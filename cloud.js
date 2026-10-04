@@ -22,7 +22,7 @@ const JKCloud = (() => {
     if(!autoSyncTimer){
       autoSyncTimer=setInterval(()=>{
         if(session && navigator.onLine && document.visibilityState==='visible') syncNow().catch(()=>{});
-      },5000);
+      },30000);
     }
     return true;
   }
@@ -43,7 +43,9 @@ const JKCloud = (() => {
   async function signOut(){ if(client) await client.auth.signOut(); session=null; }
 
   async function queueOp(op){
-    await JKDB.putLocal('syncQueue',{id:`q_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,...op,queuedAt:new Date().toISOString()});
+    const q={id:`q_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,...op,queuedAt:new Date().toISOString()};
+    await JKDB.putLocal('syncQueue',q);
+    return q;
   }
   async function queuePut(store,obj){
     if(!JKDB.stores.includes(store) || store==='settings' && obj.id==='cloudStatus') return;
@@ -52,8 +54,18 @@ const JKCloud = (() => {
   }
   async function queueDelete(store,id){
     if(!JKDB.stores.includes(store)) return;
-    if(!isSignedIn() || !navigator.onLine){ await queueOp({type:'delete',store,recordId:id}); return; }
-    try{ await deleteRecord(store,id); }catch(e){ await queueOp({type:'delete',store,recordId:id}); throw e; }
+    // Altijd eerst een tombstone/wachtrij-item opslaan. Hierdoor weet elke
+    // volgende sync dat dit record verwijderd moet blijven, ook bij offline
+    // gebruik of een tijdelijk mislukte netwerkrequest.
+    const q=await queueOp({type:'delete',store,recordId:id});
+    if(!isSignedIn() || !navigator.onLine) return;
+    try{
+      await deleteRecord(store,id);
+      await JKDB.removeLocal('syncQueue',q.id);
+    }catch(e){
+      console.warn('Cloud delete uitgesteld',store,id,e);
+      // q blijft staan en wordt bij een volgende sync opnieuw geprobeerd.
+    }
   }
 
   async function encodeRecord(store,obj){
@@ -110,11 +122,16 @@ const JKCloud = (() => {
   async function syncNow(){
     if(syncing || !isSignedIn() || !navigator.onLine) return;
     syncing=true; document.dispatchEvent(new CustomEvent('jkcloud-sync',{detail:{state:'syncing'}}));
+    let localChanged=false;
     try{
       await flushQueue();
       const {data:rows,error}=await client.from('app_records').select('store,record_id,data,updated_at').eq('user_id',user().id);
       if(error) throw error;
       const remote=new Map((rows||[]).map(r=>[`${r.store}|${r.record_id}`,r]));
+      // Records met een nog openstaande delete mogen nooit opnieuw lokaal
+      // worden geimporteerd. De delete-wachtrij is hier de tombstone.
+      const pendingDeletes=(await JKDB.all('syncQueue')).filter(q=>q.type==='delete');
+      for(const q of pendingDeletes) remote.delete(`${q.store}|${q.recordId}`);
       const hasSyncedBefore=!!(await JKDB.get('settings','cloudStatus'))?.lastSync;
       for(const store of JKDB.stores){
         const local=await JKDB.all(store);
@@ -123,12 +140,12 @@ const JKCloud = (() => {
           if(!rr){ await pushRecord(store,obj); continue; }
           const lt=new Date(obj._syncUpdatedAt||0).getTime(), rt=new Date(rr.updated_at||0).getTime();
           if(!hasSyncedBefore){
-            const decoded=await decodeRecord(rr.data); decoded._syncUpdatedAt=rr.updated_at; await JKDB.putLocal(store,decoded);
+            const decoded=await decodeRecord(rr.data); decoded._syncUpdatedAt=rr.updated_at; await JKDB.putLocal(store,decoded); localChanged=true;
           } else if(lt>rt+1000) await pushRecord(store,obj);
           else if(rt>lt+1000){
             const decoded=await decodeRecord(rr.data);
             decoded._syncUpdatedAt=rr.updated_at;
-            await JKDB.putLocal(store,decoded);
+            await JKDB.putLocal(store,decoded); localChanged=true;
           }
           remote.delete(key);
         }
@@ -137,10 +154,10 @@ const JKCloud = (() => {
         if(!JKDB.stores.includes(rr.store)) continue;
         const decoded=await decodeRecord(rr.data);
         decoded._syncUpdatedAt=rr.updated_at;
-        await JKDB.putLocal(rr.store,decoded);
+        await JKDB.putLocal(rr.store,decoded); localChanged=true;
       }
       await JKDB.putLocal('settings',{id:'cloudStatus',lastSync:new Date().toISOString(),email:user().email});
-      document.dispatchEvent(new CustomEvent('jkcloud-sync',{detail:{state:'done'}}));
+      document.dispatchEvent(new CustomEvent('jkcloud-sync',{detail:{state:'done',changed:localChanged}}));
     }finally{ syncing=false; }
   }
   function status(){ return {available:available(),signedIn:isSignedIn(),email:user()?.email||'',syncing}; }

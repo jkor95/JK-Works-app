@@ -35,8 +35,12 @@ const JKDB = (() => {
     return stamped;
   }
   async function remove(store,id,opts={}){
+    // Cloud-verwijdering eerst registreren. Zo kan een sync het item niet
+    // terugzetten tussen lokaal verwijderen en de cloud-delete.
+    if(!opts.localOnly && !window.__JK_SEEDING && window.JKCloud?.queueDelete){
+      await window.JKCloud.queueDelete(store,id);
+    }
     await removeLocal(store,id);
-    if(!opts.localOnly && !window.__JK_SEEDING && window.JKCloud?.queueDelete) window.JKCloud.queueDelete(store,id).catch(()=>{});
   }
   async function clear(store){const s=await tx(store,'readwrite');return reqP(s.clear());}
   function reqP(req){return new Promise((res,rej)=>{req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error);});}

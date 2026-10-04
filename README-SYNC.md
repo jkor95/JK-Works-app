@@ -26,3 +26,7 @@ Let op: je kunt PDF's nog steeds vanuit de app naar iCloud Drive delen/bewaren. 
 
 ## v5 synchronisatie
 De app synchroniseert automatisch elke 5 seconden zolang hij zichtbaar is, en ook bij openen, terugkeren naar de app en opnieuw online komen.
+
+
+## v6 verwijder-sync
+Verwijderingen worden nu eerst als tombstone in de lokale syncwachtrij gezet. Daardoor kan een record tijdens een trage of offline cloud-delete niet opnieuw uit Supabase worden teruggezet.
