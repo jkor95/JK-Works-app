@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#111111" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="JK Works" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>JK Works Dordrecht</title>
+</head>
+<body>
+  <div id="appShell">
+    <header class="topbar">
+      <div class="brand-title"><img src="assets/jk-works-logo.jpg" alt="JK Works Dordrecht"><div><div class="eyebrow">JK WORKS DORDRECHT</div><h1 id="pageTitle">Dashboard</h1></div></div>
+      <button id="quickAddBtn" class="icon-btn" aria-label="Snel toevoegen">+</button>
+    </header>
+
+    <main id="view" class="view" aria-live="polite"></main>
+
+    <nav class="bottom-nav" aria-label="Hoofdnavigatie">
+      <button data-route="dashboard" class="nav-item active"><span>⌂</span><small>Start</small></button>
+      <button data-route="jobs" class="nav-item"><span>▣</span><small>Klussen</small></button>
+      <button data-route="gear" class="nav-item"><span>🧰</span><small>Materiaal</small></button>
+      <button data-route="documents" class="nav-item"><span>▤</span><small>Documenten</small></button>
+      <button data-route="more" class="nav-item"><span>•••</span><small>Meer</small></button>
+    </nav>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+  <div id="modalRoot"></div>
+
+  <input id="hiddenExistingPdfInput" type="file" accept="application/pdf" multiple hidden />
+  <input id="hiddenBackupInput" type="file" accept="application/json,.jkbackup,.jkbackup.json" hidden />
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="db.js"></script>
+  <script src="cloud.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
