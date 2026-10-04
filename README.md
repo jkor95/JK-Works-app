@@ -23,5 +23,18 @@ Voor v15 hoeft `SUPABASE_SETUP.sql` niet opnieuw uitgevoerd te worden als v10 of
 Telefoonnummer en e-mailadres worden niet meer los op offerte- en factuur-PDFs geplaatst. Ze blijven wel in klant- en klusgegevens beschikbaar voor synchronisatie en hergebruik.
 
 
-## v16
+## v17
 Facturen krijgen standaard een vervaldatum van 14 dagen na de factuurdatum. Deze datum blijft handmatig aanpasbaar.
+
+
+## v17 wijziging
+Bij het maken van een offerte of factuur is een klus nu verplicht. De gekozen klus wordt altijd als eerste regel gebruikt; de omschrijving van regel 1 komt rechtstreeks uit Klussen.
+
+
+## v19
+- Het onderdeel 'Installatie & iCloud' is verwijderd uit Meer.
+- Urenstatistieken toegevoegd met grafieken per maand, kwartaal en kalenderjaar.
+
+
+## Dashboard v19
+Het dashboard is vereenvoudigd: de zwarte merk/headerkaart en KPI-blokken zijn verwijderd. Snel openen bevat Inpakchecklist, Nieuwe factuur, Nieuwe offerte, Uren invoeren, Nieuwe klus, Klanten en Urenstatistieken met een mini-grafiek van het huidige kalenderjaar.

@@ -31,3 +31,16 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}.topbar{position
 
 /* v11: PDF-voorbeeld */
 .pdf-preview-host{margin-top:12px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#d9d9d6}.pdf-preview-host[hidden]{display:none}.pdf-preview-frame{display:block;width:100%;height:68vh;min-height:520px;border:0;background:#fff}@media(max-width:600px){.pdf-preview-frame{height:62vh;min-height:440px}}
+
+
+/* v18: urenstatistieken */
+.stats-kpis{margin:2px 0 14px}.stats-kpis .kpi strong{font-size:18px}.hours-chart-wrap{overflow-x:auto;padding:4px 2px 8px;margin:0 -2px}.hours-chart{display:flex;align-items:stretch;gap:8px;min-width:max-content;height:260px;padding:6px 2px 0}.hours-bar-col{width:58px;display:grid;grid-template-rows:34px 1fr 32px;align-items:end;text-align:center}.hours-value{font-size:10px;font-weight:800;color:#555;align-self:end;padding-bottom:4px}.hours-bar-track{height:178px;width:28px;margin:0 auto;background:#ecece8;border-radius:8px 8px 4px 4px;display:flex;align-items:flex-end;overflow:hidden}.hours-bar{width:100%;background:#111;border-radius:8px 8px 4px 4px;min-height:0}.hours-label{font-size:10px;color:var(--muted);font-weight:700;align-self:start;padding-top:6px;white-space:nowrap}.stats-note{margin:10px 2px 0}@media(max-width:430px){.stats-kpis{grid-template-columns:1fr 1fr}.stats-kpis .kpi:last-child{grid-column:1/-1}.hours-chart{height:245px}.hours-bar-track{height:165px}}
+
+/* Dashboard v19 */
+.dashboard-first-title{margin-top:0}
+.dashboard-quick-grid .quick-stat{grid-column:1/-1;min-height:132px}
+.quick-stat-title{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.quick-stat-title .emoji{display:inline-block;margin:0;font-size:22px}
+.dash-stat-head{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:11px;font-weight:700;margin:2px 0 5px}
+.dash-mini-chart{height:56px;display:flex;align-items:flex-end;gap:4px;padding:3px 0 0}
+.dash-mini-bar{display:block;flex:1;min-width:4px;background:#111;border-radius:4px 4px 2px 2px;opacity:.9}
