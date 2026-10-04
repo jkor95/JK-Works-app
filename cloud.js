@@ -54,13 +54,13 @@ const JKCloud = (() => {
   }
   async function queueDelete(store,id){
     if(!JKDB.stores.includes(store)) return;
-    // Altijd eerst een tombstone/wachtrij-item opslaan. Hierdoor weet elke
-    // volgende sync dat dit record verwijderd moet blijven, ook bij offline
-    // gebruik of een tijdelijk mislukte netwerkrequest.
+    // Eerst lokaal onthouden dat dit record verwijderd is. Daarna schrijven we
+    // een permanente cloud-tombstone. Andere apparaten zien die tombstone en
+    // verwijderen hun lokale kopie in plaats van hem opnieuw te uploaden.
     const q=await queueOp({type:'delete',store,recordId:id});
     if(!isSignedIn() || !navigator.onLine) return;
     try{
-      await deleteRecord(store,id);
+      await markDeleted(store,id);
       await JKDB.removeLocal('syncQueue',q.id);
     }catch(e){
       console.warn('Cloud delete uitgesteld',store,id,e);
@@ -99,21 +99,35 @@ const JKCloud = (() => {
     const {error}=await client.from('app_records').upsert(row,{onConflict:'user_id,store,record_id'});
     if(error) throw error;
   }
-  async function deleteRecord(store,id){
+  async function markDeleted(store,id){
     if(!isSignedIn()) return;
-    const {error}=await client.from('app_records').delete().eq('user_id',user().id).eq('store',store).eq('record_id',id);
+    const when=new Date().toISOString();
+    const row={
+      user_id:user().id,
+      store,
+      record_id:id,
+      data:{__deleted:true,deleted_at:when},
+      updated_at:when
+    };
+    const {error}=await client.from('app_records').upsert(row,{onConflict:'user_id,store,record_id'});
     if(error) throw error;
+    // Eventuele gekoppelde bestanden in Storage mogen wel echt weg; de
+    // metadata-tombstone hierboven blijft bestaan om de delete te synchroniseren.
     const prefix=`${user().id}/${store}/${id}/`;
     const folder=`${user().id}/${store}/${id}`;
-    const {data:list}=await client.storage.from(BUCKET).list(folder);
-    if(list?.length) await client.storage.from(BUCKET).remove(list.map(x=>prefix+x.name));
+    const {data:list,error:listError}=await client.storage.from(BUCKET).list(folder);
+    if(listError) console.warn('Storage-list bij verwijderen mislukt',listError);
+    if(list?.length){
+      const {error:removeError}=await client.storage.from(BUCKET).remove(list.map(x=>prefix+x.name));
+      if(removeError) console.warn('Storage-bestand verwijderen mislukt',removeError);
+    }
   }
   async function flushQueue(){
     if(!isSignedIn() || !navigator.onLine) return;
     const qs=await JKDB.all('syncQueue');
     for(const q of qs){
       try{
-        if(q.type==='delete') await deleteRecord(q.store,q.recordId);
+        if(q.type==='delete') await markDeleted(q.store,q.recordId);
         else { const obj=await JKDB.get(q.store,q.recordId); if(obj) await pushRecord(q.store,obj); }
         await JKDB.removeLocal('syncQueue',q.id);
       }catch(e){ console.warn('Sync queue item failed',q,e); }
@@ -128,10 +142,23 @@ const JKCloud = (() => {
       const {data:rows,error}=await client.from('app_records').select('store,record_id,data,updated_at').eq('user_id',user().id);
       if(error) throw error;
       const remote=new Map((rows||[]).map(r=>[`${r.store}|${r.record_id}`,r]));
-      // Records met een nog openstaande delete mogen nooit opnieuw lokaal
-      // worden geimporteerd. De delete-wachtrij is hier de tombstone.
+      // Lokale deletes die nog niet naar de cloud konden, blijven ook tijdens
+      // deze sync leidend zodat het item niet terugkomt.
       const pendingDeletes=(await JKDB.all('syncQueue')).filter(q=>q.type==='delete');
       for(const q of pendingDeletes) remote.delete(`${q.store}|${q.recordId}`);
+
+      // Cloud-tombstones zijn leidend op ieder apparaat. Verwijder een nog
+      // aanwezige lokale kopie en haal de tombstone uit de normale merge-map.
+      for(const [key,rr] of [...remote.entries()]){
+        if(rr?.data?.__deleted){
+          const sep=key.indexOf('|'), store=key.slice(0,sep), id=key.slice(sep+1);
+          if(JKDB.stores.includes(store) && await JKDB.get(store,id)){
+            await JKDB.removeLocal(store,id);
+            localChanged=true;
+          }
+          remote.delete(key);
+        }
+      }
       const hasSyncedBefore=!!(await JKDB.get('settings','cloudStatus'))?.lastSync;
       for(const store of JKDB.stores){
         const local=await JKDB.all(store);

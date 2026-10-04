@@ -1,4 +1,4 @@
-const CACHE='jkworks-v7-20261004';
+const CACHE='jkworks-v8-delete-tombstones';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
