@@ -44,3 +44,87 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}.topbar{position
 .dash-stat-head{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:11px;font-weight:700;margin:2px 0 5px}
 .dash-mini-chart{height:56px;display:flex;align-items:flex-end;gap:4px;padding:3px 0 0}
 .dash-mini-bar{display:block;flex:1;min-width:4px;background:#111;border-radius:4px 4px 2px 2px;opacity:.9}
+
+/* v22 - JK Works visuele stijl (donker antraciet + brons uit het logo) */
+:root{
+  --bg:#f6f3ee;
+  --surface:#fffdf9;
+  --text:#1e272d;
+  --muted:#687077;
+  --line:#e2d8c9;
+  --accent:#a27d44;
+  --accent-dark:#7f5f31;
+  --accent-soft:#f1e8da;
+  --ink:#1e272d;
+  --shadow:0 10px 30px rgba(30,39,45,.07);
+}
+html,body{background:linear-gradient(180deg,#f8f6f2 0,#f2eee7 100%);color:var(--text)}
+.topbar{background:rgba(248,246,242,.94);border-bottom:1px solid rgba(162,125,68,.18);box-shadow:0 5px 22px rgba(30,39,45,.035)}
+.eyebrow{color:var(--accent-dark)}
+h1{color:var(--ink);letter-spacing:-.025em}
+.brand-title>img{border-color:rgba(162,125,68,.28);box-shadow:0 4px 14px rgba(30,39,45,.08)}
+.icon-btn{background:var(--ink);color:#fff;box-shadow:0 7px 20px rgba(30,39,45,.18)}
+.icon-btn.mini{width:36px;height:36px;border-radius:11px;font-size:18px;box-shadow:none}
+.icon-btn:disabled{opacity:.28;cursor:default}
+.bottom-nav{background:rgba(255,253,249,.96);border-top-color:rgba(162,125,68,.22);box-shadow:0 -8px 28px rgba(30,39,45,.055)}
+.nav-item.active{color:var(--accent-dark)}
+.nav-item.active span{filter:saturate(1.15)}
+.card,.list-item,.quick,.folder,.check-card,.tab,.search,.field input,.field textarea,.field select{border-color:var(--line)}
+.card,.list-item,.quick,.folder,.check-card{background:var(--surface);box-shadow:0 5px 18px rgba(30,39,45,.035)}
+.section-title h2{display:flex;align-items:center;gap:9px;color:var(--ink)}
+.section-title h2:before{content:"";width:4px;height:19px;border-radius:999px;background:var(--accent)}
+.primary{background:var(--ink);color:#fff;box-shadow:0 6px 16px rgba(30,39,45,.14)}
+.secondary{background:var(--accent-soft);color:var(--ink);border:1px solid rgba(162,125,68,.24)}
+.link-btn{color:var(--accent-dark)}
+.tab.active{background:var(--ink);border-color:var(--ink);color:#fff;box-shadow:inset 0 -3px 0 var(--accent)}
+.quick{position:relative;overflow:hidden;border:1px solid rgba(162,125,68,.18);transition:transform .12s ease,box-shadow .12s ease}
+.quick:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent)}
+.quick:active{transform:scale(.985)}
+.quick .emoji{filter:saturate(.85)}
+.quick strong{color:var(--ink);font-size:14px}
+.quick small{display:block;color:var(--muted);font-size:10px;line-height:1.25;margin-top:5px;padding-right:4px}
+.successbox{background:#f4ecdf;border-color:#dfc9a8;color:#554322}
+.warning{background:#fff4df;border-color:#e8cf9d}
+.progress{background:#eee8df}.progress i{background:linear-gradient(90deg,var(--accent-dark),var(--accent))}
+.check-summary{background:#f5efe6;border-bottom-color:var(--line)}
+.packing-row:has(input:checked){background:#faf8f3}
+.folder.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(162,125,68,.12)}
+.status-chip.on{background:#ece4d7;color:#6f522b}
+.toast{background:var(--ink)}
+.modal{background:#f6f3ee}.modal-head h2{color:var(--ink)}
+.close-btn{background:#e7dfd3;color:var(--ink)}
+
+/* Dashboard v22 */
+.dashboard-quick-grid{gap:12px}
+.dashboard-quick-grid .quick{min-height:102px;padding:16px 15px 14px 18px}
+.dashboard-quick-grid .quick-stat{grid-column:1/-1;min-height:205px;padding-bottom:16px}
+.quick-stat-title{border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:9px}
+.dash-stat-head{font-size:12px;color:var(--muted);margin:3px 0 8px}
+.dash-stat-head strong{color:var(--accent-dark);font-size:13px}
+.dash-month-chart{display:grid;grid-template-columns:repeat(12,minmax(31px,1fr));gap:5px;height:116px;align-items:end;overflow-x:auto;padding:0 1px 2px}
+.dash-month-col{height:112px;display:grid;grid-template-rows:20px 1fr 18px;align-items:end;text-align:center;min-width:31px}
+.dash-month-hours{font-size:8px;font-weight:800;color:var(--ink);white-space:nowrap;align-self:end;padding-bottom:3px}
+.dash-month-track{display:flex;align-items:flex-end;width:15px;height:68px;margin:0 auto;background:#eee8df;border-radius:6px 6px 3px 3px;overflow:hidden}
+.dash-month-track i{display:block;width:100%;background:linear-gradient(180deg,#b68e50,var(--accent-dark));border-radius:6px 6px 2px 2px;min-height:1px}
+.dash-month-label{font-size:8px;text-transform:uppercase;color:var(--muted);font-weight:800;padding-top:4px}
+
+/* Materiaal v22 */
+.material-actions{margin-bottom:12px}
+.material-list-item{border-left:3px solid rgba(162,125,68,.55)}
+.reorder-list{display:flex;flex-direction:column;gap:8px}
+.reorder-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:11px 12px}
+.reorder-row>div:first-child{min-width:0}.reorder-row strong{display:block}.reorder-row small{display:block;color:var(--muted);font-size:10px;margin-top:3px}
+.reorder-buttons{display:flex;gap:6px;flex:0 0 auto}
+
+/* Statistieken in JK Works-stijl */
+.hours-bar-track{background:#eee8df}.hours-bar{background:linear-gradient(180deg,#b68e50,var(--accent-dark))}.hours-value{color:var(--ink)}
+.stats-kpis .kpi{border:1px solid var(--line);background:var(--surface)}
+
+@media(max-width:430px){
+  .dashboard-quick-grid{grid-template-columns:1fr 1fr}
+  .dashboard-quick-grid .quick{min-height:98px;padding:14px 12px 12px 16px}
+  .dashboard-quick-grid .quick small{font-size:9.5px}
+  .dashboard-quick-grid .quick-stat{min-height:205px}
+  .dash-month-chart{grid-template-columns:repeat(12,31px)}
+  .material-actions>*{min-width:145px}
+}

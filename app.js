@@ -64,7 +64,7 @@ const App = (() => {
   }
   function dashboardYearMiniChart(entries){
     const buckets=currentYearMonthBuckets(entries),max=Math.max(1,...buckets.map(b=>b.minutes)),total=buckets.reduce((s,b)=>s+b.minutes,0),year=new Date().getFullYear();
-    return `<div class="dash-stat-head"><span>${year}</span><span>${hoursLabel(total)}</span></div><div class="dash-mini-chart">${buckets.map(b=>`<span class="dash-mini-bar" title="${esc(b.label)}: ${hoursLabel(b.minutes)}" style="height:${b.minutes?Math.max(8,Math.round((b.minutes/max)*100)):3}%"></span>`).join('')}</div>`;
+    return `<div class="dash-stat-head"><span>${year} per maand</span><strong>Totaal ${hoursLabel(total)}</strong></div><div class="dash-month-chart">${buckets.map(b=>`<div class="dash-month-col" title="${esc(b.label)}: ${hoursLabel(b.minutes)}"><span class="dash-month-hours">${b.minutes?hoursLabel(b.minutes):'0u'}</span><span class="dash-month-track"><i style="height:${b.minutes?Math.max(8,Math.round((b.minutes/max)*100)):2}%"></i></span><span class="dash-month-label">${esc(b.label.slice(0,3))}</span></div>`).join('')}</div>`;
   }
 
   async function renderDashboard(){
@@ -75,12 +75,12 @@ const App = (() => {
       ${daysSinceBackup>7?`<div class="warning"><strong>Back-up aanbevolen</strong><br><span class="small">${backup?.lastBackup?'Laatste back-up '+daysSinceBackup+' dagen geleden.':'Nog geen back-up gemaakt.'}</span> <button class="link-btn" id="dashBackup">Nu maken</button></div>`:''}
       <div class="section-title dashboard-first-title"><h2>Snel openen</h2></div>
       <div class="quick-grid dashboard-quick-grid">
-        <button class="quick" data-go="gear"><span class="emoji">🧰</span><strong>Inpakchecklist</strong></button>
-        <button class="quick" id="newInvoice"><span class="emoji">🧾</span><strong>Nieuwe factuur</strong></button>
-        <button class="quick" id="newQuote"><span class="emoji">📄</span><strong>Nieuwe offerte</strong></button>
-        <button class="quick" id="addHours"><span class="emoji">🕒</span><strong>Uren invoeren</strong></button>
-        <button class="quick" id="newJobDash"><span class="emoji">👷</span><strong>Nieuwe klus</strong></button>
-        <button class="quick" id="clientsDash"><span class="emoji">👥</span><strong>Klanten</strong></button>
+        <button class="quick" id="newJobDash"><span class="emoji">👷</span><strong>Nieuwe klus</strong><small>Opdracht en klant koppelen</small></button>
+        <button class="quick" id="addHours"><span class="emoji">🕒</span><strong>Uren invoeren</strong><small>Datum en van-tot registreren</small></button>
+        <button class="quick" id="newQuote"><span class="emoji">📄</span><strong>Nieuwe offerte</strong><small>Vanuit een bestaande klus</small></button>
+        <button class="quick" id="newInvoice"><span class="emoji">🧾</span><strong>Nieuwe factuur</strong><small>Uren en materiaal factureren</small></button>
+        <button class="quick" id="clientsDash"><span class="emoji">👥</span><strong>Klanten</strong><small>Contact- en adresgegevens</small></button>
+        <button class="quick" data-go="gear"><span class="emoji">🧰</span><strong>Materiaal</strong><small>Inpaklijsten en gereedschap</small></button>
         <button class="quick quick-stat" id="timeStatsDash"><span class="quick-stat-title"><span class="emoji">📊</span><strong>Urenstatistieken</strong></span>${dashboardYearMiniChart(entries)}</button>
       </div>`;
     $$('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
@@ -125,8 +125,11 @@ const App = (() => {
   async function renderGearContent(){
     const c=$('#gearContent');if(!c)return;const q=($('#gearSearch')?.value||'').toLowerCase();
     if(state.gearTab==='mboxes'){
-      const rows=(await JKDB.all('mboxes')).filter(m=>(m.name+' '+m.type+' '+m.items.join(' ')).toLowerCase().includes(q));
-      c.innerHTML=`<div class="successbox"><strong>Inpakken = afvinken</strong><br><span class="small">Open een Mbox, organizer of losse groep en vink af wat je hebt ingepakt. Met Reset maak je hem weer leeg voor de volgende klus.</span></div><div class="list">${rows.map(m=>{const done=m.items.filter(i=>m.checked?.[i]).length;return `<div class="list-item clickable" data-mbox="${m.id}"><div class="main"><div class="title">${esc(m.name)} · ${esc(m.type)}</div><div class="sub">${done}/${m.items.length} afgevinkt${m.notes?' · '+esc(m.notes):''}</div><div class="progress"><i style="width:${m.items.length?Math.round(done/m.items.length*100):0}%"></i></div></div><span>›</span></div>`}).join('')}</div>`;
+      const all=await JKDB.all('mboxes');
+      const rows=all.map((m,index)=>({m,index})).filter(x=>(x.m.name+' '+x.m.type+' '+x.m.items.join(' ')).toLowerCase().includes(q)).sort((a,b)=>((a.m.order??a.index)-(b.m.order??b.index))).map(x=>x.m);
+      c.innerHTML=`<div class="button-row material-actions"><button class="primary" id="addMbox">+ Nieuwe inpaklijst</button><button class="secondary" id="reorderMboxes">↕ Volgorde wijzigen</button></div><div class="successbox"><strong>Inpakken = afvinken</strong><br><span class="small">Open een Mbox, organizer of losse groep en vink af wat je hebt ingepakt. Met Reset maak je hem weer leeg voor de volgende klus.</span></div><div class="list">${rows.map(m=>{const done=m.items.filter(i=>m.checked?.[i]).length;return `<div class="list-item clickable material-list-item" data-mbox="${m.id}"><div class="main"><div class="title">${esc(m.name)} · ${esc(m.type)}</div><div class="sub">${done}/${m.items.length} afgevinkt${m.notes?' · '+esc(m.notes):''}</div><div class="progress"><i style="width:${m.items.length?Math.round(done/m.items.length*100):0}%"></i></div></div><span>›</span></div>`}).join('')}</div>`;
+      $('#addMbox').addEventListener('click',()=>editMbox());
+      $('#reorderMboxes').addEventListener('click',()=>reorderMboxes());
       $$('[data-mbox]').forEach(x=>x.addEventListener('click',()=>showMboxChecklist(x.dataset.mbox)));
     }else{
       const boxes=await JKDB.all('mboxes'),map=Object.fromEntries(boxes.map(m=>[m.id,`${m.name} · ${m.type}`]));const rows=(await JKDB.all('tools')).filter(t=>(t.name+' '+t.category+' '+(map[t.location]||'')).toLowerCase().includes(q));
@@ -139,10 +142,22 @@ const App = (() => {
     $$('[data-pack]').forEach(cb=>cb.addEventListener('change',async()=>{const item=m.items[Number(cb.dataset.pack)];m.checked[item]=cb.checked;await JKDB.put('mboxes',m);const n=m.items.filter(i=>m.checked[i]).length;const el=$('.check-summary strong');if(el)el.textContent=`${n}/${m.items.length}`;}));$('#resetPack').addEventListener('click',async()=>{if(confirm('Alle vinkjes van deze lijst wissen?')){m.checked={};await JKDB.put('mboxes',m);closeModal();showMboxChecklist(id)}});$('#editPack').addEventListener('click',()=>{closeModal();editMbox(id)});
   }
   async function editMbox(id){
-    const m=id?await JKDB.get('mboxes',id):{id:JKDB.id('mbox'),name:'Mbox',type:'',items:[],notes:'',checked:{}};
+    const m=id?await JKDB.get('mboxes',id):{id:JKDB.id('mbox'),name:'Nieuwe inpaklijst',type:'',items:[],notes:'',checked:{},order:(await JKDB.all('mboxes')).length};
     modal(`${modalHead(id?'Checklist bewerken':'Nieuwe checklist')}<form id="mboxForm"><div class="form-grid"><div class="field"><label>Naam</label><input name="name" value="${esc(m.name)}"></div><div class="field"><label>Type / inhoud</label><input name="type" value="${esc(m.type)}"></div><div class="field full"><label>Onderdelen - één per regel</label><textarea name="items" style="min-height:280px">${esc(m.items.join('\n'))}</textarea></div><div class="field full"><label>Notitie</label><textarea name="notes">${esc(m.notes||'')}</textarea></div></div><div class="button-row"><button class="primary">Opslaan</button>${id?'<button type="button" class="danger-btn" id="delMbox">Verwijderen</button>':''}</div></form>`);
     $('#mboxForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),items=String(f.get('items')).split('\n').map(x=>x.trim()).filter(Boolean),checked={};items.forEach(i=>{if(m.checked?.[i])checked[i]=true});Object.assign(m,{name:f.get('name'),type:f.get('type'),items,notes:f.get('notes'),checked,updatedAt:new Date().toISOString()});await JKDB.put('mboxes',m);closeModal();toast('Checklist opgeslagen');renderGearContent();});$('#delMbox')?.addEventListener('click',async()=>{if(confirm('Deze lijst verwijderen?')){await JKDB.remove('mboxes',id);closeModal();renderGearContent();}});
   }
+  async function reorderMboxes(){
+    let rows=await JKDB.all('mboxes');
+    rows=rows.map((m,index)=>({...m,_originalIndex:index})).sort((a,b)=>((a.order??a._originalIndex)-(b.order??b._originalIndex)));
+    const draw=()=>{
+      modal(`${modalHead('Volgorde materiaal')}<p class="muted small">Zet je meest gebruikte inpaklijsten bovenaan. De volgorde wordt gesynchroniseerd met je andere apparaten.</p><div class="reorder-list">${rows.map((m,i)=>`<div class="reorder-row"><div><strong>${esc(m.name)}</strong><small>${esc(m.type||'Inpaklijst')}</small></div><div class="reorder-buttons"><button type="button" class="icon-btn mini" data-up="${i}" ${i===0?'disabled':''}>↑</button><button type="button" class="icon-btn mini" data-down="${i}" ${i===rows.length-1?'disabled':''}>↓</button></div></div>`).join('')}</div><div class="button-row" style="margin-top:14px"><button class="primary" id="saveMboxOrder">Volgorde opslaan</button></div>`);
+      $$('[data-up]').forEach(b=>b.addEventListener('click',()=>{const i=Number(b.dataset.up);[rows[i-1],rows[i]]=[rows[i],rows[i-1]];draw()}));
+      $$('[data-down]').forEach(b=>b.addEventListener('click',()=>{const i=Number(b.dataset.down);[rows[i+1],rows[i]]=[rows[i],rows[i+1]];draw()}));
+      $('#saveMboxOrder').addEventListener('click',async()=>{for(let i=0;i<rows.length;i++){const m={...rows[i]};delete m._originalIndex;m.order=i;m.updatedAt=new Date().toISOString();await JKDB.put('mboxes',m)}closeModal();toast('Volgorde opgeslagen');renderGearContent()});
+    };
+    draw();
+  }
+
   async function editTool(id){
     const t=id?await JKDB.get('tools',id):{id:JKDB.id('tool'),name:'',category:'',location:'',serial:'',purchaseDate:'',notes:''},boxes=await JKDB.all('mboxes');
     modal(`${modalHead(id?'Gereedschap bewerken':'Nieuw gereedschap')}<form id="toolForm"><div class="field"><label>Naam</label><input name="name" required value="${esc(t.name)}"></div><div class="form-grid"><div class="field"><label>Categorie</label><input name="category" value="${esc(t.category)}"></div><div class="field"><label>Locatie</label><select name="location"><option value="">Los / vrij</option>${boxes.map(m=>`<option value="${m.id}" ${m.id===t.location?'selected':''}>${esc(m.name+' · '+m.type)}</option>`).join('')}</select></div><div class="field"><label>Serienummer</label><input name="serial" value="${esc(t.serial||'')}"></div><div class="field"><label>Aanschafdatum</label><input type="date" name="purchaseDate" value="${esc(t.purchaseDate||'')}"></div><div class="field full"><label>Notities</label><textarea name="notes">${esc(t.notes||'')}</textarea></div></div><div class="button-row"><button class="primary">Opslaan</button>${id?'<button type="button" class="danger-btn" id="delTool">Verwijderen</button>':''}</div></form>`);
