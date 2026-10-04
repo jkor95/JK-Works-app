@@ -38,3 +38,7 @@ Bij het maken van een offerte of factuur is een klus nu verplicht. De gekozen kl
 
 ## Dashboard v19
 Het dashboard is vereenvoudigd: de zwarte merk/headerkaart en KPI-blokken zijn verwijderd. Snel openen bevat Inpakchecklist, Nieuwe factuur, Nieuwe offerte, Uren invoeren, Nieuwe klus, Klanten en Urenstatistieken met een mini-grafiek van het huidige kalenderjaar.
+
+
+## v20
+Bij facturen staat de geselecteerde urenregistratie op regel 1 als Werkuren. De klusnaam wordt niet meer als factuurregel toegevoegd; de klus blijft alleen de bron voor klant-, datum- en koppelgegevens.
