@@ -2,7 +2,7 @@
 
 Persoonlijke PWA voor JK Works Dordrecht.
 
-## v14 - Klus, klant, offerte en factuur gekoppeld
+## v15 - Klus, klant, offerte en factuur gekoppeld
 
 - Een klus gebruikt dezelfde klantvelden als Klanten, Offertes en Facturen.
 - Kies bij een klus een bestaande klant om alle contactgegevens automatisch over te nemen.
@@ -16,8 +16,12 @@ Persoonlijke PWA voor JK Works Dordrecht.
 ## Bijwerken
 
 Vervang de bestanden in de bestaande GitHub Pages repository door de inhoud van deze map en commit de wijzigingen.
-Voor v14 hoeft `SUPABASE_SETUP.sql` niet opnieuw uitgevoerd te worden als v10 of nieuwer al correct is ingesteld.
+Voor v15 hoeft `SUPABASE_SETUP.sql` niet opnieuw uitgevoerd te worden als v10 of nieuwer al correct is ingesteld.
 
 
-## v14
+## v15
 Telefoonnummer en e-mailadres worden niet meer los op offerte- en factuur-PDFs geplaatst. Ze blijven wel in klant- en klusgegevens beschikbaar voor synchronisatie en hergebruik.
+
+
+## v16
+Facturen krijgen standaard een vervaldatum van 14 dagen na de factuurdatum. Deze datum blijft handmatig aanpasbaar.
