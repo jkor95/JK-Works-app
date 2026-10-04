@@ -17,7 +17,7 @@ const App = (() => {
     await JKDB.open(); window.__JK_SEEDING=true; try{await JKDB.seed();}finally{window.__JK_SEEDING=false;} await JKCloud.init(); bindNav(); bindInputs(); bindCloudEvents(); registerSW(); await render();
     if(navigator.onLine) setTimeout(()=>ensurePdfLib().catch(()=>{}),1000);
   }
-  function bindCloudEvents(){document.addEventListener('jkcloud-auth',()=>{if(state.route==='more')render()});document.addEventListener('jkcloud-sync',()=>{if(state.route==='more')render()});}
+  function bindCloudEvents(){document.addEventListener('jkcloud-auth',()=>render());document.addEventListener('jkcloud-sync',e=>{if(e.detail?.state==='done')render();});}
   function registerSW(){if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./service-worker.js').catch(()=>{});}
   function ensurePdfLib(){
     if(window.PDFLib)return Promise.resolve(window.PDFLib);

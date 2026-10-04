@@ -2,7 +2,7 @@ const JKCloud = (() => {
   const SUPABASE_URL = 'https://ercqiavruotoclhvfzud.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_z4kkYgzjr-bYDEcSZlVciw_cP8MfOuX';
   const BUCKET = 'jkworks-files';
-  let client = null, session = null, syncing = false;
+  let client = null, session = null, syncing = false, autoSyncTimer = null;
 
   function available(){ return !!window.supabase?.createClient; }
   async function init(){
@@ -15,6 +15,15 @@ const JKCloud = (() => {
     client.auth.onAuthStateChange((_event,s)=>{session=s||null; document.dispatchEvent(new CustomEvent('jkcloud-auth'));});
     if(session && navigator.onLine) setTimeout(()=>syncNow().catch(console.warn),300);
     window.addEventListener('online',()=>{ if(session) syncNow().catch(()=>{}); });
+    window.addEventListener('focus',()=>{ if(session && navigator.onLine) syncNow().catch(()=>{}); });
+    document.addEventListener('visibilitychange',()=>{
+      if(document.visibilityState==='visible' && session && navigator.onLine) syncNow().catch(()=>{});
+    });
+    if(!autoSyncTimer){
+      autoSyncTimer=setInterval(()=>{
+        if(session && navigator.onLine && document.visibilityState==='visible') syncNow().catch(()=>{});
+      },5000);
+    }
     return true;
   }
   function user(){ return session?.user || null; }

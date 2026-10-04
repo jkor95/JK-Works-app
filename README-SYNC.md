@@ -22,3 +22,7 @@ Je bestaande GitHub Pages URL blijft hetzelfde.
 Vanaf dat moment worden klanten, klussen, uren, checklists, instellingen en PDF-documenten via Supabase gesynchroniseerd. De app blijft daarnaast lokaal werken; wijzigingen die je offline doet worden in een wachtrij gezet en bij de volgende internetverbinding verstuurd.
 
 Let op: je kunt PDF's nog steeds vanuit de app naar iCloud Drive delen/bewaren. Supabase bewaart daarnaast een synchronisatiekopie zodat dezelfde documenten ook op je andere apparaat in de app beschikbaar zijn.
+
+
+## v5 synchronisatie
+De app synchroniseert automatisch elke 5 seconden zolang hij zichtbaar is, en ook bij openen, terugkeren naar de app en opnieuw online komen.
