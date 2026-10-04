@@ -1,8 +1,8 @@
 const JKDB = (() => {
   const DB_NAME = 'jkworks-dordrecht';
-  const DB_VERSION = 3;
+  const DB_VERSION = 4;
   const stores = ['mboxes','tools','checklists','clients','jobs','timeEntries','pdfTemplates','documents','settings'];
-  const internalStores = ['syncQueue'];
+  const internalStores = ['syncQueue','deleteMarkers'];
   let dbPromise;
 
   function open(){
@@ -34,13 +34,22 @@ const JKDB = (() => {
     if(!opts.localOnly && !window.__JK_SEEDING && window.JKCloud?.queuePut) window.JKCloud.queuePut(store,stamped).catch(()=>{});
     return stamped;
   }
+  async function markDeleteLocal(store,id,deletedAt=new Date().toISOString()){
+    const marker={id:`${store}|${id}`,store,recordId:id,deletedAt};
+    await putLocal('deleteMarkers',marker);
+    return marker;
+  }
+  async function isDeletedLocal(store,id){
+    return !!(await get('deleteMarkers',`${store}|${id}`));
+  }
   async function remove(store,id,opts={}){
-    // Cloud-verwijdering eerst registreren. Zo kan een sync het item niet
-    // terugzetten tussen lokaal verwijderen en de cloud-delete.
+    // Eerst een blijvende lokale verwijdermarkering opslaan. Hierdoor kan geen
+    // oude of nog lopende upload dit record na verwijderen opnieuw tot leven brengen.
+    if(!opts.localOnly) await markDeleteLocal(store,id);
+    await removeLocal(store,id);
     if(!opts.localOnly && !window.__JK_SEEDING && window.JKCloud?.queueDelete){
       await window.JKCloud.queueDelete(store,id);
     }
-    await removeLocal(store,id);
   }
   async function clear(store){const s=await tx(store,'readwrite');return reqP(s.clear());}
   function reqP(req){return new Promise((res,rej)=>{req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error);});}
@@ -132,5 +141,5 @@ const JKDB = (() => {
     }
   }
 
-  return {stores,open,all,get,put,remove,clear,id,seed,putLocal,removeLocal};
+  return {stores,open,all,get,put,remove,clear,id,seed,putLocal,removeLocal,markDeleteLocal,isDeletedLocal};
 })();

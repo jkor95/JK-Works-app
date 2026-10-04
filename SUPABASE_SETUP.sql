@@ -61,3 +61,31 @@ for delete using (
   bucket_id = 'jkworks-files'
   and (storage.foldername(name))[1] = auth.uid()::text
 );
+
+-- v10: permanente verwijderlog. Nodig om verwijderingen tussen apparaten
+-- betrouwbaar te synchroniseren en oude lokale kopieen te blokkeren.
+create table if not exists public.app_deletions (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  store text not null,
+  record_id text not null,
+  deleted_at timestamptz not null default now(),
+  primary key (user_id, store, record_id)
+);
+
+alter table public.app_deletions enable row level security;
+
+drop policy if exists "jkworks_deletions_select_own" on public.app_deletions;
+create policy "jkworks_deletions_select_own" on public.app_deletions
+for select using (auth.uid() = user_id);
+
+drop policy if exists "jkworks_deletions_insert_own" on public.app_deletions;
+create policy "jkworks_deletions_insert_own" on public.app_deletions
+for insert with check (auth.uid() = user_id);
+
+drop policy if exists "jkworks_deletions_update_own" on public.app_deletions;
+create policy "jkworks_deletions_update_own" on public.app_deletions
+for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "jkworks_deletions_delete_own" on public.app_deletions;
+create policy "jkworks_deletions_delete_own" on public.app_deletions
+for delete using (auth.uid() = user_id);

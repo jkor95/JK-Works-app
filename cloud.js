@@ -47,24 +47,35 @@ const JKCloud = (() => {
     await JKDB.putLocal('syncQueue',q);
     return q;
   }
+  async function hasLocalDelete(store,id){
+    return !!(await JKDB.get('deleteMarkers',`${store}|${id}`));
+  }
+  async function removePendingPuts(store,id){
+    const qs=await JKDB.all('syncQueue');
+    for(const q of qs){
+      if(q.type==='put' && q.store===store && q.recordId===id) await JKDB.removeLocal('syncQueue',q.id);
+    }
+  }
   async function queuePut(store,obj){
     if(!JKDB.stores.includes(store) || store==='settings' && obj.id==='cloudStatus') return;
+    // Een lokale delete-marker is definitief voor dit record-id. Oude async puts
+    // mogen een verwijdering nooit meer overschrijven.
+    if(await hasLocalDelete(store,obj.id)) return;
     if(!isSignedIn() || !navigator.onLine){ await queueOp({type:'put',store,recordId:obj.id}); return; }
     try{ await pushRecord(store,obj); }catch(e){ await queueOp({type:'put',store,recordId:obj.id}); throw e; }
   }
   async function queueDelete(store,id){
     if(!JKDB.stores.includes(store)) return;
-    // Eerst lokaal onthouden dat dit record verwijderd is. Daarna schrijven we
-    // een permanente cloud-tombstone. Andere apparaten zien die tombstone en
-    // verwijderen hun lokale kopie in plaats van hem opnieuw te uploaden.
-    const q=await queueOp({type:'delete',store,recordId:id});
+    await JKDB.markDeleteLocal(store,id);
+    await removePendingPuts(store,id);
+    const existing=(await JKDB.all('syncQueue')).find(q=>q.type==='delete'&&q.store===store&&q.recordId===id);
+    const q=existing||await queueOp({type:'delete',store,recordId:id});
     if(!isSignedIn() || !navigator.onLine) return;
     try{
       await markDeleted(store,id);
       await JKDB.removeLocal('syncQueue',q.id);
     }catch(e){
       console.warn('Cloud delete uitgesteld',store,id,e);
-      // q blijft staan en wordt bij een volgende sync opnieuw geprobeerd.
     }
   }
 
@@ -94,25 +105,31 @@ const JKCloud = (() => {
   }
   async function pushRecord(store,obj){
     if(!isSignedIn()) return;
+    if(await hasLocalDelete(store,obj.id)) return;
     const data=await encodeRecord(store,obj);
+    // Nogmaals controleren na eventuele Storage-upload: een delete kan tijdens
+    // de upload zijn gestart. In dat geval verwijderen we de upload weer via
+    // markDeleted en schrijven we geen levend metadatarecord terug.
+    if(await hasLocalDelete(store,obj.id)){ await markDeleted(store,obj.id); return; }
     const row={user_id:user().id,store,record_id:obj.id,data,updated_at:obj._syncUpdatedAt||new Date().toISOString()};
     const {error}=await client.from('app_records').upsert(row,{onConflict:'user_id,store,record_id'});
     if(error) throw error;
   }
   async function markDeleted(store,id){
     if(!isSignedIn()) return;
-    const when=new Date().toISOString();
-    const row={
-      user_id:user().id,
-      store,
-      record_id:id,
-      data:{__deleted:true,deleted_at:when},
-      updated_at:when
-    };
-    const {error}=await client.from('app_records').upsert(row,{onConflict:'user_id,store,record_id'});
-    if(error) throw error;
-    // Eventuele gekoppelde bestanden in Storage mogen wel echt weg; de
-    // metadata-tombstone hierboven blijft bestaan om de delete te synchroniseren.
+    const when=(await JKDB.get('deleteMarkers',`${store}|${id}`))?.deletedAt||new Date().toISOString();
+
+    // 1. Eerst de delete in een aparte cloudtabel vastleggen. Deze tabel kan
+    // niet door een oude app_records-upsert worden overschreven.
+    const delRow={user_id:user().id,store,record_id:id,deleted_at:when};
+    const {error:delError}=await client.from('app_deletions').upsert(delRow,{onConflict:'user_id,store,record_id'});
+    if(delError) throw delError;
+
+    // 2. Daarna het levende record echt verwijderen.
+    const {error:recordError}=await client.from('app_records').delete().eq('user_id',user().id).eq('store',store).eq('record_id',id);
+    if(recordError) throw recordError;
+
+    // 3. En tenslotte eventuele PDF/blob-bestanden uit Storage verwijderen.
     const prefix=`${user().id}/${store}/${id}/`;
     const folder=`${user().id}/${store}/${id}`;
     const {data:list,error:listError}=await client.storage.from(BUCKET).list(folder);
@@ -125,10 +142,16 @@ const JKCloud = (() => {
   async function flushQueue(){
     if(!isSignedIn() || !navigator.onLine) return;
     const qs=await JKDB.all('syncQueue');
-    for(const q of qs){
+    // Deletes eerst. Zo kan een oude put in dezelfde queue nooit na een delete
+    // hetzelfde record opnieuw schrijven.
+    const ordered=[...qs].sort((a,b)=>(a.type==='delete'?0:1)-(b.type==='delete'?0:1));
+    for(const q of ordered){
       try{
         if(q.type==='delete') await markDeleted(q.store,q.recordId);
-        else { const obj=await JKDB.get(q.store,q.recordId); if(obj) await pushRecord(q.store,obj); }
+        else {
+          if(await hasLocalDelete(q.store,q.recordId)){ await JKDB.removeLocal('syncQueue',q.id); continue; }
+          const obj=await JKDB.get(q.store,q.recordId); if(obj) await pushRecord(q.store,obj);
+        }
         await JKDB.removeLocal('syncQueue',q.id);
       }catch(e){ console.warn('Sync queue item failed',q,e); }
     }
@@ -139,47 +162,53 @@ const JKCloud = (() => {
     let localChanged=false;
     try{
       await flushQueue();
-      const {data:rows,error}=await client.from('app_records').select('store,record_id,data,updated_at').eq('user_id',user().id);
-      if(error) throw error;
-      const remote=new Map((rows||[]).map(r=>[`${r.store}|${r.record_id}`,r]));
+      const [recordsRes,deletionsRes]=await Promise.all([
+        client.from('app_records').select('store,record_id,data,updated_at').eq('user_id',user().id),
+        client.from('app_deletions').select('store,record_id,deleted_at').eq('user_id',user().id)
+      ]);
+      if(recordsRes.error) throw recordsRes.error;
+      if(deletionsRes.error) throw deletionsRes.error;
 
-      // Verwijderingen moeten tijdens de HELE merge leidend blijven. In v8
-      // werden tombstones uit `remote` gehaald; daarna zag de lokale merge
-      // `!rr` en uploadde een nog aanwezige kopie opnieuw. Dat maakte verwijderde
-      // documenten en urenregistraties weer levend. Bewaar daarom aparte sets.
+      const legacyDeleted=(recordsRes.data||[]).filter(r=>r?.data?.__deleted);
+      const remote=new Map((recordsRes.data||[]).filter(r=>!r?.data?.__deleted).map(r=>[`${r.store}|${r.record_id}`,r]));
       const deletedKeys=new Set();
-      const pendingDeletes=(await JKDB.all('syncQueue')).filter(q=>q.type==='delete');
-      for(const q of pendingDeletes) deletedKeys.add(`${q.store}|${q.recordId}`);
 
-      for(const [key,rr] of remote.entries()){
-        if(rr?.data?.__deleted) deletedKeys.add(key);
+      // Lokale markers blijven bewust bewaard, zodat een oude lokale kopie ook
+      // na browserherstart niet opnieuw kan worden geupload.
+      for(const m of await JKDB.all('deleteMarkers')) deletedKeys.add(`${m.store}|${m.recordId}`);
+      for(const q of (await JKDB.all('syncQueue')).filter(q=>q.type==='delete')) deletedKeys.add(`${q.store}|${q.recordId}`);
+      for(const d of deletionsRes.data||[]) deletedKeys.add(`${d.store}|${d.record_id}`);
+      for(const r of legacyDeleted) deletedKeys.add(`${r.store}|${r.record_id}`);
+
+      // Migreer tombstones uit oudere appversies naar de nieuwe aparte
+      // verwijdertabel en ruim het oude app_records-record op.
+      for(const r of legacyDeleted){
+        try{
+          await JKDB.markDeleteLocal(r.store,r.record_id,r?.data?.deleted_at||r.updated_at);
+          await markDeleted(r.store,r.record_id);
+        }catch(e){ console.warn('Oude tombstone migreren mislukt',r,e); }
       }
 
-      // Een delete/tombstone wint altijd van een lokale kopie op elk apparaat.
+      // Een verwijdering wint altijd, op ieder apparaat.
       for(const key of deletedKeys){
         const sep=key.indexOf('|'), store=key.slice(0,sep), id=key.slice(sep+1);
-        if(JKDB.stores.includes(store) && await JKDB.get(store,id)){
-          await JKDB.removeLocal(store,id);
-          localChanged=true;
+        if(JKDB.stores.includes(store)){
+          if(await JKDB.get(store,id)){ await JKDB.removeLocal(store,id); localChanged=true; }
+          // Cloud-delete ook lokaal onthouden wanneer deze op een ander apparaat
+          // is uitgevoerd.
+          if(!(await JKDB.get('deleteMarkers',key))){
+            await JKDB.putLocal('deleteMarkers',{id:key,store,recordId:id,deletedAt:new Date().toISOString()});
+          }
         }
-        // Niet als normaal record verwerken, maar deletedKeys blijft bestaan
-        // zodat de lokale loop hem ook niet opnieuw kan uploaden.
         remote.delete(key);
       }
+
       const hasSyncedBefore=!!(await JKDB.get('settings','cloudStatus'))?.lastSync;
       for(const store of JKDB.stores){
         const local=await JKDB.all(store);
         for(const obj of local){
           const key=`${store}|${obj.id}`;
-          // Nooit een lokaal record terug uploaden als dezelfde sleutel bewust
-          // verwijderd is (cloud-tombstone of nog wachtende lokale delete).
-          if(deletedKeys.has(key)){
-            if(await JKDB.get(store,obj.id)){
-              await JKDB.removeLocal(store,obj.id);
-              localChanged=true;
-            }
-            continue;
-          }
+          if(deletedKeys.has(key)){ await JKDB.removeLocal(store,obj.id); localChanged=true; continue; }
           const rr=remote.get(key);
           if(!rr){ await pushRecord(store,obj); continue; }
           const lt=new Date(obj._syncUpdatedAt||0).getTime(), rt=new Date(rr.updated_at||0).getTime();
@@ -187,15 +216,15 @@ const JKCloud = (() => {
             const decoded=await decodeRecord(rr.data); decoded._syncUpdatedAt=rr.updated_at; await JKDB.putLocal(store,decoded); localChanged=true;
           } else if(lt>rt+1000) await pushRecord(store,obj);
           else if(rt>lt+1000){
-            const decoded=await decodeRecord(rr.data);
-            decoded._syncUpdatedAt=rr.updated_at;
-            await JKDB.putLocal(store,decoded); localChanged=true;
+            const decoded=await decodeRecord(rr.data); decoded._syncUpdatedAt=rr.updated_at; await JKDB.putLocal(store,decoded); localChanged=true;
           }
           remote.delete(key);
         }
       }
       for(const rr of remote.values()){
         if(!JKDB.stores.includes(rr.store)) continue;
+        const key=`${rr.store}|${rr.record_id}`;
+        if(deletedKeys.has(key)) continue;
         const decoded=await decodeRecord(rr.data);
         decoded._syncUpdatedAt=rr.updated_at;
         await JKDB.putLocal(rr.store,decoded); localChanged=true;
