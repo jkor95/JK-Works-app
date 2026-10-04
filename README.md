@@ -1,21 +1,13 @@
-# JK Works Dordrecht App
+# JK Works Dordrecht app - v12
 
 Persoonlijke PWA voor JK Works Dordrecht.
 
-## Installatie / update
+## Nieuw in v12
+- Documenten opent voortaan eerst alleen de drie mappen: Offertes, Facturen en Diversen.
+- Er wordt niet meer automatisch een lijst met alle documenten getoond.
+- De knop 'Alle documenten' is verwijderd.
+- Na het openen van een map zie je uitsluitend documenten uit die map.
+- Met 'Mappen' ga je terug naar de mapkeuze.
 
-1. Upload alle bestanden uit deze map naar de bestaande GitHub Pages repository.
-2. Voer `SUPABASE_SETUP.sql` uit in Supabase > SQL Editor. Het script is idempotent en mag opnieuw worden uitgevoerd.
-3. Wacht tot GitHub Pages is bijgewerkt en laad de app opnieuw op iPhone en Mac.
-4. Log op beide apparaten in met hetzelfde account.
-
-## Opslag
-
-- GitHub bevat alleen de app-code en standaardtemplates.
-- Bedrijfsgegevens en uren staan in Supabase `app_records`.
-- Verwijderingen staan in Supabase `app_deletions`.
-- Geuploade PDF-bestanden staan in Supabase Storage, bucket `jkworks-files`; documentmetadata staat in `app_records`.
-
-## v10
-
-Verwijderen is opnieuw opgebouwd met een aparte permanente verwijderlog (`app_deletions`). Hierdoor kunnen documenten en urenregistraties niet meer door een oud lokaal apparaat of een vertraagde upload worden teruggezet. Documentnamen blijven bewerkbaar.
+## Bijwerken
+Vervang de bestanden in de bestaande GitHub Pages repository door deze versie en commit de wijzigingen. Er is geen nieuwe Supabase SQL nodig voor v12.

@@ -28,3 +28,6 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}.topbar{position
 .status-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .status-chip{font-size:11px;padding:3px 7px;border-radius:999px;background:var(--card2,#eef1f4);color:var(--muted,#68707a);font-weight:600}
 .status-chip.on{background:#e7f6ec;color:#237a3b}
+
+/* v11: PDF-voorbeeld */
+.pdf-preview-host{margin-top:12px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#d9d9d6}.pdf-preview-host[hidden]{display:none}.pdf-preview-frame{display:block;width:100%;height:68vh;min-height:520px;border:0;background:#fff}@media(max-width:600px){.pdf-preview-frame{height:62vh;min-height:440px}}
