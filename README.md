@@ -42,3 +42,9 @@ Het dashboard is vereenvoudigd: de zwarte merk/headerkaart en KPI-blokken zijn v
 
 ## v20
 Bij facturen staat de geselecteerde urenregistratie op regel 1 als Werkuren. De klusnaam wordt niet meer als factuurregel toegevoegd; de klus blijft alleen de bron voor klant-, datum- en koppelgegevens.
+
+
+## v21
+- Offertes en facturen gebruiken Helvetica 12 pt voor alle ingevulde PDF-velden.
+- Offertes hebben nu net als facturen de mogelijkheid om geregistreerde uren op regel 1 te zetten.
+- Klusselectie blijft voor beide documenttypen de bron voor klantgegevens en werkzaamheden.

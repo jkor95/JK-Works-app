@@ -1,4 +1,4 @@
-const CACHE='jkworks-v20-invoice-hours-first';
+const CACHE='jkworks-v21-helvetica12-quote-parity';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
