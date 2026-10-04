@@ -1,4 +1,4 @@
-const CACHE='jkworks-v12-folder-picker';
+const CACHE='jkworks-v14-no-contactline-pdf';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
