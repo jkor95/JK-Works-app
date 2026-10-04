@@ -1,7 +1,8 @@
 const JKDB = (() => {
   const DB_NAME = 'jkworks-dordrecht';
-  const DB_VERSION = 2;
+  const DB_VERSION = 3;
   const stores = ['mboxes','tools','checklists','clients','jobs','timeEntries','pdfTemplates','documents','settings'];
+  const internalStores = ['syncQueue'];
   let dbPromise;
 
   function open(){
@@ -10,7 +11,7 @@ const JKDB = (() => {
       const req = indexedDB.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = () => {
         const db = req.result;
-        stores.forEach(name => {
+        [...stores,...internalStores].forEach(name => {
           if(!db.objectStoreNames.contains(name)) db.createObjectStore(name,{keyPath:'id'});
         });
       };
@@ -24,8 +25,19 @@ const JKDB = (() => {
   }
   async function all(store){const s=await tx(store);return reqP(s.getAll());}
   async function get(store,id){const s=await tx(store);return reqP(s.get(id));}
-  async function put(store,obj){const s=await tx(store,'readwrite');await reqP(s.put(obj));return obj;}
-  async function remove(store,id){const s=await tx(store,'readwrite');return reqP(s.delete(id));}
+  async function putLocal(store,obj){const s=await tx(store,'readwrite');await reqP(s.put(obj));return obj;}
+  async function removeLocal(store,id){const s=await tx(store,'readwrite');return reqP(s.delete(id));}
+  async function put(store,obj,opts={}){
+    const stamped={...obj};
+    if(!opts.preserveTimestamp) stamped._syncUpdatedAt=new Date().toISOString();
+    await putLocal(store,stamped);
+    if(!opts.localOnly && !window.__JK_SEEDING && window.JKCloud?.queuePut) window.JKCloud.queuePut(store,stamped).catch(()=>{});
+    return stamped;
+  }
+  async function remove(store,id,opts={}){
+    await removeLocal(store,id);
+    if(!opts.localOnly && !window.__JK_SEEDING && window.JKCloud?.queueDelete) window.JKCloud.queueDelete(store,id).catch(()=>{});
+  }
   async function clear(store){const s=await tx(store,'readwrite');return reqP(s.clear());}
   function reqP(req){return new Promise((res,rej)=>{req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error);});}
   function id(prefix='id'){return prefix+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);}
@@ -116,5 +128,5 @@ const JKDB = (() => {
     }
   }
 
-  return {stores,open,all,get,put,remove,clear,id,seed};
+  return {stores,open,all,get,put,remove,clear,id,seed,putLocal,removeLocal};
 })();

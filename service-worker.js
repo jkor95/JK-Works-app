@@ -1,6 +1,6 @@
-const CACHE='jkworks-v3-20261004';
+const CACHE='jkworks-v4-20261004';
 const LOCAL=[
-  './','./index.html','./styles.css','./db.js','./app.js','./manifest.webmanifest',
+  './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
   './templates/factuur-kor.pdf','./templates/offerte-kor.pdf',
   './icons/icon-192.png','./icons/icon-512.png','./icons/icon-maskable-512.png','./icons/apple-touch-icon.png'
