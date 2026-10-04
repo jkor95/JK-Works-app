@@ -1,4 +1,4 @@
-const CACHE='jkworks-v8-delete-tombstones';
+const CACHE='jkworks-v9-delete-rename-fix';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
