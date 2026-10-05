@@ -1,4 +1,4 @@
-const CACHE='jkworks-v25-supabase-login-gate';
+const CACHE='jkworks-v26-supabase-login-gate';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',

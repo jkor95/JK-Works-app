@@ -1,4 +1,4 @@
-/* JK Works Dordrecht - persoonlijke PWA v25 */
+/* JK Works Dordrecht - persoonlijke PWA v26 */
 const App = (() => {
   const state = {route:'dashboard',gearTab:'mboxes',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,activeBlobUrl:null};
   const PDFLIB_URL='https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';
@@ -12,12 +12,32 @@ const App = (() => {
   const nlDate=iso=>{if(!iso)return '';const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(m)return `${m[3]}-${m[2]}-${m[1]}`;const d=new Date(iso);return Number.isNaN(+d)?String(iso):new Intl.DateTimeFormat('nl-NL').format(d)};
   const fmtDateTime=v=>v?new Intl.DateTimeFormat('nl-NL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(v)):'-';
   const jobTimeLabel=j=>j?.startTime?(j.endTime?`${j.startTime} - ${j.endTime}`:`${j.startTime}`):'';
-  function calendarStamp(date,time){return `${String(date||'').replaceAll('-','')}T${String(time||'00:00').replace(':','')}00`}
-  function calendarEnd(date,startTime,endTime){
-    if(!startTime)return String(addDays(date,1)).replaceAll('-','');
-    const a=new Date(`${date}T${startTime}:00`),b=new Date(`${date}T${endTime||startTime}:00`);
-    if(!endTime)b.setHours(b.getHours()+1);else if(b<=a)b.setDate(b.getDate()+1);
-    return `${b.getFullYear()}${pad(b.getMonth()+1)}${pad(b.getDate())}T${pad(b.getHours())}${pad(b.getMinutes())}00`;
+  const CALENDAR_TZ='Europe/Amsterdam';
+  function tzOffsetMs(instant,timeZone=CALENDAR_TZ){
+    const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(instant).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+    const asUTC=Date.UTC(Number(parts.year),Number(parts.month)-1,Number(parts.day),Number(parts.hour),Number(parts.minute),Number(parts.second));
+    return asUTC-instant.getTime();
+  }
+  function localCalendarDateToUtc(date,time,timeZone=CALENDAR_TZ){
+    const dm=String(date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/),tm=String(time||'').match(/^(\d{2}):(\d{2})$/);
+    if(!dm||!tm)return null;
+    const y=Number(dm[1]),m=Number(dm[2]),d=Number(dm[3]),hh=Number(tm[1]),mm=Number(tm[2]);
+    let guess=new Date(Date.UTC(y,m-1,d,hh,mm,0));
+    for(let i=0;i<2;i++)guess=new Date(Date.UTC(y,m-1,d,hh,mm,0)-tzOffsetMs(guess,timeZone));
+    return guess;
+  }
+  function calendarUtcStamp(date,time){
+    const d=localCalendarDateToUtc(date,time);
+    return d?d.toISOString().replace(/[-:]/g,'').replace(/\.000Z$/,'Z'):'';
+  }
+  function calendarTimedRange(date,startTime,endTime){
+    const start=localCalendarDateToUtc(date,startTime);
+    if(!start)return '';
+    let endDate=date,end=endTime?localCalendarDateToUtc(date,endTime):null;
+    if(!end)end=new Date(start.getTime()+60*60*1000);
+    else if(end<=start){endDate=addDays(date,1);end=localCalendarDateToUtc(endDate,endTime);}
+    const stamp=d=>d.toISOString().replace(/[-:]/g,'').replace(/\.000Z$/,'Z');
+    return `${stamp(start)}/${stamp(end)}`;
   }
   function googleCalendarUrlForJob(j,extra={}){
     if(!j?.date)return '';
@@ -25,7 +45,7 @@ const App = (() => {
     const details=[extra.kind&&extra.number?`${extra.kind}: ${extra.number}`:'',j.clientName?`Klant: ${j.clientName}`:'',j.phone?`Telefoon: ${j.phone}`:'',j.email?`E-mail: ${j.email}`:'',j.notes?`Notities: ${j.notes}`:''].filter(Boolean).join('\n');
     const location=[j.street||j.address,j.postal,j.city].filter(Boolean).join(', ');
     const params=new URLSearchParams({action:'TEMPLATE',text:titleText,details,location,ctz:'Europe/Amsterdam'});
-    params.set('dates',j.startTime?`${calendarStamp(j.date,j.startTime)}/${calendarEnd(j.date,j.startTime,j.endTime)}`:`${String(j.date).replaceAll('-','')}/${calendarEnd(j.date,'','')}`);
+    params.set('dates',j.startTime?calendarTimedRange(j.date,j.startTime,j.endTime):`${String(j.date).replaceAll('-','')}/${String(addDays(j.date,1)).replaceAll('-','')}`);
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
   }
   function openGoogleCalendarForJob(j,extra={}){const url=googleCalendarUrlForJob(j,extra);if(!url){alert('Vul eerst een datum bij de klus in.');return;}window.open(url,'_blank','noopener,noreferrer');}
@@ -43,7 +63,7 @@ const App = (() => {
     ].filter(Boolean).join('\n');
     const location=[j.street||j.address,j.postal,j.city].filter(Boolean).join(', ');
     const params=new URLSearchParams({action:'TEMPLATE',text:titleText,details,location,ctz:'Europe/Amsterdam'});
-    params.set('dates',`${calendarStamp(date,from)}/${calendarEnd(date,from,to)}`);
+    params.set('dates',calendarTimedRange(date,from,to));
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
   }
   function openGoogleCalendarForTimeEntry(e,j={}){const url=googleCalendarUrlForTimeEntry(e,j);if(!url){alert('Vul eerst datum, van en tot in.');return;}window.open(url,'_blank','noopener,noreferrer');}
