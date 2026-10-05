@@ -1,6 +1,6 @@
-# JK Works Dordrecht App v45
+# JK Works Dordrecht App v46
 
-## Nieuw in v45 – klusfoto’s compact in de cloud
+## Nieuw in v46 – klusfoto’s compact in de cloud
 - Klusfoto’s synchroniseren weer via Supabase zodat ze op iPhone, MacBook en andere ingelogde apparaten zichtbaar zijn.
 - Foto’s worden vóór opslag gecomprimeerd: lange zijde maximaal circa 1600 px, JPEG, met een doel/harde richtwaarde van maximaal circa 250 KB per foto.
 - Gemiddeld 9 foto’s per klus is daarmee maximaal circa 2,25 MB per klus.

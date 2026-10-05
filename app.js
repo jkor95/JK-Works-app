@@ -500,7 +500,7 @@ const App = (() => {
   }
   async function renderGear(){
     title('Materiaal');
-    $('#view').innerHTML=`<div class="tabs"><button class="tab ${state.gearTab==='mboxes'?'active':''}" data-gt="mboxes">Inpakchecklists</button><button class="tab ${state.gearTab==='tools'?'active':''}" data-gt="tools">Gereedschapregister</button><button class="tab ${state.gearTab==='checks'?'active':''}" data-gt="checks">Kluschecklists</button></div><input class="search" id="gearSearch" placeholder="${state.gearTab==='checks'?'Zoek kluschecklist...':'Zoek koffer, machine of onderdeel...'}"><div id="gearContent"></div>`;
+    $('#view').innerHTML=`<div class="tabs"><button class="tab ${state.gearTab==='checks'?'active':''}" data-gt="checks">Kluschecklists</button><button class="tab ${state.gearTab==='mboxes'?'active':''}" data-gt="mboxes">Inpakchecklists</button><button class="tab ${state.gearTab==='tools'?'active':''}" data-gt="tools">Gereedschapregister</button></div><input class="search" id="gearSearch" placeholder="${state.gearTab==='checks'?'Zoek kluschecklist...':'Zoek koffer, machine of onderdeel...'}"><div id="gearContent"></div>`;
     $$('[data-gt]').forEach(b=>b.addEventListener('click',()=>{state.gearTab=b.dataset.gt;renderGear()}));$('#gearSearch').addEventListener('input',renderGearContent);await renderGearContent();
   }
   async function renderGearContent(){
