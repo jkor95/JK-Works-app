@@ -1,4 +1,4 @@
-const CACHE='jkworks-v41-material-job-checklists';
+const CACHE='jkworks-v42-job-photos';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',

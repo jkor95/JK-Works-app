@@ -226,7 +226,7 @@ const JKCloud = (() => {
     }finally{ syncing=false; document.dispatchEvent(new CustomEvent('jkcloud-queue')); }
   }
 
-  async function pruneCloudToLocal(stores=['documents','timeEntries','jobs']){
+  async function pruneCloudToLocal(stores=['documents','timeEntries','jobs','jobPhotos']){
     if(!isSignedIn()) throw new Error('Niet ingelogd.');
     if(!navigator.onLine) throw new Error('Geen internetverbinding.');
     const allowed=stores.filter(s=>JKDB.stores.includes(s));

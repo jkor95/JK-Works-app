@@ -1,7 +1,7 @@
 const JKDB = (() => {
   const DB_NAME = 'jkworks-dordrecht';
-  const DB_VERSION = 4;
-  const stores = ['mboxes','tools','checklists','clients','jobs','timeEntries','pdfTemplates','documents','settings'];
+  const DB_VERSION = 5;
+  const stores = ['mboxes','tools','checklists','clients','jobs','jobPhotos','timeEntries','pdfTemplates','documents','settings'];
   const internalStores = ['syncQueue','deleteMarkers'];
   let dbPromise;
 
@@ -298,6 +298,18 @@ const JKDB = (() => {
       ];
       for(const c of jobChecklists) await put('checklists',c);
       await put('settings',{id:'seedVersion',value:4,at:new Date().toISOString()});
+    }
+    if(v < 5){
+      const photoPoints=['Foto vóór de klus maken','Foto tijdens de klus maken','Foto na de klus maken'];
+      for(const c of await all('checklists')){
+        let items=(c.items||[]).filter(x=>!/^Foto\b/i.test(String(x).trim()));
+        const catering=/catering|horeca/i.test(String(c.name||''));
+        if(!catering) items=[...items,...photoPoints];
+        const checked={};
+        for(const item of items) if(c.checked?.[item]) checked[item]=true;
+        await put('checklists',{...c,items,checked,updatedAt:new Date().toISOString()});
+      }
+      await put('settings',{id:'seedVersion',value:5,at:new Date().toISOString()});
     }
   }
 
