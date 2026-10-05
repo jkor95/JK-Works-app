@@ -1,4 +1,4 @@
-/* JK Works Dordrecht - persoonlijke PWA v28 */
+/* JK Works Dordrecht - persoonlijke PWA v29 */
 const App = (() => {
   const state = {route:'dashboard',gearTab:'mboxes',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,activeBlobUrl:null};
   const PDFLIB_URL='https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';
@@ -14,7 +14,8 @@ const App = (() => {
   function normalizeClockTime(v){
     if(v==null)return '';
     const s=String(v).trim();
-    const m=s.match(/(?:^|T|\s)(\d{1,2}):(\d{2})(?::\d{2})?(?:$|[+Z\s])/i) || s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    // Accepteer HTML-time (08:30), seconden, ISO-datums en oudere notaties zoals 8.30.
+    const m=s.match(/(?:^|T|\s)(\d{1,2})[:.](\d{2})(?::\d{2})?(?:\.\d+)?(?:$|[+Z\s])/i) || s.match(/^(\d{1,2})[:.](\d{2})(?::\d{2})?(?:\.\d+)?$/);
     if(!m)return '';
     const h=Number(m[1]),min=Number(m[2]);
     if(h<0||h>23||min<0||min>59)return '';
@@ -51,18 +52,19 @@ const App = (() => {
     return `${stamp(start)}/${stamp(end)}`;
   }
   async function resolveJobCalendarTimes(j){
-    let start=jobStartTime(j),end=jobEndTime(j);
-    if(start)return {start,end};
-    // Fallback: oudere klussen of gesynchroniseerde records kunnen geen startTime/endTime
-    // hebben, terwijl er wel urenregistraties voor dezelfde klus en datum bestaan.
-    // In dat geval gebruiken we de vroegste start en laatste eindtijd van die dag.
-    if(j?.id && j?.date){
-      const entries=(await JKDB.all('timeEntries')).filter(e=>e.jobId===j.id && entryDate(e)===j.date);
+    // Lees bij klikken altijd de nieuwste klus uit IndexedDB. Zo gebruiken we niet
+    // per ongeluk een oudere modal-kopie zonder recent opgeslagen tijden.
+    const fresh=(j?.id ? await JKDB.get('jobs',j.id) : null) || j || {};
+    let start=jobStartTime(fresh),end=jobEndTime(fresh);
+    if(start)return {job:fresh,start,end};
+    // Fallback: gekoppelde urenregistraties op dezelfde klus/datum.
+    if(fresh?.id && fresh?.date){
+      const entries=(await JKDB.all('timeEntries')).filter(e=>e.jobId===fresh.id && entryDate(e)===fresh.date);
       const starts=entries.map(e=>normalizeClockTime(entryFrom(e))).filter(Boolean).sort();
       const ends=entries.map(e=>normalizeClockTime(entryTo(e))).filter(Boolean).sort();
       if(starts.length){ start=starts[0]; end=ends.length?ends.at(-1):''; }
     }
-    return {start,end};
+    return {job:fresh,start,end};
   }
   function googleCalendarUrlForJob(j,extra={},times={}){
     if(!j?.date)return '';
@@ -71,16 +73,25 @@ const App = (() => {
     const location=[j.street||j.address,j.postal,j.city].filter(Boolean).join(', ');
     const params=new URLSearchParams({action:'TEMPLATE',text:titleText,details,location,ctz:CALENDAR_TZ});
     const start=normalizeClockTime(times.start||jobStartTime(j)),end=normalizeClockTime(times.end||jobEndTime(j));
-    params.set('dates',start?calendarTimedRange(j.date,start,end):`${String(j.date).replaceAll('-','')}/${String(addDays(j.date,1)).replaceAll('-','')}`);
+    // Gebruik exact dezelfde timed-range-opbouw als bij Urenregistratie, want die
+    // route wordt door Google Agenda op mobiel correct als afspraak met tijd gelezen.
+    if(start){
+      const range=calendarTimedRange(j.date,start,end);
+      if(range) params.set('dates',range);
+    }
+    if(!params.has('dates')) params.set('dates',`${String(j.date).replaceAll('-','')}/${String(addDays(j.date,1)).replaceAll('-','')}`);
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
   }
   async function openGoogleCalendarForJob(j,extra={}){
-    if(!j?.date){alert('Vul eerst een datum bij de klus in.');return;}
-    const times=await resolveJobCalendarTimes(j);
-    const url=googleCalendarUrlForJob(j,extra,times);
-    if(!url)return;
-    if(!times.start) console.warn('Google Agenda: geen starttijd bij klus gevonden; hele-dagafspraak gebruikt.',j);
-    window.open(url,'_blank','noopener,noreferrer');
+    const resolved=await resolveJobCalendarTimes(j);
+    const fresh=resolved.job||j;
+    if(!fresh?.date){alert('Vul eerst een datum bij de klus in.');return;}
+    if(!resolved.start){
+      const proceed=confirm('Bij deze klus kon geen starttijd worden gevonden. Google Agenda zou er daarom een hele-dagafspraak van maken. Toch doorgaan?');
+      if(!proceed)return;
+    }
+    const url=googleCalendarUrlForJob(fresh,extra,resolved);
+    if(url)window.open(url,'_blank','noopener,noreferrer');
   }
   function googleCalendarUrlForTimeEntry(e,j={}){
     const date=entryDate(e),from=entryFrom(e),to=entryTo(e);if(!date||!from||!to)return '';
@@ -262,6 +273,57 @@ const App = (() => {
     $('#editThisJob').addEventListener('click',()=>{closeModal();editJob(id)});$('#hoursThisJob').addEventListener('click',()=>{closeModal();editTimeEntry(null,id)});$('#quoteThisJob').addEventListener('click',()=>{closeModal();createBusinessDoc('Offerte',{jobId:j.id,clientId:j.clientId,workDate:j.date})});$('#invoiceThisJob').addEventListener('click',()=>{closeModal();createBusinessDoc('Factuur',{jobId:j.id,clientId:j.clientId,workDate:j.date})});$('#calendarThisJob').addEventListener('click',()=>openGoogleCalendarForJob(j));$$('[data-time]').forEach(x=>x.addEventListener('click',()=>{closeModal();editTimeEntry(x.dataset.time)}));$$('[data-jobcheck]').forEach(c=>c.addEventListener('change',async()=>{j.checklistState=j.checklistState||{};j.checklistState[c.dataset.jobcheck]=c.checked;await JKDB.put('jobs',j)}));
   }
 
+  const normGearName=v=>String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+  function toolMatchesPackingItem(t,location,item){
+    if(!t || t.location!==location)return false;
+    const a=normGearName(t.name),b=normGearName(item);
+    return !!a && !!b && (a===b || (a.length>=7 && b.includes(a)) || (b.length>=7 && a.includes(b)));
+  }
+  function inferGearCategory(name){
+    const n=normGearName(name);
+    if(n.includes('accu'))return 'Accu';
+    if(n.includes('ladder')||n.includes('trap'))return 'Ladder / trap';
+    if(n.includes('handschoen')||n.includes('bril')||n.includes('oordop')||n.includes('mondkap'))return 'PBM';
+    if(n.includes('tape')||n.includes('kit')||n.includes('lijm')||n.includes('wd 40'))return 'Materiaal / verbruik';
+    if(n.includes('boor')||n.includes('zaag')||n.includes('tang')||n.includes('schroevendraaier')||n.includes('hamer')||n.includes('sleutel')||n.includes('waterpas')||n.includes('rolmaat')||n.includes('mes'))return 'Handgereedschap / accessoire';
+    return 'Gereedschap / materiaal';
+  }
+  async function unifiedGearRows(){
+    const [boxes,tools]=await Promise.all([JKDB.all('mboxes'),JKDB.all('tools')]);
+    const used=new Set(),rows=[];
+    for(const box of boxes){
+      for(const item of box.items||[]){
+        const match=tools.find(t=>!used.has(t.id)&&toolMatchesPackingItem(t,box.id,item));
+        if(match)used.add(match.id);
+        rows.push({key:`pack|${box.id}|${encodeURIComponent(item)}`,name:item,category:match?.category||inferGearCategory(item),location:box.id,toolId:match?.id||'',source:'packing'});
+      }
+    }
+    for(const t of tools){
+      if(used.has(t.id))continue;
+      rows.push({key:`tool|${t.id}`,name:t.name,category:t.category||inferGearCategory(t.name),location:t.location||'',toolId:t.id,source:'tool'});
+    }
+    return {boxes,rows};
+  }
+  async function updatePackingForTool(oldLocation,oldName,newLocation,newName){
+    if(oldLocation){
+      const oldBox=await JKDB.get('mboxes',oldLocation);
+      if(oldBox){
+        const keepSame=oldLocation===newLocation && normGearName(oldName)===normGearName(newName);
+        if(!keepSame){
+          oldBox.items=(oldBox.items||[]).filter(i=>normGearName(i)!==normGearName(oldName));
+          if(oldBox.checked){delete oldBox.checked[oldName];}
+          await JKDB.put('mboxes',oldBox);
+        }
+      }
+    }
+    if(newLocation && newName){
+      const newBox=await JKDB.get('mboxes',newLocation);
+      if(newBox && !(newBox.items||[]).some(i=>normGearName(i)===normGearName(newName))){
+        newBox.items=[...(newBox.items||[]),newName];
+        await JKDB.put('mboxes',newBox);
+      }
+    }
+  }
   async function renderGear(){
     title('Materiaal');
     $('#view').innerHTML=`<div class="tabs"><button class="tab ${state.gearTab==='mboxes'?'active':''}" data-gt="mboxes">Inpakchecklists</button><button class="tab ${state.gearTab==='tools'?'active':''}" data-gt="tools">Gereedschapregister</button></div><input class="search" id="gearSearch" placeholder="Zoek koffer, machine of onderdeel..."><div id="gearContent"></div>`;
@@ -277,8 +339,11 @@ const App = (() => {
       $('#reorderMboxes').addEventListener('click',()=>reorderMboxes());
       $$('[data-mbox]').forEach(x=>x.addEventListener('click',()=>showMboxChecklist(x.dataset.mbox)));
     }else{
-      const boxes=await JKDB.all('mboxes'),map=Object.fromEntries(boxes.map(m=>[m.id,`${m.name} · ${m.type}`]));const rows=(await JKDB.all('tools')).filter(t=>(t.name+' '+t.category+' '+(map[t.location]||'')).toLowerCase().includes(q));
-      c.innerHTML=`<div class="button-row"><button class="primary" id="addTool">+ Gereedschap</button></div><div class="list" style="margin-top:12px">${rows.map(t=>`<div class="list-item clickable" data-tool="${t.id}"><div class="main"><div class="title">${esc(t.name)}</div><div class="sub">${esc(t.category)} · ${esc(map[t.location]||'Los / vrij')}</div></div><span>›</span></div>`).join('')}</div>`;$('#addTool').addEventListener('click',()=>editTool());$$('[data-tool]').forEach(x=>x.addEventListener('click',()=>editTool(x.dataset.tool)));
+      const unified=await unifiedGearRows(),map=Object.fromEntries(unified.boxes.map(m=>[m.id,`${m.name} · ${m.type}`]));
+      const rows=unified.rows.filter(t=>(t.name+' '+t.category+' '+(map[t.location]||'')).toLowerCase().includes(q));
+      c.innerHTML=`<div class="button-row"><button class="primary" id="addTool">+ Nieuw (hand)gereedschap / materiaal</button></div><div class="successbox"><strong>Gekoppeld register</strong><br><span class="small">Alles uit de inpakchecklists staat automatisch ook in dit register. Voeg je hier iets toe met een locatie, dan wordt het tegelijk aan die inpakchecklist toegevoegd.</span></div><div class="list" style="margin-top:12px">${rows.map(t=>`<div class="list-item clickable" data-registry="${esc(t.key)}"><div class="main"><div class="title">${esc(t.name)}</div><div class="sub">${esc(t.category)} · ${esc(map[t.location]||'Los / vrij')}</div></div><span>›</span></div>`).join('')}</div>`;
+      $('#addTool').addEventListener('click',()=>editTool());
+      $$('[data-registry]').forEach(x=>x.addEventListener('click',()=>{const row=rows.find(r=>r.key===x.dataset.registry);if(row)editTool(row.toolId||null,{location:row.location,itemName:row.name})}));
     }
   }
   async function showMboxChecklist(id){
@@ -289,7 +354,7 @@ const App = (() => {
   async function editMbox(id){
     const m=id?await JKDB.get('mboxes',id):{id:JKDB.id('mbox'),name:'Nieuwe inpaklijst',type:'',items:[],notes:'',checked:{},order:(await JKDB.all('mboxes')).length};
     modal(`${modalHead(id?'Checklist bewerken':'Nieuwe checklist')}<form id="mboxForm"><div class="form-grid"><div class="field"><label>Naam</label><input name="name" value="${esc(m.name)}"></div><div class="field"><label>Type / inhoud</label><input name="type" value="${esc(m.type)}"></div><div class="field full"><label>Onderdelen - één per regel</label><textarea name="items" style="min-height:280px">${esc(m.items.join('\n'))}</textarea></div><div class="field full"><label>Notitie</label><textarea name="notes">${esc(m.notes||'')}</textarea></div></div><div class="button-row"><button class="primary">Opslaan</button>${id?'<button type="button" class="danger-btn" id="delMbox">Verwijderen</button>':''}</div></form>`);
-    $('#mboxForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),items=String(f.get('items')).split('\n').map(x=>x.trim()).filter(Boolean),checked={};items.forEach(i=>{if(m.checked?.[i])checked[i]=true});Object.assign(m,{name:f.get('name'),type:f.get('type'),items,notes:f.get('notes'),checked,updatedAt:new Date().toISOString()});await JKDB.put('mboxes',m);closeModal();toast('Checklist opgeslagen');renderGearContent();});$('#delMbox')?.addEventListener('click',async()=>{if(confirm('Deze lijst verwijderen?')){await JKDB.remove('mboxes',id);closeModal();renderGearContent();}});
+    $('#mboxForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),oldItems=[...(m.items||[])],items=String(f.get('items')).split('\n').map(x=>x.trim()).filter(Boolean),checked={};items.forEach(i=>{if(m.checked?.[i])checked[i]=true});Object.assign(m,{name:f.get('name'),type:f.get('type'),items,notes:f.get('notes'),checked,updatedAt:new Date().toISOString()});await JKDB.put('mboxes',m);const removed=oldItems.filter(x=>!items.some(i=>normGearName(i)===normGearName(x)));if(removed.length){const tools=await JKDB.all('tools');for(const t of tools.filter(t=>t.location===m.id&&removed.some(x=>toolMatchesPackingItem(t,m.id,x)))){t.location='';await JKDB.put('tools',t)}}closeModal();toast('Checklist en register bijgewerkt');renderGearContent();});$('#delMbox')?.addEventListener('click',async()=>{if(confirm('Deze lijst verwijderen? Gekoppelde registeritems worden Los / vrij.')){const tools=await JKDB.all('tools');for(const t of tools.filter(t=>t.location===id)){t.location='';await JKDB.put('tools',t)}await JKDB.remove('mboxes',id);closeModal();renderGearContent();}});
   }
   async function reorderMboxes(){
     let rows=await JKDB.all('mboxes');
@@ -303,10 +368,27 @@ const App = (() => {
     draw();
   }
 
-  async function editTool(id){
-    const t=id?await JKDB.get('tools',id):{id:JKDB.id('tool'),name:'',category:'',location:'',serial:'',purchaseDate:'',notes:''},boxes=await JKDB.all('mboxes');
-    modal(`${modalHead(id?'Gereedschap bewerken':'Nieuw gereedschap')}<form id="toolForm"><div class="field"><label>Naam</label><input name="name" required value="${esc(t.name)}"></div><div class="form-grid"><div class="field"><label>Categorie</label><input name="category" value="${esc(t.category)}"></div><div class="field"><label>Locatie</label><select name="location"><option value="">Los / vrij</option>${boxes.map(m=>`<option value="${m.id}" ${m.id===t.location?'selected':''}>${esc(m.name+' · '+m.type)}</option>`).join('')}</select></div><div class="field"><label>Serienummer</label><input name="serial" value="${esc(t.serial||'')}"></div><div class="field"><label>Aanschafdatum</label><input type="date" name="purchaseDate" value="${esc(t.purchaseDate||'')}"></div><div class="field full"><label>Notities</label><textarea name="notes">${esc(t.notes||'')}</textarea></div></div><div class="button-row"><button class="primary">Opslaan</button>${id?'<button type="button" class="danger-btn" id="delTool">Verwijderen</button>':''}</div></form>`);
-    $('#toolForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);['name','category','location','serial','purchaseDate','notes'].forEach(k=>t[k]=f.get(k));await JKDB.put('tools',t);closeModal();toast('Opgeslagen');renderGearContent();});$('#delTool')?.addEventListener('click',async()=>{if(confirm('Gereedschap verwijderen?')){await JKDB.remove('tools',id);closeModal();renderGearContent();}});
+  async function editTool(id,context={}){
+    const boxes=await JKDB.all('mboxes');
+    const existing=id?await JKDB.get('tools',id):null;
+    const isVirtual=!existing && !!context.itemName;
+    const t=existing||{id:JKDB.id('tool'),name:context.itemName||'',category:context.itemName?inferGearCategory(context.itemName):'',location:context.location||'',serial:'',purchaseDate:'',notes:''};
+    const oldName=context.itemName||t.name,oldLocation=context.location||t.location||'';
+    modal(`${modalHead(existing||isVirtual?'Gereedschap / materiaal bewerken':'Nieuw gereedschap / materiaal')}<form id="toolForm"><div class="field"><label>Naam</label><input name="name" required value="${esc(t.name)}"></div><div class="form-grid"><div class="field"><label>Categorie</label><input name="category" value="${esc(t.category)}"></div><div class="field"><label>Locatie / inpakchecklist</label><select name="location"><option value="">Los / vrij</option>${boxes.map(m=>`<option value="${m.id}" ${m.id===t.location?'selected':''}>${esc(m.name+' · '+m.type)}</option>`).join('')}</select><small class="muted">Met een locatie wordt dit item automatisch aan die inpakchecklist gekoppeld.</small></div><div class="field"><label>Serienummer</label><input name="serial" value="${esc(t.serial||'')}"></div><div class="field"><label>Aanschafdatum</label><input type="date" name="purchaseDate" value="${esc(t.purchaseDate||'')}"></div><div class="field full"><label>Notities</label><textarea name="notes">${esc(t.notes||'')}</textarea></div></div><div class="button-row"><button class="primary">Opslaan</button>${existing||isVirtual?'<button type="button" class="danger-btn" id="delTool">Verwijderen</button>':''}</div></form>`);
+    $('#toolForm').addEventListener('submit',async e=>{
+      e.preventDefault();const f=new FormData(e.target);
+      const newName=String(f.get('name')||'').trim(),newLocation=String(f.get('location')||'');
+      Object.assign(t,{name:newName,category:f.get('category'),location:newLocation,serial:f.get('serial'),purchaseDate:f.get('purchaseDate'),notes:f.get('notes')});
+      await JKDB.put('tools',t);
+      await updatePackingForTool(oldLocation,oldName,newLocation,newName);
+      closeModal();toast('Register en inpakchecklist bijgewerkt');renderGearContent();
+    });
+    $('#delTool')?.addEventListener('click',async()=>{
+      if(!confirm('Dit item verwijderen uit het gereedschapsregister én uit de gekoppelde inpakchecklist?'))return;
+      if(existing)await JKDB.remove('tools',existing.id);
+      await updatePackingForTool(oldLocation,oldName,'','');
+      closeModal();renderGearContent();
+    });
   }
 
   async function renderDocuments(){
@@ -354,7 +436,7 @@ const App = (() => {
     const lines=(prefill.lines||[]).slice(0,4);while(lines.length<4)lines.push({qty:'',description:'',price:''});
     const pClient=prefill.client||{};
     const prefillJob=jobs.find(j=>j.id===prefill.jobId)||null;
-    modal(`${modalHead('Nieuwe '+kind.toLowerCase())}<form id="businessDocForm"><div class="card form-section"><h3>Document</h3><div class="field"><label>Kies klus</label><select id="jobPick" required><option value="">Selecteer een klus</option>${jobs.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(j=>`<option value="${j.id}" ${prefill.jobId===j.id?'selected':''}>${esc(j.title)}${j.clientName?' · '+esc(j.clientName):''}${j.date?' · '+nlDate(j.date):''}</option>`).join('')}</select><small class="muted">De gekozen klus wordt gebruikt voor klantgegevens, datum werkzaamheden en de koppeling met uren. De klusnaam wordt niet als documentregel toegevoegd.</small></div><div class="form-grid"><div class="field"><label>${kind}nummer</label><input name="number" required value="${esc(number)}"></div><div class="field"><label>${isInvoice?'Factuurdatum':'Datum'}</label><input type="date" name="docDate" required value="${esc(docDate)}"></div><div class="field"><label>${isInvoice?'Datum werkzaamheden':'Werkzaamheden op'}</label>${isInvoice?`<input name="workDate" placeholder="bijv. 04-10-2026" value="${esc(initialWorkDate)}">`:`<input type="date" name="workDate" value="${esc(initialWorkDate)}">`}</div><div class="field"><label>${isInvoice?'Vervaldatum':'Geldig t/m'}</label><input type="date" name="deadline" required value="${esc(deadline)}" ${isInvoice?'':`max="${esc(deadline)}"`}>${isInvoice?'<small class="muted">Standaard 14 dagen na de factuurdatum. Je kunt de vervaldatum handmatig aanpassen.</small>':'<small class="muted">Automatisch maximaal 4 weken na offertedatum, of uiterlijk de dag vóór de werkzaamheden.</small>'}</div></div></div>
+    modal(`${modalHead('Nieuwe '+kind.toLowerCase())}<form id="businessDocForm"><div class="card form-section"><h3>Document</h3><div class="field"><label>Kies klus</label><select id="jobPick" required><option value="">Selecteer een klus</option>${jobs.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(j=>`<option value="${j.id}" ${prefill.jobId===j.id?'selected':''}>${esc(j.title)}${j.clientName?' · '+esc(j.clientName):''}${j.date?' · '+nlDate(j.date):''}</option>`).join('')}</select><small class="muted">De gekozen klus wordt gebruikt voor klantgegevens, datum werkzaamheden en de koppeling met uren. De klusnaam wordt niet als documentregel toegevoegd.</small><button type="button" class="secondary" id="calendarBusinessJob" style="margin-top:8px">📅 Zet gekozen klus in Google Agenda</button></div><div class="form-grid"><div class="field"><label>${kind}nummer</label><input name="number" required value="${esc(number)}"></div><div class="field"><label>${isInvoice?'Factuurdatum':'Datum'}</label><input type="date" name="docDate" required value="${esc(docDate)}"></div><div class="field"><label>${isInvoice?'Datum werkzaamheden':'Werkzaamheden op'}</label>${isInvoice?`<input name="workDate" placeholder="bijv. 04-10-2026" value="${esc(initialWorkDate)}">`:`<input type="date" name="workDate" value="${esc(initialWorkDate)}">`}</div><div class="field"><label>${isInvoice?'Vervaldatum':'Geldig t/m'}</label><input type="date" name="deadline" required value="${esc(deadline)}" ${isInvoice?'':`max="${esc(deadline)}"`}>${isInvoice?'<small class="muted">Standaard 14 dagen na de factuurdatum. Je kunt de vervaldatum handmatig aanpassen.</small>':'<small class="muted">Automatisch maximaal 4 weken na offertedatum, of uiterlijk de dag vóór de werkzaamheden.</small>'}</div></div></div>
       <div class="card form-section"><h3>Klant</h3><div class="field"><label>Kies bestaande klant</label><select id="clientPick"><option value="">Handmatig invullen</option>${clients.map(c=>`<option value="${c.id}" ${prefill.clientId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>Naam/bedrijf</label><input name="clientName" value="${esc(pClient.name||'')}"></div><div class="field"><label>T.a.v.</label><input name="attention" value="${esc(pClient.attention||'')}"></div><div class="field"><label>Adres</label><input name="address" value="${esc(pClient.address||pClient.street||'')}"></div><div class="field"><label>Postcode/Plaats</label><input name="postalCity" value="${esc(pClient.postalCity||[pClient.postal,pClient.city].filter(Boolean).join(' '))}"></div><div class="form-grid"><div class="field"><label>Telefoon</label><input name="phone" value="${esc(pClient.phone||'')}"></div><div class="field"><label>E-mail</label><input type="email" name="email" value="${esc(pClient.email||'')}"></div></div><p class="muted small">Kies je een bestaande klant, dan worden alle klantgegevens automatisch overgenomen.</p></div>
       <div class="card form-section"><div class="section-inline"><h3>Werkzaamheden / materiaal</h3><span class="muted small">max. 4 regels in huidig sjabloon</span></div><div class="line-head"><span>Aantal</span><span>Omschrijving</span><span>Prijs p/st</span><span>Totaal</span></div>${lines.map((l,i)=>`<div class="invoice-line" data-line="${i}"><input inputmode="decimal" name="qty${i}" placeholder="1" value="${esc(l.qty||'')}"><input name="desc${i}" placeholder="${isInvoice&&i===0?'Werkuren':'Omschrijving'}" value="${esc(isInvoice&&i===0?(l.description||'Werkuren'):(l.description||''))}" ${isInvoice&&i===0?'readonly':''}><input inputmode="decimal" name="price${i}" placeholder="0,00" value="${esc(l.price||'')}"><output id="lineTotal${i}">€ 0,00</output></div>`).join('')}<div class="doc-total"><span>Totaal te betalen</span><strong id="grandTotal">€ 0,00</strong></div></div>
       ${entries.length?`<div class="card form-section"><div class="section-inline"><h3>Uren uit urenregistratie</h3><span class="muted small">optioneel</span></div><p class="muted small">Selecteer registraties van de gekozen klus. De app telt ze op en zet ze als één werkurenregel op regel 1.</p><div class="hours-select">${entries.sort((a,b)=>entryDate(b).localeCompare(entryDate(a))).slice(0,30).map(e=>`<label class="packing-row"><input type="checkbox" data-hour-entry="${e.id}"><span><strong>${nlDate(entryDate(e))}</strong> · ${esc(e.jobTitle||'Algemeen')} · ${durationHM(entryMinutes(e))} u</span></label>`).join('')}</div><div class="form-grid" style="margin-top:10px"><div class="field"><label>Uurtarief voor geselecteerde uren</label><input id="hourRate" inputmode="decimal" value="${esc(company?.defaultRate||'')}"></div><div class="field action-field"><button type="button" class="secondary" id="hoursToLine">Voeg geselecteerde uren toe</button></div></div></div>`:''}
@@ -377,6 +459,7 @@ const App = (() => {
       const syncQuoteDeadline=()=>{const max=maxQuoteDeadline(),el=$('[name=deadline]');el.max=max;if(!el.value||el.value>max)el.value=max;else if(el.dataset.auto==='1')el.value=max;el.dataset.auto='1';};
       $('[name=docDate]').addEventListener('change',syncQuoteDeadline);$('[name=workDate]').addEventListener('change',syncQuoteDeadline);$('[name=deadline]').addEventListener('input',e=>e.target.dataset.auto='0');syncQuoteDeadline();
     }
+    $('#calendarBusinessJob')?.addEventListener('click',()=>{const j=jobs.find(x=>x.id===$('#jobPick').value);if(!j){alert('Selecteer eerst een klus.');return;}openGoogleCalendarForJob(j,{kind,number:document.querySelector('[name=number]')?.value||''});});
     $('#hoursToLine')?.addEventListener('click',()=>{const ids=$$('[data-hour-entry]:checked').map(x=>x.dataset.hourEntry);if(!ids.length){alert('Selecteer eerst één of meer urenregistraties.');return}const jobId=$('#jobPick').value;let selected=entries.filter(e=>ids.includes(e.id));if(jobId){const matching=selected.filter(e=>!e.jobId||e.jobId===jobId);if(matching.length!==selected.length){alert('Selecteer alleen urenregistraties die bij de gekozen klus horen.');return;}selected=matching;}const minutes=selected.reduce((s,e)=>s+entryMinutes(e),0),hours=Math.round(minutes/60*100)/100,rate=num($('#hourRate').value);const idx=0,dates=[...new Set(selected.map(entryDate))].sort();$(`[name=qty${idx}]`).value=String(hours).replace('.',',');$(`[name=desc${idx}]`).value='Werkuren';$(`[name=price${idx}]`).value=rate?String(rate).replace('.',','):'';if(!$('[name=workDate]').value&&dates.length)$('[name=workDate]').value=dates.length===1?nlDate(dates[0]):`${nlDate(dates[0])} t/m ${nlDate(dates.at(-1))}`;recalc();toast('Geregistreerde uren op regel 1 gezet');});
     $('#businessDocForm').addEventListener('submit',async e=>{e.preventDefault();const selectedJob=jobs.find(x=>x.id===$('#jobPick').value);if(!selectedJob){alert('Selecteer eerst een klus.');return;}const f=new FormData(e.target),items=[];for(let i=0;i<4;i++)items.push({qty:f.get(`qty${i}`),description:f.get(`desc${i}`),price:f.get(`price${i}`)});let chosenDeadline=f.get('deadline');if(isInvoice){if(!chosenDeadline)chosenDeadline=addDays(f.get('docDate'),14);}else{const max=maxQuoteDeadline();if(!chosenDeadline||chosenDeadline>max)chosenDeadline=max;}const data={kind,number:f.get('number'),docDate:f.get('docDate'),workDate:f.get('workDate'),deadline:chosenDeadline,jobId:$('#jobPick').value,clientId:$('#clientPick').value,client:{name:f.get('clientName'),attention:f.get('attention'),address:f.get('address'),postalCity:f.get('postalCity'),phone:f.get('phone'),email:f.get('email')},lines:items,total:recalc()};try{const d=await generateBusinessPdf(data);closeModal();toast(kind+' opgeslagen');state.docFolder=isInvoice?'factuur':'offerte';await showDocument(d.id);if(state.route==='documents')renderDocuments();}catch(err){console.error(err);alert('PDF maken mislukt: '+err.message)}});
   }
@@ -392,9 +475,9 @@ const App = (() => {
   async function showDocument(id){
     const d=await JKDB.get('documents',id),folder=docFolder(d),m=d.meta||{},linkedJob=m.jobId?await JKDB.get('jobs',m.jobId):null;
     const statusBox=folder==='factuur'?`<div class="card" style="margin-top:12px"><h3>Status factuur</h3><label class="checkline"><input type="checkbox" id="docSent" ${m.sent?'checked':''}><span>Verstuurd</span></label><label class="checkline"><input type="checkbox" id="docPaid" ${m.paid?'checked':''}><span>Betaald</span></label></div>`:folder==='offerte'?`<div class="card" style="margin-top:12px"><h3>Status offerte</h3><label class="checkline"><input type="checkbox" id="docSent" ${m.sent?'checked':''}><span>Verstuurd</span></label><label class="checkline"><input type="checkbox" id="docConfirmed" ${m.confirmed?'checked':''}><span>Bevestigd</span></label></div>`:'';
-    modal(`${modalHead(d.filename)}<div class="card"><div class="document-card"><div class="doc-icon">PDF</div><div><h3>${esc(d.filename)}</h3><div class="muted small">${esc(d.kind||'PDF')} · ${fmtDateTime(d.createdAt)}</div>${d.meta?.total!=null?`<div class="big-number" style="margin-top:8px">${money(d.meta.total)}</div>`:''}</div></div><div class="button-row" style="margin-top:14px"><button class="primary" id="previewDoc">Bekijk PDF</button><button class="secondary" id="shareDoc">Delen / bewaar in iCloud</button><button class="secondary" id="downloadDoc">Download</button>${linkedJob?.date?'<button class="secondary" id="calendarDoc">📅 Zet klus in Google Agenda</button>':''}</div><div id="pdfPreviewHost" class="pdf-preview-host" hidden></div>${folder==='offerte'&&d.meta?.lines?`<button class="secondary" id="quoteToInvoice" style="width:100%;margin-top:10px">Zet offerte om naar factuur</button>`:''}</div>${statusBox}<div class="card" style="margin-top:12px"><h3>Documentnaam</h3><div class="field"><label>Bestandsnaam</label><input id="docFilename" value="${esc(d.filename)}"></div><button class="secondary" id="renameDoc" style="width:100%">Naam opslaan</button></div><div class="card" style="margin-top:12px"><h3>Map</h3><div class="field"><label>Verplaats document naar</label><select id="moveDocFolder"><option value="offerte" ${folder==='offerte'?'selected':''}>Offertes</option><option value="factuur" ${folder==='factuur'?'selected':''}>Facturen</option><option value="diversen" ${folder==='diversen'?'selected':''}>Diversen</option></select></div></div><button class="danger-btn" id="delDoc" style="width:100%">Uit app verwijderen</button>`);
+    modal(`${modalHead(d.filename)}<div class="card"><div class="document-card"><div class="doc-icon">PDF</div><div><h3>${esc(d.filename)}</h3><div class="muted small">${esc(d.kind||'PDF')} · ${fmtDateTime(d.createdAt)}</div>${d.meta?.total!=null?`<div class="big-number" style="margin-top:8px">${money(d.meta.total)}</div>`:''}</div></div><div class="button-row" style="margin-top:14px"><button class="primary" id="previewDoc">Bekijk PDF</button><button class="secondary" id="shareDoc">Delen / bewaar in iCloud</button><button class="secondary" id="downloadDoc">Download</button>${folder==='offerte'||folder==='factuur'?'<button class="secondary" id="calendarDoc">📅 Google Agenda</button>':''}</div><div id="pdfPreviewHost" class="pdf-preview-host" hidden></div>${folder==='offerte'&&d.meta?.lines?`<button class="secondary" id="quoteToInvoice" style="width:100%;margin-top:10px">Zet offerte om naar factuur</button>`:''}</div>${statusBox}<div class="card" style="margin-top:12px"><h3>Documentnaam</h3><div class="field"><label>Bestandsnaam</label><input id="docFilename" value="${esc(d.filename)}"></div><button class="secondary" id="renameDoc" style="width:100%">Naam opslaan</button></div><div class="card" style="margin-top:12px"><h3>Map</h3><div class="field"><label>Verplaats document naar</label><select id="moveDocFolder"><option value="offerte" ${folder==='offerte'?'selected':''}>Offertes</option><option value="factuur" ${folder==='factuur'?'selected':''}>Facturen</option><option value="diversen" ${folder==='diversen'?'selected':''}>Diversen</option></select></div></div><button class="danger-btn" id="delDoc" style="width:100%">Uit app verwijderen</button>`);
     $('#previewDoc').addEventListener('click',()=>{const host=$('#pdfPreviewHost');if(!host)return;if(!host.hidden){host.hidden=true;host.innerHTML='';if(state.activeBlobUrl){URL.revokeObjectURL(state.activeBlobUrl);state.activeBlobUrl=null;}$('#previewDoc').textContent='Bekijk PDF';return;}if(!(d.blob instanceof Blob)){alert('Dit PDF-bestand is nog niet lokaal beschikbaar. Synchroniseer opnieuw en probeer het nog eens.');return;}state.activeBlobUrl=URL.createObjectURL(d.blob);host.innerHTML=`<iframe class="pdf-preview-frame" src="${state.activeBlobUrl}#toolbar=0&navpanes=0" title="Voorbeeld ${esc(d.filename)}"></iframe>`;host.hidden=false;$('#previewDoc').textContent='Sluit voorbeeld';});
-    $('#shareDoc').addEventListener('click',()=>shareBlob(d.blob,d.filename));$('#downloadDoc').addEventListener('click',()=>downloadBlob(d.blob,d.filename));$('#calendarDoc')?.addEventListener('click',()=>openGoogleCalendarForJob(linkedJob,{kind:d.kind||folder,number:m.number||d.filename.replace(/\.pdf$/i,'')}));$('#quoteToInvoice')?.addEventListener('click',()=>{const meta=d.meta;closeModal();createBusinessDoc('Factuur',{jobId:meta.jobId,clientId:meta.clientId,client:meta.client,lines:meta.lines,workDate:meta.workDate})});
+    $('#shareDoc').addEventListener('click',()=>shareBlob(d.blob,d.filename));$('#downloadDoc').addEventListener('click',()=>downloadBlob(d.blob,d.filename));$('#calendarDoc')?.addEventListener('click',async()=>{let job=linkedJob;if(!job){const jobs=await JKDB.all('jobs');const work=String(m.workDate||'');const clientName=normGearName(m.client?.name||'');job=jobs.find(j=>(!work||j.date===work||nlDate(j.date)===work)&&(!clientName||normGearName(j.clientName)===clientName));}if(!job){alert('Dit document is niet aan een klus gekoppeld. Open de offerte/factuur vanuit een klus om Google Agenda te gebruiken.');return;}openGoogleCalendarForJob(job,{kind:d.kind||folder,number:m.number||d.filename.replace(/\.pdf$/i,'')});});$('#quoteToInvoice')?.addEventListener('click',()=>{const meta=d.meta;closeModal();createBusinessDoc('Factuur',{jobId:meta.jobId,clientId:meta.clientId,client:meta.client,lines:meta.lines,workDate:meta.workDate})});
     const saveStatus=async()=>{d.meta=d.meta||{};if($('#docSent'))d.meta.sent=$('#docSent').checked;if($('#docPaid'))d.meta.paid=$('#docPaid').checked;if($('#docConfirmed'))d.meta.confirmed=$('#docConfirmed').checked;await JKDB.put('documents',d);toast('Status opgeslagen');};
     $('#docSent')?.addEventListener('change',saveStatus);$('#docPaid')?.addEventListener('change',saveStatus);$('#docConfirmed')?.addEventListener('change',saveStatus);
     $('#renameDoc').addEventListener('click',async()=>{
