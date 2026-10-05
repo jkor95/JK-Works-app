@@ -1,4 +1,12 @@
-# JK Works Dordrecht App v47
+# JK Works Dordrecht App v48
+
+## Nieuw in v48 - jaaroverzicht verkoopfacturen
+- Onder Documenten staat een kleine knop **Jaaroverzicht PDF**.
+- Kies een kalenderjaar en download een PDF met samenvatting en detailregels van de opgeslagen facturen.
+- Het overzicht bevat o.a. factuurnummer, factuurdatum, klant, werkzaamheden, aantallen/prijzen, totaal en betaalstatus voor zover opgeslagen.
+- Het rapport is aanvullend; de originele facturen blijven de fiscale brondocumenten en moeten volgens de geldende bewaarplicht worden bewaard.
+- Geen nieuwe Supabase SQL nodig.
+
 
 ## Nieuw in v47 – duidelijkere kluschecklists
 - Klusfoto’s synchroniseren weer via Supabase zodat ze op iPhone, MacBook en andere ingelogde apparaten zichtbaar zijn.

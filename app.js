@@ -1,4 +1,4 @@
-/* JK Works Dordrecht - persoonlijke PWA v42 */
+/* JK Works Dordrecht - persoonlijke PWA v48 */
 const App = (() => {
   const state = {route:'dashboard',gearTab:'mboxes',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,activeBlobUrl:null,reminderChecking:false,snoozedReminderJobs:new Set(),pendingCloudRefresh:false,pendingAuthRefresh:false};
   window.__JK_UI_BUSY=false;
@@ -584,14 +584,90 @@ const App = (() => {
     const [docs,photos,jobs]=await Promise.all([JKDB.all('documents'),JKDB.all('jobPhotos'),JKDB.all('jobs')]);
     const counts={offerte:0,factuur:0,diversen:0,klusfotos:photos.length};docs.forEach(d=>counts[docFolder(d)]++);
     if(!['offerte','factuur','diversen','klusfotos'].includes(state.docFolder)){
-      $('#view').innerHTML=`<div class="button-row"><button class="primary" id="docQuote">+ Offerte</button><button class="primary" id="docInvoice">+ Factuur</button></div><div class="section-title"><h2>Kies een map</h2></div><div class="folder-grid"><button class="folder" data-folder="offerte"><span>📁</span><strong>Offertes</strong><small>${counts.offerte} bestanden</small></button><button class="folder" data-folder="factuur"><span>📁</span><strong>Facturen</strong><small>${counts.factuur} bestanden</small></button><button class="folder" data-folder="diversen"><span>📁</span><strong>Diversen</strong><small>${counts.diversen} bestanden</small></button><button class="folder" data-folder="klusfotos"><span>📷</span><strong>Klusfoto’s</strong><small>${counts.klusfotos} foto${counts.klusfotos===1?'':'’s'}</small></button></div><p class="muted small" style="margin-top:14px">Klusfoto’s gebruikt dezelfde fotorecords als de klus. Er wordt dus geen tweede cloudbestand opgeslagen. Na handmatige Sync zijn ze op je andere apparaten beschikbaar.</p>`;
-      $('#docQuote').addEventListener('click',()=>createBusinessDoc('Offerte'));$('#docInvoice').addEventListener('click',()=>createBusinessDoc('Factuur'));$$('[data-folder]').forEach(x=>x.addEventListener('click',()=>{state.docFolder=x.dataset.folder;renderDocuments()}));
+      $('#view').innerHTML=`<div class="button-row"><button class="primary" id="docQuote">+ Offerte</button><button class="primary" id="docInvoice">+ Factuur</button><button class="ghost" id="annualInvoices" style="margin-left:auto;font-size:12px;padding:7px 10px">Jaaroverzicht PDF</button></div><div class="section-title"><h2>Kies een map</h2></div><div class="folder-grid"><button class="folder" data-folder="offerte"><span>📁</span><strong>Offertes</strong><small>${counts.offerte} bestanden</small></button><button class="folder" data-folder="factuur"><span>📁</span><strong>Facturen</strong><small>${counts.factuur} bestanden</small></button><button class="folder" data-folder="diversen"><span>📁</span><strong>Diversen</strong><small>${counts.diversen} bestanden</small></button><button class="folder" data-folder="klusfotos"><span>📷</span><strong>Klusfoto’s</strong><small>${counts.klusfotos} foto${counts.klusfotos===1?'':'’s'}</small></button></div><p class="muted small" style="margin-top:14px">Klusfoto’s gebruikt dezelfde fotorecords als de klus. Er wordt dus geen tweede cloudbestand opgeslagen. Na handmatige Sync zijn ze op je andere apparaten beschikbaar.</p>`;
+      $('#docQuote').addEventListener('click',()=>createBusinessDoc('Offerte'));$('#docInvoice').addEventListener('click',()=>createBusinessDoc('Factuur'));$('#annualInvoices').addEventListener('click',()=>showAnnualInvoiceReport());$$('[data-folder]').forEach(x=>x.addEventListener('click',()=>{state.docFolder=x.dataset.folder;renderDocuments()}));
       return;
     }
     if(state.docFolder==='klusfotos') return renderJobPhotoDocuments(photos,jobs);
     const folderLabel=state.docFolder==='offerte'?'Offertes':state.docFolder==='factuur'?'Facturen':'Diversen';
     $('#view').innerHTML=`<div class="button-row"><button class="secondary" id="backToFolders">← Mappen</button><button class="secondary" id="importDocs">Upload naar ${folderLabel}</button></div><div id="docList"></div>`;
     $('#backToFolders').addEventListener('click',()=>{state.docFolder=null;renderDocuments()});$('#importDocs').addEventListener('click',()=>chooseImportFolder());renderDocumentList(docs);
+  }
+  function invoiceReportDate(d){
+    const raw=String(d?.meta?.docDate||d?.createdAt||'');
+    const m=raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m?`${m[1]}-${m[2]}-${m[3]}`:'';
+  }
+  function invoiceReportYear(d){const date=invoiceReportDate(d);return date?Number(date.slice(0,4)):null;}
+  function invoiceReportNumber(d){return String(d?.meta?.number||d?.filename||'').replace(/\.pdf$/i,'')||'Onbekend';}
+  function reportMoney(v){return `EUR ${Number(v||0).toFixed(2).replace('.',',')}`;}
+  function pdfSafeText(value){return String(value??'').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/…/g,'...').replace(/[^\x20-\x7E\xA0-\xFF]/g,'?');}
+  function pdfWrapText(text,font,size,maxWidth){
+    const clean=pdfSafeText(text).replace(/\s+/g,' ').trim();if(!clean)return [''];
+    const words=clean.split(' '),lines=[];let line='';
+    for(const word of words){const test=line?`${line} ${word}`:word;if(font.widthOfTextAtSize(test,size)<=maxWidth){line=test;continue;}if(line)lines.push(line);let part='';for(const ch of word){const t=part+ch;if(font.widthOfTextAtSize(t,size)<=maxWidth)part=t;else{if(part)lines.push(part);part=ch}}line=part;}
+    if(line)lines.push(line);return lines;
+  }
+  async function showAnnualInvoiceReport(){
+    const docs=(await JKDB.all('documents')).filter(d=>docFolder(d)==='factuur');
+    const years=[...new Set(docs.map(invoiceReportYear).filter(Boolean))].sort((a,b)=>b-a);
+    if(!years.length)years.push(new Date().getFullYear());
+    const options=years.map(y=>`<option value="${y}">${y}</option>`).join('');
+    modal(`${modalHead('Jaaroverzicht facturen')}<div class="card"><p>Maak een PDF-overzicht van je verkoopfacturen per kalenderjaar.</p><div class="field"><label>Kalenderjaar</label><select id="annualInvoiceYear">${options}</select></div><div class="muted small">Het overzicht bevat factuurnummer, datum, klant, werkzaamheden, aantallen/prijzen, totaalbedrag en betaalstatus voor zover deze gegevens in de app zijn opgeslagen. De originele facturen blijven de fiscale brondocumenten.</div><button class="secondary" id="downloadAnnualInvoices" style="width:100%;margin-top:14px">Download jaaroverzicht PDF</button></div>`);
+    $('#downloadAnnualInvoices').addEventListener('click',async()=>{
+      const year=Number($('#annualInvoiceYear').value);const btn=$('#downloadAnnualInvoices');btn.disabled=true;btn.textContent='PDF maken...';
+      try{await generateAnnualInvoiceReport(year);closeModal();toast(`Jaaroverzicht ${year} gedownload`);}catch(err){console.error(err);alert('Jaaroverzicht maken mislukt: '+(err.message||err));btn.disabled=false;btn.textContent='Download jaaroverzicht PDF';}
+    });
+  }
+  async function generateAnnualInvoiceReport(year){
+    await ensurePdfLib();
+    const [allDocs,company]=await Promise.all([JKDB.all('documents'),JKDB.get('settings','company')]);
+    const invoices=allDocs.filter(d=>docFolder(d)==='factuur'&&invoiceReportYear(d)===Number(year)).sort((a,b)=>invoiceReportDate(a).localeCompare(invoiceReportDate(b))||invoiceReportNumber(a).localeCompare(invoiceReportNumber(b)));
+    if(!invoices.length)throw new Error(`Geen facturen gevonden voor ${year}.`);
+    const {PDFDocument,StandardFonts,rgb}=PDFLib,pdf=await PDFDocument.create(),regular=await pdf.embedFont(StandardFonts.Helvetica),bold=await pdf.embedFont(StandardFonts.HelveticaBold);
+    const W=595.28,H=841.89,M=42,contentW=W-M*2,bronze=rgb(0.48,0.32,0.19),dark=rgb(0.15,0.14,0.13),muted=rgb(0.38,0.36,0.34),light=rgb(0.94,0.92,0.88),line=rgb(0.82,0.79,0.74);
+    let page,y,pageNo=0;
+    const addPage=()=>{page=pdf.addPage([W,H]);pageNo++;y=H-M;page.drawText('JK Works Dordrecht',{x:M,y:y-2,size:9,font:bold,color:bronze});page.drawText(`Jaaroverzicht verkoopfacturen ${year}`,{x:W-M-regular.widthOfTextAtSize(`Jaaroverzicht verkoopfacturen ${year}`,9),y:y-2,size:9,font:regular,color:muted});y-=24;return page;};
+    const ensure=(need)=>{if(y-need<M+28)addPage();};
+    const text=(value,x,size=9,font=regular,color=dark,maxWidth=contentW,lineH=size*1.28)=>{const lines=pdfWrapText(value,font,size,maxWidth);for(const ln of lines){ensure(lineH);page.drawText(ln,{x,y:y-size,size,font,color});y-=lineH;}return lines.length;};
+    const labelValue=(label,value)=>{const valLines=pdfWrapText(value||'-',regular,8.5,contentW-122),h=Math.max(17,valLines.length*11+6);ensure(h);page.drawText(pdfSafeText(label),{x:M,y:y-9,size:8,font:bold,color:muted});for(let i=0;i<valLines.length;i++)page.drawText(valLines[i],{x:M+112,y:y-9-(i*11),size:8.5,font:regular,color:dark});y-=h;};
+    addPage();
+    page.drawText(`Jaaroverzicht verkoopfacturen ${year}`,{x:M,y:y-26,size:20,font:bold,color:dark});y-=38;
+    text('Administratief overzicht van de uitgaande facturen in de JK Works-app. Dit document is een samenvatting en vervangt de originele facturen en overige bedrijfsadministratie niet.',M,9,regular,muted,contentW,12);y-=8;
+    page.drawRectangle({x:M,y:y-100,width:contentW,height:94,color:light});
+    let iy=y-20;const companyName=company?.companyName||'JK Works Dordrecht',owner=company?.owner||'Jeremy Korstanje';
+    page.drawText(pdfSafeText(companyName),{x:M+14,y:iy,size:12,font:bold,color:dark});iy-=16;page.drawText(pdfSafeText(owner),{x:M+14,y:iy,size:9,font:regular,color:dark});iy-=14;page.drawText('Van Blanckenburgstraat 72, 3314 WP Dordrecht',{x:M+14,y:iy,size:8.5,font:regular,color:dark});iy-=14;page.drawText('KVK 42078161  |  BTW-ID NL005477968B66',{x:M+14,y:iy,size:8.5,font:regular,color:dark});
+    y-=114;
+    const structured=invoices.filter(d=>Number.isFinite(Number(d?.meta?.total))),total=structured.reduce((s,d)=>s+Number(d.meta.total||0),0),paid=structured.filter(d=>d.meta?.paid).reduce((s,d)=>s+Number(d.meta.total||0),0),open=total-paid;
+    page.drawText('Samenvatting',{x:M,y:y-12,size:13,font:bold,color:dark});y-=28;
+    const stats=[['Aantal facturen',String(invoices.length)],['Totaal factuurbedragen',reportMoney(total)],['Betaald gemarkeerd',reportMoney(paid)],['Openstaand gemarkeerd',reportMoney(open)]];
+    for(const [a,b] of stats)labelValue(a,b);
+    if(company?.kor){labelValue('KOR',company.korSince?`Actief sinds ${nlDate(company.korSince)}`:'Actief');}
+    if(structured.length!==invoices.length){text(`${invoices.length-structured.length} factuur/facturen hebben geen gestructureerd totaalbedrag in de app en zijn daarom niet meegenomen in de totaalsommen. Controleer daarvoor de originele PDF.`,M,8.5,bold,bronze,contentW,11);y-=4;}
+    text('Belastingdienst: een volledige administratie omvat meer dan alleen verkoopfacturen. Bewaar de originele facturen en onderliggende administratie. Voor de aangifte inkomstenbelasting zijn onder andere ook zakelijke kosten en gegevens voor winst-en-verliesrekening en balans nodig.',M,8,regular,muted,contentW,10.5);y-=14;
+    page.drawLine({start:{x:M,y},end:{x:W-M,y},thickness:0.7,color:line});y-=18;
+    page.drawText('Facturen',{x:M,y:y-10,size:14,font:bold,color:dark});y-=28;
+    for(const d of invoices){
+      const m=d.meta||{},number=invoiceReportNumber(d),date=invoiceReportDate(d),client=m.client||{},amount=Number.isFinite(Number(m.total))?reportMoney(m.total):'Zie originele factuur',status=m.paid?'Betaald':(m.sent?'Verstuurd / niet als betaald gemarkeerd':'Niet als verstuurd gemarkeerd');
+      ensure(94);
+      page.drawRectangle({x:M,y:y-24,width:contentW,height:24,color:light});
+      page.drawText(pdfSafeText(number),{x:M+10,y:y-16,size:9.5,font:bold,color:dark});
+      const right=`${nlDate(date)}  |  ${amount}`;page.drawText(pdfSafeText(right),{x:W-M-10-regular.widthOfTextAtSize(pdfSafeText(right),8.5),y:y-15,size:8.5,font:regular,color:dark});y-=34;
+      labelValue('Klant',client.name||m.clientName||'Niet opgeslagen');
+      const address=[client.address,client.postalCity].filter(Boolean).join(', ');if(address)labelValue('Adres afnemer',address);
+      if(m.workDate)labelValue('Datum prestatie',nlDate(m.workDate));
+      labelValue('Status',status);
+      const inKor=!!(company?.kor&&company?.korSince&&date&&date>=company.korSince);labelValue('BTW/KOR',inKor?'KOR - vrijgesteld van btw':'Zie originele factuur voor btw-specificatie');
+      const lines=(m.lines||[]).filter(l=>String(l?.description||'').trim()||num(l?.qty)||num(l?.price));
+      if(lines.length){
+        ensure(28);page.drawText('Werkzaamheden / regels',{x:M,y:y-9,size:8,font:bold,color:muted});y-=17;
+        for(const l of lines){const q=num(l.qty),p=num(l.price),lt=q*p,desc=String(l.description||'Omschrijving');const prefix=`${String(l.qty||'1')} x `,suffix=` @ ${reportMoney(p)} = ${reportMoney(lt)}`;const whole=prefix+desc+suffix;text(whole,M+10,8.2,regular,dark,contentW-20,10.5);}
+      }else{text('Geen gestructureerde factuurregels opgeslagen - raadpleeg de originele PDF.',M+10,8.2,regular,muted,contentW-20,10.5);}
+      y-=6;page.drawLine({start:{x:M,y},end:{x:W-M,y},thickness:0.5,color:line});y-=15;
+    }
+    const pages=pdf.getPages(),generated=new Intl.DateTimeFormat('nl-NL',{day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date());
+    pages.forEach((pg,i)=>{const footer=`Pagina ${i+1} van ${pages.length}  |  Gegenereerd ${generated}`;pg.drawText(footer,{x:M,y:20,size:7.5,font:regular,color:muted});});
+    const bytes=await pdf.save(),blob=new Blob([bytes],{type:'application/pdf'});downloadBlob(blob,`JK-Works-Jaaroverzicht-Facturen-${year}.pdf`);
   }
   function docFolder(d){const k=String(d.folder||d.kind||'').toLowerCase();return k.includes('offert')?'offerte':k.includes('fact')?'factuur':'diversen'}
   function docStatusHtml(d){const f=docFolder(d),m=d.meta||{};if(f==='factuur')return `<span class="status-chip ${m.sent?'on':''}">${m.sent?'✓ ':''}Verstuurd</span><span class="status-chip ${m.paid?'on':''}">${m.paid?'✓ ':''}Betaald</span>`;if(f==='offerte')return `<span class="status-chip ${m.sent?'on':''}">${m.sent?'✓ ':''}Verstuurd</span><span class="status-chip ${m.confirmed?'on':''}">${m.confirmed?'✓ ':''}Bevestigd</span>`;return ''}
