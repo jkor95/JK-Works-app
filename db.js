@@ -172,10 +172,10 @@ const JKDB = (() => {
         {id:'c_kitchen',name:'Keuken monteren',items:[
           'Drinkfles meenemen',
           'Eten / lunch meenemen',
-          'Mbox maat 3 – Schroefmachines: DHP485Z, DTD153ZJ, acculader, bitjes/bithouders en vaste 5,0Ah accu',
-          'Mbox maat 3 – Cirkelzaag: DHS680Z, afzuigadapter en geleider',
-          'Mbox maat 2 – Decoupeerzaag: DJV181ZJ, zaagjes, geleider en afzuigadapter',
-          'Mbox maat 2 – Multitool: DTM52ZJ + diverse zaagjes',
+          'Mbox maat 3 – Schroefmachines: Makita DHP485Z klopboor-/schroefmachine, Makita DTD153ZJ slagschroevendraaier, acculader, bitjes/bithouders en vaste 5,0Ah accu',
+          'Mbox maat 3 – Cirkelzaag: Makita DHS680Z cirkelzaag, afzuigadapter en geleider',
+          'Mbox maat 2 – Decoupeerzaag: Makita DJV181ZJ decoupeerzaag, zaagjes, geleider en afzuigadapter',
+          'Mbox maat 2 – Multitool: Makita DTM52ZJ multitool + diverse zaagjes',
           'Mbox maat 2 – Handgereedschap: rolmaat, waterpas, hamer, schroevendraaiers, tangen, sleutels, aftekenspullen, koevoet, winkelhaak / timmermansdriehoek',
           'Mbox maat 3 – Diversen: hout/steen/metaalboren, gatenzaag, speedboor, ringstops, montagewig, tapes, WD-40, leidingzoeker en stoffer + blik',
           'Organizer – Bevestigingsmateriaal: schroeven, pluggen, spijkers en popnagels',
@@ -244,7 +244,7 @@ const JKDB = (() => {
         ]},
         {id:'c_drill_mount',name:'Boren & ophangen',items:[
           'Drinkfles meenemen',
-          'Mbox maat 3 – Schroefmachines: DHP485Z + DTD153ZJ, bitjes en accu',
+          'Mbox maat 3 – Schroefmachines: Makita DHP485Z klopboor-/schroefmachine + Makita DTD153ZJ slagschroevendraaier, bitjes en accu',
           'Mbox maat 3 – Diversen: juiste hout/steen/metaal/glasboor, ringstops, gatenzaag / speedboor indien nodig en leidingzoeker',
           'Mbox maat 2 – Handgereedschap: rolmaat, waterpas, hamer, schroevendraaiers en aftekenspullen',
           'Organizer – Bevestigingsmateriaal: juiste pluggen en schroeven',
@@ -269,7 +269,7 @@ const JKDB = (() => {
         {id:'c_paint_finish',name:'Schilderen & afwerken',items:[
           'Drinkfles meenemen',
           'Eten / lunch meenemen als dit een grotere dagklus is',
-          'Mbox maat 2 – Schuurmachine: DBO180ZJ, stofopvang en korrel 80/120/180/250',
+          'Mbox maat 2 – Schuurmachine: Makita DBO180ZJ excentrische schuurmachine, stofopvang en schuurpapier korrel 80/120/180/250',
           'Mbox maat 3 – Kit & afwerking indien naden / kieren moeten worden afgewerkt',
           'Mbox maat 3 – Diversen: schilderstape, ducttape en stoffer + blik',
           'Mbox maat 2 – Handgereedschap: stanleymes, schaar en aftekenspullen',
@@ -313,6 +313,71 @@ const JKDB = (() => {
         await put('checklists',{...c,items,checked,updatedAt:new Date().toISOString()});
       }
       await put('settings',{id:'seedVersion',value:5,at:new Date().toISOString()});
+    }
+
+    if(v < 6){
+      const productNames = [
+        ['DHP485Z','Makita DHP485Z klopboor-/schroefmachine'],
+        ['DTD153ZJ','Makita DTD153ZJ slagschroevendraaier'],
+        ['DHS680Z','Makita DHS680Z cirkelzaag'],
+        ['DJV181ZJ','Makita DJV181ZJ decoupeerzaag'],
+        ['DTM52ZJ','Makita DTM52ZJ multitool'],
+        ['DBO180ZJ','Makita DBO180ZJ excentrische schuurmachine'],
+        ['DGA506ZJ','Makita DGA506ZJ haakse slijper'],
+        ['DML805','Makita DML805 bouwlamp']
+      ];
+      const elektraParts = [
+        'multimeter','kniptang','striptang','pijpenknipper','kabelstripper','knijptang',
+        'wago','stekker','schroevendraaier pz2','schroevendraaier ph1',
+        'kleine platte schroevendraaier','brede platte schroevendraaier','1-polige spanningstester'
+      ];
+      const handParts = [
+        'rolmaat','kleine waterpas','waterpas','kleine hamer','waterpomptang','punttang','zijkniptang',
+        'verstelbare moersleutel','inbussleutel','torx','koevoet','ijzerzaag','popnageltang','zaklamp',
+        'schaar','priem','mini-ratel','winkelhaak','timmermansdriehoek'
+      ];
+      const bevestParts = ['losse schroeven','losse pluggen','losse spijkers','losse popnagels'];
+      for(const c of await all('checklists')){
+        let items=[...(c.items||[])];
+        items=items.map(raw=>{
+          let t=String(raw||'');
+          for(const [code,full] of productNames){
+            if(t.includes(code) && !t.toLowerCase().includes(full.toLowerCase())){
+              t=t.replace(new RegExp('(?:Makita\\s+)?'+code+'(?:ZJ|Z)?','g'),full);
+            }
+          }
+          return t;
+        });
+        const hasElec=items.some(x=>/organizer\s*[–-]?\s*elektra/i.test(x));
+        const hasHand=items.some(x=>/mbox maat 2\s*[–-]?\s*handgereedschap/i.test(x));
+        const hasFix=items.some(x=>/organizer\s*[–-]?\s*bevestigingsmateriaal/i.test(x));
+        if(hasElec){
+          items=items.filter(x=>{
+            const n=String(x).trim().toLowerCase();
+            if(/organizer\s*[–-]?\s*elektra/i.test(x)) return true;
+            return !elektraParts.some(k=>n===k || n.startsWith(k+' meenemen') || n.startsWith(k+' controleren'));
+          });
+        }
+        if(hasHand){
+          items=items.filter(x=>{
+            const n=String(x).trim().toLowerCase();
+            if(/mbox maat 2\s*[–-]?\s*handgereedschap/i.test(x)) return true;
+            return !handParts.some(k=>n===k || n.startsWith(k+' meenemen'));
+          });
+        }
+        if(hasFix){
+          items=items.filter(x=>{
+            const n=String(x).trim().toLowerCase();
+            if(/organizer\s*[–-]?\s*bevestigingsmateriaal/i.test(x)) return true;
+            return !bevestParts.some(k=>n===k || n.startsWith(k+' meenemen'));
+          });
+        }
+        items=[...new Set(items)];
+        const checked={};
+        for(const item of items) if(c.checked?.[item]) checked[item]=true;
+        await put('checklists',{...c,items,checked,updatedAt:new Date().toISOString()});
+      }
+      await put('settings',{id:'seedVersion',value:6,at:new Date().toISOString()});
     }
   }
 
