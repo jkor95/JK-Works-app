@@ -145,3 +145,7 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 .auth-error{margin:12px 0 0;padding:10px 12px;border-radius:11px;background:#fff0ef;border:1px solid #f0c9c5;color:#9b332b;font-size:12px;line-height:1.4;text-align:left}
 .auth-note{margin:17px 2px 0;color:var(--muted);font-size:10px;line-height:1.45}
 @media(max-width:430px){.auth-card{padding:24px 18px 19px;border-radius:22px}.auth-logo{width:82px;height:82px}.auth-card h1{font-size:27px}}
+
+
+/* v32: uren per klant */
+.stat-year-field{margin:2px 0 14px;max-width:220px}.customer-hours-list{display:grid;gap:12px;margin-top:6px}.customer-hours-row{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:12px 13px}.customer-hours-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}.customer-hours-top strong{min-width:0;overflow-wrap:anywhere}.customer-hours-top span{white-space:nowrap;font-weight:800;color:var(--accent-dark)}.customer-hours-track{height:10px;border-radius:999px;background:var(--card2,#ecece8);overflow:hidden}.customer-hours-track i{display:block;height:100%;border-radius:999px;background:var(--accent,#9b7646)}

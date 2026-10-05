@@ -624,9 +624,37 @@ const App = (() => {
     const max=Math.max(1,...buckets.map(b=>b.minutes)), total=buckets.reduce((s,b)=>s+b.minutes,0), nonzero=buckets.filter(b=>b.minutes>0), avg=nonzero.length?Math.round(total/nonzero.length):0, best=nonzero.slice().sort((a,b)=>b.minutes-a.minutes)[0];
     return `<div class="kpi-row stats-kpis"><div class="kpi"><strong>${hoursLabel(total)}</strong><span>Totaal</span></div><div class="kpi"><strong>${hoursLabel(avg)}</strong><span>Gem. actieve periode</span></div><div class="kpi"><strong>${best?esc(best.label):'-'}</strong><span>Meeste uren</span></div></div><div class="hours-chart-wrap"><div class="hours-chart">${buckets.map(b=>{const pct=b.minutes?Math.max(4,(b.minutes/max)*100):0;return `<div class="hours-bar-col"><div class="hours-value">${b.minutes?hoursLabel(b.minutes):''}</div><div class="hours-bar-track"><div class="hours-bar" style="height:${pct}%"></div></div><div class="hours-label">${esc(b.label)}</div></div>`}).join('')}</div></div>`;
   }
+  function customerHourBuckets(entries,jobs,clients,year){
+    const jobMap=new Map(jobs.map(j=>[j.id,j])), clientMap=new Map(clients.map(c=>[c.id,c]));
+    const map=new Map();
+    for(const e of entries){
+      const d=new Date(entryDate(e)+'T12:00:00');
+      if(Number.isNaN(d.getTime())||d.getFullYear()!==year)continue;
+      const j=jobMap.get(e.jobId), c=j?.clientId?clientMap.get(j.clientId):null;
+      const name=(c?.name||j?.clientName||'Geen klant / algemeen').trim()||'Geen klant / algemeen';
+      const key=j?.clientId||('name:'+name.toLowerCase());
+      const b=map.get(key)||{key,label:name,minutes:0};
+      b.minutes+=entryMinutes(e);map.set(key,b);
+    }
+    return [...map.values()].sort((a,b)=>b.minutes-a.minutes||a.label.localeCompare(b.label,'nl'));
+  }
+  function customerStatsHtml(buckets,year){
+    const total=buckets.reduce((s,b)=>s+b.minutes,0),max=Math.max(1,...buckets.map(b=>b.minutes));
+    if(!buckets.length)return `<div class="empty">Geen uren voor klanten geregistreerd in ${year}.</div>`;
+    return `<div class="kpi-row stats-kpis customer-kpis"><div class="kpi"><strong>${hoursLabel(total)}</strong><span>Totaal ${year}</span></div><div class="kpi"><strong>${buckets.length}</strong><span>Klanten</span></div><div class="kpi"><strong>${esc(buckets[0].label)}</strong><span>Meeste uren</span></div></div><div class="customer-hours-list">${buckets.map(b=>`<div class="customer-hours-row"><div class="customer-hours-top"><strong>${esc(b.label)}</strong><span>${hoursLabel(b.minutes)}</span></div><div class="customer-hours-track"><i style="width:${Math.max(3,(b.minutes/max)*100)}%"></i></div></div>`).join('')}</div>`;
+  }
   async function showTimeStats(){
-    const entries=await JKDB.all('timeEntries');let mode='month';
-    const draw=()=>{const buckets=periodBuckets(entries,mode);modal(`${modalHead('Urenstatistieken')}<div class="tabs"><button class="tab ${mode==='month'?'active':''}" data-stat-mode="month">Per maand</button><button class="tab ${mode==='quarter'?'active':''}" data-stat-mode="quarter">Per kwartaal</button><button class="tab ${mode==='year'?'active':''}" data-stat-mode="year">Per kalenderjaar</button></div>${entries.length?statsChartHtml(buckets):'<div class="empty">Nog geen uren geregistreerd.</div>'}<p class="muted small stats-note">Gebaseerd op je urenregistraties. Maand toont de laatste 12 maanden, kwartaal de laatste 8 kwartalen en kalenderjaar alle geregistreerde jaren.</p>`);$$('[data-stat-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.statMode;draw()}));};draw();
+    const [entries,jobs,clients]=await Promise.all([JKDB.all('timeEntries'),JKDB.all('jobs'),JKDB.all('clients')]);let mode='month';
+    const years=[...new Set(entries.map(e=>new Date(entryDate(e)+'T12:00:00')).filter(d=>!Number.isNaN(d.getTime())).map(d=>d.getFullYear()))].sort((a,b)=>b-a);
+    if(!years.includes(new Date().getFullYear()))years.unshift(new Date().getFullYear());
+    let customerYear=new Date().getFullYear();
+    const draw=()=>{
+      const customerMode=mode==='client';
+      const content=customerMode?customerStatsHtml(customerHourBuckets(entries,jobs,clients,customerYear),customerYear):(entries.length?statsChartHtml(periodBuckets(entries,mode)):'<div class="empty">Nog geen uren geregistreerd.</div>');
+      modal(`${modalHead('Urenstatistieken')}<div class="tabs"><button class="tab ${mode==='month'?'active':''}" data-stat-mode="month">Per maand</button><button class="tab ${mode==='quarter'?'active':''}" data-stat-mode="quarter">Per kwartaal</button><button class="tab ${mode==='year'?'active':''}" data-stat-mode="year">Per kalenderjaar</button><button class="tab ${mode==='client'?'active':''}" data-stat-mode="client">Per klant</button></div>${customerMode?`<div class="field stat-year-field"><label>Kalenderjaar</label><select id="customerStatsYear">${years.map(y=>`<option value="${y}" ${y===customerYear?'selected':''}>${y}</option>`).join('')}</select></div>`:''}${content}<p class="muted small stats-note">${customerMode?'Uren per klant zijn gebaseerd op de klant die aan de gekoppelde klus is gekoppeld.':'Gebaseerd op je urenregistraties. Maand toont de laatste 12 maanden, kwartaal de laatste 8 kwartalen en kalenderjaar alle geregistreerde jaren.'}</p>`);
+      $$('[data-stat-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.statMode;draw()}));
+      $('#customerStatsYear')?.addEventListener('change',e=>{customerYear=Number(e.target.value);draw()});
+    };draw();
   }
 
   async function showTimeEntries(){

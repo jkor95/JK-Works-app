@@ -12,3 +12,9 @@ Vervang de bestaande bestanden in de GitHub Pages repository door deze versie en
 
 ## v31 - invoer niet meer onderbroken
 Automatische cloud-synchronisatie pauzeert zolang een formulier of venster open staat. Na opslaan/sluiten wordt de synchronisatie hervat. De periodieke achtergrondcontrole is verlengd naar 2 minuten en veroorzaakt geen scherm-refresh tijdens invoer.
+
+
+## v32
+- Urenstatistieken uitgebreid met **Per klant**.
+- Per klant kan een kalenderjaar worden gekozen.
+- Toont uren per klant, totaaluren, aantal klanten en de klant met de meeste uren.
