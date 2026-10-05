@@ -1,6 +1,7 @@
-/* JK Works Dordrecht - persoonlijke PWA v30 */
+/* JK Works Dordrecht - persoonlijke PWA v31 */
 const App = (() => {
-  const state = {route:'dashboard',gearTab:'mboxes',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,activeBlobUrl:null,reminderChecking:false,snoozedReminderJobs:new Set()};
+  const state = {route:'dashboard',gearTab:'mboxes',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,activeBlobUrl:null,reminderChecking:false,snoozedReminderJobs:new Set(),pendingCloudRefresh:false,pendingAuthRefresh:false};
+  window.__JK_UI_BUSY=false;
   const PDFLIB_URL='https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';
   const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
   const esc=(v='')=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -213,10 +214,25 @@ const App = (() => {
     setTimeout(()=>maybeShowCompletedJobReminder().catch(console.error),250);
   }
 
+  function uiBusy(){ return !!window.__JK_UI_BUSY || !!$('#modalRoot')?.children.length; }
+  async function flushDeferredUi(){
+    if(uiBusy())return;
+    if(state.pendingAuthRefresh){ state.pendingAuthRefresh=false; await applyAuthState(); return; }
+    if(state.pendingCloudRefresh){
+      state.pendingCloudRefresh=false;
+      await render();
+      setTimeout(()=>maybeShowCompletedJobReminder().catch(console.error),250);
+    }
+  }
   function bindCloudEvents(){
-    document.addEventListener('jkcloud-auth',()=>applyAuthState().catch(console.error));
+    document.addEventListener('jkcloud-auth',()=>{
+      if(uiBusy()){state.pendingAuthRefresh=true;return;}
+      applyAuthState().catch(console.error);
+    });
     document.addEventListener('jkcloud-sync',e=>{
-      if(JKCloud.isSignedIn()&&e.detail?.state==='done'&&e.detail?.changed&&!$('#modalRoot').children.length)render().then(()=>setTimeout(()=>maybeShowCompletedJobReminder().catch(console.error),250));
+      if(!JKCloud.isSignedIn()||e.detail?.state!=='done'||!e.detail?.changed)return;
+      if(uiBusy()){state.pendingCloudRefresh=true;return;}
+      render().then(()=>setTimeout(()=>maybeShowCompletedJobReminder().catch(console.error),250));
     });
   }
   function registerSW(){if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./service-worker.js').catch(()=>{});}
@@ -243,8 +259,22 @@ const App = (() => {
   async function go(route){state.route=route;if(route==='documents')state.docFolder=null;$$('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.route===route));await render();window.scrollTo({top:0,behavior:'instant'});}
   function title(t){$('#pageTitle').textContent=t}
   function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._x);t._x=setTimeout(()=>t.classList.remove('show'),2200)}
-  function modal(html){if(state.activeBlobUrl){URL.revokeObjectURL(state.activeBlobUrl);state.activeBlobUrl=null;}$('#modalRoot').innerHTML=`<div class="modal-backdrop"><section class="modal">${html}</section></div>`;$('.modal-backdrop').addEventListener('click',e=>{if(e.target.classList.contains('modal-backdrop'))closeModal()});$$('[data-close]').forEach(x=>x.addEventListener('click',closeModal));}
-  function closeModal(){if(state.activeBlobUrl){URL.revokeObjectURL(state.activeBlobUrl);state.activeBlobUrl=null;}$('#modalRoot').innerHTML=''}
+  function modal(html){
+    if(state.activeBlobUrl){URL.revokeObjectURL(state.activeBlobUrl);state.activeBlobUrl=null;}
+    window.__JK_UI_BUSY=true;
+    $('#modalRoot').innerHTML=`<div class="modal-backdrop"><section class="modal">${html}</section></div>`;
+    $('.modal-backdrop').addEventListener('click',e=>{if(e.target.classList.contains('modal-backdrop'))closeModal()});
+    $$('[data-close]').forEach(x=>x.addEventListener('click',closeModal));
+  }
+  function closeModal(){
+    if(state.activeBlobUrl){URL.revokeObjectURL(state.activeBlobUrl);state.activeBlobUrl=null;}
+    $('#modalRoot').innerHTML='';
+    window.__JK_UI_BUSY=false;
+    setTimeout(()=>{
+      flushDeferredUi().catch(console.error);
+      if(JKCloud.isSignedIn()&&navigator.onLine)JKCloud.syncNow().catch(()=>{});
+    },50);
+  }
   function modalHead(t){return `<div class="modal-head"><h2>${esc(t)}</h2><button class="close-btn" data-close>×</button></div>`}
   async function render(){const v=$('#view');v.innerHTML='<div class="empty">Laden...</div>';try{if(state.route==='dashboard')return renderDashboard();if(state.route==='jobs')return renderJobs();if(state.route==='gear')return renderGear();if(state.route==='documents')return renderDocuments();if(state.route==='more')return renderMore();}catch(e){console.error(e);v.innerHTML=`<div class="card"><h2>Er ging iets mis</h2><p class="muted">${esc(e.message||e)}</p></div>`}}
 

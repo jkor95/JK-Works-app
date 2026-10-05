@@ -14,15 +14,15 @@ const JKCloud = (() => {
     session = data.session || null;
     client.auth.onAuthStateChange((_event,s)=>{session=s||null; document.dispatchEvent(new CustomEvent('jkcloud-auth'));});
     if(session && navigator.onLine) setTimeout(()=>syncNow().catch(console.warn),300);
-    window.addEventListener('online',()=>{ if(session) syncNow().catch(()=>{}); });
-    window.addEventListener('focus',()=>{ if(session && navigator.onLine) syncNow().catch(()=>{}); });
+    window.addEventListener('online',()=>{ if(session && !window.__JK_UI_BUSY) syncNow().catch(()=>{}); });
+    window.addEventListener('focus',()=>{ if(session && navigator.onLine && !window.__JK_UI_BUSY) syncNow().catch(()=>{}); });
     document.addEventListener('visibilitychange',()=>{
-      if(document.visibilityState==='visible' && session && navigator.onLine) syncNow().catch(()=>{});
+      if(document.visibilityState==='visible' && session && navigator.onLine && !window.__JK_UI_BUSY) syncNow().catch(()=>{});
     });
     if(!autoSyncTimer){
       autoSyncTimer=setInterval(()=>{
-        if(session && navigator.onLine && document.visibilityState==='visible') syncNow().catch(()=>{});
-      },30000);
+        if(session && navigator.onLine && document.visibilityState==='visible' && !window.__JK_UI_BUSY) syncNow().catch(()=>{});
+      },120000);
     }
     return true;
   }

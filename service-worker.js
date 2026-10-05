@@ -1,4 +1,4 @@
-const CACHE='jkworks-v30-calendar-material-link';
+const CACHE='jkworks-v31-no-form-refresh';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
