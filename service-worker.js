@@ -1,4 +1,4 @@
-const CACHE='jkworks-v39-google-calendar-link';
+const CACHE='jkworks-v40-job-checklists';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',

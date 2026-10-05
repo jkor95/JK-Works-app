@@ -139,6 +139,166 @@ const JKDB = (() => {
       if(!(await get('settings','backup'))) await put('settings',{id:'backup',lastBackup:null});
       await put('settings',{id:'seedVersion',value:3,at:new Date().toISOString()});
     }
+
+    if(v < 4){
+      const jobChecklists=[
+        {id:'c_departure',name:'Korte vertrekcheck',items:[
+          'Drinkfles meenemen',
+          'Werkadres en contactpersoon controleren',
+          'Juiste Mboxen / inpaklijsten voor de klus gepakt',
+          'Voldoende Makita 18V 5,0Ah accu’s meenemen en controleren of ze geladen zijn',
+          'Makita 18V acculader meenemen als de klus langer duurt',
+          'PBM controleren: werkhandschoenen, veiligheidsbril, gehoorbescherming en/of mondkapje waar nodig',
+          'Kabelhaspel / verlengmogelijkheid meenemen als 230V nodig is',
+          'Eten alleen meenemen bij een grotere / langere klus'
+        ]},
+        {id:'c_general',name:'Algemene klus',items:[
+          'Drinkfles meenemen',
+          'Werkadres, contactpersoon en werkzaamheden controleren',
+          'Juiste Mboxen / inpaklijsten selecteren',
+          'Voldoende 18V accu’s opgeladen en meegenomen',
+          'PBM / veiligheidsmiddelen meenemen',
+          'Kabelhaspel / verlengmogelijkheid indien nodig',
+          'Eten meenemen als het een grotere / langere klus is',
+          'Foto vóór maken',
+          'Gebruikte materialen / bonnetjes registreren',
+          'Foto na maken',
+          'Werkplek schoon achterlaten',
+          'Uren registreren en klus afronden'
+        ]},
+        {id:'c_kitchen',name:'Keuken monteren',items:[
+          'Drinkfles meenemen',
+          'Eten / lunch meenemen',
+          'Mbox maat 3 – Schroefmachines: DHP485Z, DTD153ZJ, acculader, bitjes/bithouders en vaste 5,0Ah accu',
+          'Mbox maat 3 – Cirkelzaag: DHS680Z, afzuigadapter en geleider',
+          'Mbox maat 2 – Decoupeerzaag: DJV181ZJ, zaagjes, geleider en afzuigadapter',
+          'Mbox maat 2 – Multitool: DTM52ZJ + diverse zaagjes',
+          'Mbox maat 2 – Handgereedschap: rolmaat, waterpas, hamer, schroevendraaiers, tangen, sleutels, aftekenspullen, koevoet, winkelhaak / timmermansdriehoek',
+          'Mbox maat 3 – Diversen: hout/steen/metaalboren, gatenzaag, speedboor, ringstops, montagewig, tapes, WD-40, leidingzoeker en stoffer + blik',
+          'Organizer – Bevestigingsmateriaal: schroeven, pluggen, spijkers en popnagels',
+          'Organizer – Elektra meenemen als stopcontacten / aansluitingen gecontroleerd moeten worden',
+          'Los: kruislijnlaser + statief / plafondpaal',
+          'Los: bouwlamp indien nodig',
+          'Los: minimaal 2–3 extra 18V 5,0Ah accu’s',
+          'Los: passende trap / ladder indien bovenkasten worden gemonteerd',
+          'Kabelhaspel meenemen indien 230V nodig is',
+          'Kniebeschermers meenemen',
+          'Foto vóór en na maken',
+          'Werkplek schoon en zaagselvrij achterlaten'
+        ]},
+        {id:'c_kit',name:'Kitten',items:[
+          'Drinkfles meenemen',
+          'Mbox maat 3 – Kit & afwerking compleet meenemen',
+          'Juiste kit + voldoende kokers controleren',
+          'Handkitspuit meenemen; 18V kitspuit alleen als gewenst',
+          'Kitstrijkers en spuitmonden',
+          'Stanleymes / mesjes',
+          'Schilderstape indien nodig',
+          'Keukenpapier / doeken en afvalzakjes',
+          'Latex handschoenen + werkhandschoenen',
+          'Spons + sprayfles water/Dreft',
+          'Ondergrond controleren: schoon, droog en vetvrij',
+          'Foto vóór maken',
+          'Naden kitten en strak afwerken',
+          'Foto na maken',
+          'Afval en overtollige kit opruimen'
+        ]},
+        {id:'c_catering',name:'Catering / horeca',items:[
+          'Drinkfles meenemen',
+          'Werkkleding / nette kleding volgens afspraak',
+          'Werkschoenen / geschikte dichte schoenen',
+          'Telefoon volledig opgeladen',
+          'Powerbank / laadkabel indien lange dienst',
+          'Eventueel schort of bedrijfskleding als dit vooraf is afgesproken',
+          'Starttijd, locatie en contactpersoon controleren',
+          'Geen eten meenemen',
+          'Na afloop gewerkte uren direct registreren'
+        ]},
+        {id:'c_renovation',name:'Verbouwing / renovatie',items:[
+          'Drinkfles meenemen',
+          'Eten / lunch meenemen',
+          'Mbox maat 3 – Schroefmachines compleet',
+          'Mbox maat 3 – Cirkelzaag compleet',
+          'Mbox maat 3 – Diversen compleet',
+          'Mbox maat 2 – Handgereedschap compleet',
+          'Mbox maat 2 – Multitool compleet',
+          'Mbox maat 2 – Decoupeerzaag compleet',
+          'Mbox maat 2 – Schuurmachine + schuurpapier indien afwerking nodig is',
+          'Mbox maat 2 – Haakse slijper + schijven indien nodig',
+          'Organizer – Bevestigingsmateriaal',
+          'Organizer – Elektra indien elektra onderdeel van de werkzaamheden is',
+          'Los: kruislijnlaser + statief / plafondpaal',
+          'Los: bouwlamp',
+          'Los: 2–3 extra 18V 5,0Ah accu’s + acculader',
+          'Los: kabelhaspels 10 m / 7,5 m',
+          'Los: juiste trap / ladder voor de werkzaamheden',
+          'Los / reserve: kniebeschermers en contourmal indien nodig',
+          'PBM: veiligheidsbril, gehoorbescherming, handschoenen en mondkapjes',
+          'Afvalzakken / schoonmaakmiddelen meenemen',
+          'Foto vóór, tussendoor en na maken',
+          'Materialen / bonnetjes registreren',
+          'Werkplek schoon achterlaten'
+        ]},
+        {id:'c_drill_mount',name:'Boren & ophangen',items:[
+          'Drinkfles meenemen',
+          'Mbox maat 3 – Schroefmachines: DHP485Z + DTD153ZJ, bitjes en accu',
+          'Mbox maat 3 – Diversen: juiste hout/steen/metaal/glasboor, ringstops, gatenzaag / speedboor indien nodig en leidingzoeker',
+          'Mbox maat 2 – Handgereedschap: rolmaat, waterpas, hamer, schroevendraaiers en aftekenspullen',
+          'Organizer – Bevestigingsmateriaal: juiste pluggen en schroeven',
+          'Los: kruislijnlaser indien recht / op lijn gemonteerd moet worden',
+          'Los: trap / ladder indien nodig',
+          'Stoffer + blik meenemen voor boorstof',
+          'Controleren op leidingen voordat je boort',
+          'Foto na maken en werkplek schoon achterlaten'
+        ]},
+        {id:'c_small_repair',name:'Kleine montage / reparatie',items:[
+          'Drinkfles meenemen',
+          'Mbox maat 3 – Schroefmachines meenemen als er geschroefd / geboord wordt',
+          'Mbox maat 2 – Handgereedschap compleet',
+          'Mbox maat 3 – Diversen voor boren, tape, WD-40, pluggen en leidingzoeker',
+          'Organizer – Bevestigingsmateriaal indien nodig',
+          'Eén losse 18V 5,0Ah accu extra meenemen als elektrisch gereedschap nodig is',
+          'Passende trap / ladder alleen indien nodig',
+          'Geen eten meenemen',
+          'Foto vóór / na indien relevant',
+          'Werkplek schoon achterlaten'
+        ]},
+        {id:'c_paint_finish',name:'Schilderen & afwerken',items:[
+          'Drinkfles meenemen',
+          'Eten / lunch meenemen als dit een grotere dagklus is',
+          'Mbox maat 2 – Schuurmachine: DBO180ZJ, stofopvang en korrel 80/120/180/250',
+          'Mbox maat 3 – Kit & afwerking indien naden / kieren moeten worden afgewerkt',
+          'Mbox maat 3 – Diversen: schilderstape, ducttape en stoffer + blik',
+          'Mbox maat 2 – Handgereedschap: stanleymes, schaar en aftekenspullen',
+          'Los: bouwlamp voor controle van de afwerking',
+          'Los: trap / ladder indien nodig',
+          'Mondkapjes en werkhandschoenen',
+          'Afdekfolie / afdekmateriaal, rollers, kwasten, bakjes en verf meenemen volgens de klus',
+          'Ondergrond voorbereiden, stofvrij en schoon maken',
+          'Foto vóór en na maken',
+          'Werkplek schoon achterlaten'
+        ]},
+        {id:'c_strip_demo',name:'Sloop / stripwerk',items:[
+          'Drinkfles meenemen',
+          'Eten / lunch meenemen',
+          'Mbox maat 2 – Handgereedschap: hamer, koevoet, tangen, ijzerzaag en handschoenen',
+          'Mbox maat 2 – Multitool + zaagjes',
+          'Mbox maat 2 – Haakse slijper + juiste schijven indien nodig',
+          'Mbox maat 3 – Schroefmachines voor demonteren',
+          'Mbox maat 3 – Diversen: leidingzoeker, tapes, tie-wraps, WD-40 en stoffer + blik',
+          'Los: bouwlamp',
+          'Los: kabelhaspel indien nodig',
+          'Los: juiste trap / ladder',
+          'PBM: veiligheidsbril, gehoorbescherming, handschoenen en mondkapje',
+          'Afvalzakken / bakken regelen',
+          'Vooraf controleren op elektra / leidingen',
+          'Foto vóór en na maken',
+          'Werkplek bezemschoon achterlaten'
+        ]}
+      ];
+      for(const c of jobChecklists) await put('checklists',c);
+      await put('settings',{id:'seedVersion',value:4,at:new Date().toISOString()});
+    }
   }
 
   return {stores,open,all,get,put,remove,clear,id,seed,putLocal,removeLocal,markDeleteLocal,isDeletedLocal};
