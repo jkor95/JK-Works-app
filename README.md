@@ -1,23 +1,11 @@
-# JK Works Dordrecht app v42
+# JK Works Dordrecht App v45
 
-## Nieuw in v42
-- Per klus kun je bij het aanmaken/bewerken instellen of foto's **niet nodig**, **optioneel** of **verplicht voor, tijdens en na** zijn.
-- Bij een gekozen checklist wordt voor een nieuwe klus automatisch een logisch voorstel gedaan: Catering / horeca = niet nodig, overige kluschecklists = verplicht. Dit is altijd handmatig aanpasbaar.
-- In een klus staat een nieuwe sectie **Foto's** met drie aparte delen: Voor, Tijdens en Na.
-- Per deel kun je op iPhone direct **Foto maken** of bestaande foto's **Uploaden**.
-- Meerdere foto's per fase zijn toegestaan en foto's kunnen weer worden verwijderd.
-- Foto's worden lokaal in de app bewaard en gaan bij de handmatige Sync mee naar Supabase Storage.
-- Grote foto's worden waar mogelijk verkleind tot maximaal ongeveer 1600 px om opslag en dataverbruik te beperken.
-- Verwijder je een klus, dan worden de gekoppelde klusfoto's ook verwijderd.
-- Cloud opschonen neemt nu ook klusfoto's mee.
+## Nieuw in v45 – klusfoto’s compact in de cloud
+- Klusfoto’s synchroniseren weer via Supabase zodat ze op iPhone, MacBook en andere ingelogde apparaten zichtbaar zijn.
+- Foto’s worden vóór opslag gecomprimeerd: lange zijde maximaal circa 1600 px, JPEG, met een doel/harde richtwaarde van maximaal circa 250 KB per foto.
+- Gemiddeld 9 foto’s per klus is daarmee maximaal circa 2,25 MB per klus.
+- Documenten → Klusfoto’s toont exact hetzelfde fotorecord als de klus; er is dus geen tweede foto/cloudbestand.
+- Bestaande lokale v44-foto’s worden éénmalig gecomprimeerd en klaargezet voor de eerstvolgende handmatige Sync.
+- Foto’s gaan nog steeds alleen naar de cloud wanneer de gebruiker handmatig op Sync drukt.
 
-## Kluschecklists
-Alle kluschecklists behalve **Catering / horeca** krijgen drie losse fotopunten:
-- Foto vóór de klus maken
-- Foto tijdens de klus maken
-- Foto na de klus maken
-
-Catering / horeca krijgt deze fotopunten bewust niet.
-
-## Supabase
-Geen nieuwe SQL nodig. Foto's gebruiken dezelfde bestaande `app_records`-opzet en de bestaande Storage-bucket `jkworks-files`.
+Geen nieuwe Supabase SQL nodig.

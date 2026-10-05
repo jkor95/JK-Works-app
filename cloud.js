@@ -2,6 +2,7 @@ const JKCloud = (() => {
   const SUPABASE_URL = 'https://ercqiavruotoclhvfzud.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_z4kkYgzjr-bYDEcSZlVciw_cP8MfOuX';
   const BUCKET = 'jkworks-files';
+  const LOCAL_ONLY_STORES = new Set();
   let client = null, session = null, syncing = false;
 
   function available(){ return !!window.supabase?.createClient; }
@@ -54,6 +55,7 @@ const JKCloud = (() => {
     }
   }
   async function queuePut(store,obj){
+    if(LOCAL_ONLY_STORES.has(store)) return;
     if(!JKDB.stores.includes(store) || store==='settings' && obj.id==='cloudStatus') return;
     if(await hasLocalDelete(store,obj.id)) return;
     // v33: elke wijziging blijft lokaal staan tot de gebruiker handmatig synchroniseert.
@@ -62,6 +64,7 @@ const JKCloud = (() => {
     await queueOp({type:'put',store,recordId:obj.id});
   }
   async function queueDelete(store,id){
+    if(LOCAL_ONLY_STORES.has(store)) return;
     if(!JKDB.stores.includes(store)) return;
     await JKDB.markDeleteLocal(store,id);
     await removePendingPuts(store,id);
@@ -75,7 +78,7 @@ const JKCloud = (() => {
     const data={...obj};
     for(const [k,v] of Object.entries(data)){
       if(v instanceof Blob){
-        const ext=v.type==='application/pdf'?'pdf':'bin';
+        const ext=v.type==='application/pdf'?'pdf':v.type==='image/jpeg'?'jpg':v.type==='image/png'?'png':'bin';
         const path=`${user().id}/${store}/${obj.id}/${k}.${ext}`;
         const {error}=await client.storage.from(BUCKET).upload(path,v,{upsert:true,contentType:v.type||'application/octet-stream'});
         if(error) throw error;
@@ -131,6 +134,9 @@ const JKCloud = (() => {
       if(removeError) console.warn('Storage-bestand verwijderen mislukt',removeError);
     }
   }
+
+  async function purgeLocalOnlyCloudData(){ return; }
+
   async function flushQueue(){
     if(!isSignedIn() || !navigator.onLine) return;
     const qs=await JKDB.all('syncQueue');
@@ -153,6 +159,7 @@ const JKCloud = (() => {
     syncing=true; document.dispatchEvent(new CustomEvent('jkcloud-sync',{detail:{state:'syncing'}}));
     let localChanged=false;
     try{
+      await purgeLocalOnlyCloudData();
       await flushQueue();
       const [recordsRes,deletionsRes]=await Promise.all([
         client.from('app_records').select('store,record_id,data,updated_at').eq('user_id',user().id),
@@ -162,19 +169,20 @@ const JKCloud = (() => {
       if(deletionsRes.error) throw deletionsRes.error;
 
       const legacyDeleted=(recordsRes.data||[]).filter(r=>r?.data?.__deleted);
-      const remote=new Map((recordsRes.data||[]).filter(r=>!r?.data?.__deleted).map(r=>[`${r.store}|${r.record_id}`,r]));
+      const remote=new Map((recordsRes.data||[]).filter(r=>!r?.data?.__deleted && !LOCAL_ONLY_STORES.has(r.store)).map(r=>[`${r.store}|${r.record_id}`,r]));
       const deletedKeys=new Set();
 
       // Lokale markers blijven bewust bewaard, zodat een oude lokale kopie ook
       // na browserherstart niet opnieuw kan worden geupload.
       for(const m of await JKDB.all('deleteMarkers')) deletedKeys.add(`${m.store}|${m.recordId}`);
       for(const q of (await JKDB.all('syncQueue')).filter(q=>q.type==='delete')) deletedKeys.add(`${q.store}|${q.recordId}`);
-      for(const d of deletionsRes.data||[]) deletedKeys.add(`${d.store}|${d.record_id}`);
-      for(const r of legacyDeleted) deletedKeys.add(`${r.store}|${r.record_id}`);
+      for(const d of deletionsRes.data||[]) if(!LOCAL_ONLY_STORES.has(d.store)) deletedKeys.add(`${d.store}|${d.record_id}`);
+      for(const r of legacyDeleted) if(!LOCAL_ONLY_STORES.has(r.store)) deletedKeys.add(`${r.store}|${r.record_id}`);
 
       // Migreer tombstones uit oudere appversies naar de nieuwe aparte
       // verwijdertabel en ruim het oude app_records-record op.
       for(const r of legacyDeleted){
+        if(LOCAL_ONLY_STORES.has(r.store)) continue;
         try{
           await JKDB.markDeleteLocal(r.store,r.record_id,r?.data?.deleted_at||r.updated_at);
           await markDeleted(r.store,r.record_id);
@@ -197,6 +205,7 @@ const JKCloud = (() => {
 
       const hasSyncedBefore=!!(await JKDB.get('settings','cloudStatus'))?.lastSync;
       for(const store of JKDB.stores){
+        if(LOCAL_ONLY_STORES.has(store)) continue;
         const local=await JKDB.all(store);
         for(const obj of local){
           const key=`${store}|${obj.id}`;
@@ -226,10 +235,10 @@ const JKCloud = (() => {
     }finally{ syncing=false; document.dispatchEvent(new CustomEvent('jkcloud-queue')); }
   }
 
-  async function pruneCloudToLocal(stores=['documents','timeEntries','jobs','jobPhotos']){
+  async function pruneCloudToLocal(stores=['documents','timeEntries','jobs']){
     if(!isSignedIn()) throw new Error('Niet ingelogd.');
     if(!navigator.onLine) throw new Error('Geen internetverbinding.');
-    const allowed=stores.filter(s=>JKDB.stores.includes(s));
+    const allowed=stores.filter(s=>JKDB.stores.includes(s) && !LOCAL_ONLY_STORES.has(s));
     const {data:rows,error}=await client.from('app_records').select('store,record_id').eq('user_id',user().id).in('store',allowed);
     if(error) throw error;
     const localIds=new Map();
@@ -246,7 +255,7 @@ const JKCloud = (() => {
     await syncNow();
     return {removed,stores:allowed};
   }
-  async function pendingCount(){ return (await JKDB.all('syncQueue')).length; }
+  async function pendingCount(){ return (await JKDB.all('syncQueue')).filter(q=>!LOCAL_ONLY_STORES.has(q.store)).length; }
   function status(){ return {available:available(),signedIn:isSignedIn(),email:user()?.email||'',syncing}; }
   return {init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,queuePut,queueDelete,pruneCloudToLocal,pendingCount};
 })();

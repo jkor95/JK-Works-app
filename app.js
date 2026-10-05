@@ -144,6 +144,23 @@ const App = (() => {
     await applyAuthState();
   }
 
+  async function migrateLocalJobPhotosToCloud(){
+    const flag=await JKDB.get('settings','photoCloudMigrationV45');
+    if(flag?.done)return;
+    const photos=await JKDB.all('jobPhotos');
+    for(const p of photos){
+      // Oudere lokale foto's zijn mogelijk nog groter. Comprimeer ze eerst opnieuw.
+      if(p.blob instanceof Blob && p.blob.size>250*1024){
+        const file=new File([p.blob],p.name||'klusfoto.jpg',{type:p.blob.type||'image/jpeg'});
+        const {blob,originalSize}=await optimizeJobPhoto(file);
+        p.originalSize=p.originalSize||originalSize;p.blob=blob;p.compressedSize=blob.size;
+        await JKDB.putLocal('jobPhotos',p);
+      }
+      if(window.JKCloud?.queuePut) await JKCloud.queuePut('jobPhotos',p);
+    }
+    await JKDB.putLocal('settings',{id:'photoCloudMigrationV45',done:true,at:new Date().toISOString()});
+  }
+
   function bindSiteAuth(){
     const form=$('#siteLoginForm');
     if(!form || form.dataset.bound==='1')return;
@@ -173,6 +190,8 @@ const App = (() => {
     document.body.classList.toggle('auth-locked',!signedIn);
     if(gate)gate.hidden=signedIn;
     if(shell)shell.hidden=!signedIn;
+    const logoutBtn=$('#topLogoutBtn');
+    if(logoutBtn) logoutBtn.hidden=!signedIn;
     if(!signedIn){
       if($('#modalRoot'))$('#modalRoot').innerHTML='';
       await refreshSyncButton();
@@ -181,6 +200,7 @@ const App = (() => {
     if(!appReady){
       window.__JK_SEEDING=true;
       try{await JKDB.seed();}finally{window.__JK_SEEDING=false;}
+      await migrateLocalJobPhotosToCloud();
       bindNav();
       bindInputs();
       appReady=true;
@@ -254,6 +274,14 @@ const App = (() => {
     $$('.nav-item').forEach(b=>b.addEventListener('click',()=>go(b.dataset.route)));
     $('#quickAddBtn').addEventListener('click',quickAdd);
     $('#manualSyncBtn')?.addEventListener('click',manualSync);
+    $('#topLogoutBtn')?.addEventListener('click',async()=>{
+      if(!confirm('Wil je uitloggen bij JK Works?'))return;
+      try{
+        await JKCloud.signOut();
+        toast('Uitgelogd');
+        await applyAuthState();
+      }catch(e){alert('Uitloggen mislukt: '+e.message)}
+    });
   }
   function bindInputs(){
     $('#hiddenExistingPdfInput').addEventListener('change',async e=>{if(e.target.files.length)await importExistingPdfs([...e.target.files],state.importFolderTarget);e.target.value='';});
@@ -363,24 +391,38 @@ const App = (() => {
   }
   const photoPhaseMeta={before:{label:'Voor',icon:'📷'},during:{label:'Tijdens',icon:'🔨'},after:{label:'Na',icon:'✅'}};
   function photoPolicyText(v){return v==='required'?'Verplicht voor, tijdens en na':v==='none'?'Niet nodig bij deze klus':'Optioneel';}
+  function humanBytes(n){
+    n=Number(n||0);if(!n)return '0 KB';
+    if(n<1024*1024)return `${Math.max(1,Math.round(n/1024))} KB`;
+    return `${(n/1024/1024).toFixed(1).replace('.',',')} MB`;
+  }
   async function optimizeJobPhoto(file){
-    if(!file?.type?.startsWith('image/'))return file;
+    if(!file?.type?.startsWith('image/'))return {blob:file,originalSize:file?.size||0};
+    const TARGET=250*1024; // harde richtwaarde per klusfoto voor Supabase-opslag
     try{
       const url=URL.createObjectURL(file),img=new Image();
       await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=url});
       URL.revokeObjectURL(url);
-      const max=1600,scale=Math.min(1,max/Math.max(img.naturalWidth||1,img.naturalHeight||1));
-      if(scale===1 && file.size<1600000)return file;
-      const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
-      canvas.getContext('2d',{alpha:false}).drawImage(img,0,0,canvas.width,canvas.height);
-      const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',.82));
-      return blob||file;
-    }catch(e){console.warn('Foto verkleinen mislukt, origineel wordt bewaard',e);return file;}
+      const ow=img.naturalWidth||1,oh=img.naturalHeight||1;
+      let maxSide=1600,quality=.74,best=null;
+      for(let attempt=0;attempt<7;attempt++){
+        const scale=Math.min(1,maxSide/Math.max(ow,oh));
+        const canvas=document.createElement('canvas');
+        canvas.width=Math.max(1,Math.round(ow*scale));canvas.height=Math.max(1,Math.round(oh*scale));
+        const ctx=canvas.getContext('2d',{alpha:false});ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',quality));
+        if(blob){best=blob;if(blob.size<=TARGET)break;}
+        if(quality>.56) quality-=.07; else maxSide=Math.max(1000,Math.round(maxSide*.86));
+      }
+      return {blob:best||file,originalSize:file.size||0};
+    }catch(e){console.warn('Foto verkleinen mislukt, origineel wordt bewaard',e);return {blob:file,originalSize:file?.size||0};}
   }
   async function saveJobPhoto(jobId,phase,file){
     if(!file)return;
-    const blob=await optimizeJobPhoto(file);
-    await JKDB.put('jobPhotos',{id:JKDB.id('photo'),jobId,phase,blob,name:file.name||`${phase}-${Date.now()}.jpg`,createdAt:new Date().toISOString()});
+    const {blob,originalSize}=await optimizeJobPhoto(file);
+    const original=String(file.name||`${phase}-${Date.now()}.jpg`);
+    const name=blob?.type==='image/jpeg'?original.replace(/\.[^.]+$/, '')+'.jpg':original;
+    await JKDB.put('jobPhotos',{id:JKDB.id('photo'),jobId,phase,blob,name,originalSize,compressedSize:blob?.size||0,createdAt:new Date().toISOString()});
   }
   async function showJob(id){
     const j=await JKDB.get('jobs',id),entries=(await JKDB.all('timeEntries')).filter(e=>e.jobId===id).sort((a,b)=>entryDate(b).localeCompare(entryDate(a))),check=j.checklistId?await JKDB.get('checklists',j.checklistId):null,client=j.clientId?await JKDB.get('clients',j.clientId):null;
@@ -393,7 +435,8 @@ const App = (() => {
       const thumbs=list.map(p=>{const url=URL.createObjectURL(p.blob);return `<div class="job-photo-thumb"><img src="${url}" alt="${esc(meta.label)} foto"><button type="button" class="photo-delete" data-del-photo="${p.id}" aria-label="Foto verwijderen">×</button></div>`}).join('');
       return `<div class="job-photo-phase ${missing?'photo-missing':''}"><div class="job-photo-head"><strong>${meta.icon} ${meta.label}</strong><span>${list.length} foto${list.length===1?'':'\'s'}${missing?' · nog nodig':''}</span></div><div class="job-photo-grid">${thumbs||'<div class="job-photo-empty">Nog geen foto</div>'}</div><div class="button-row photo-actions"><button type="button" class="secondary" data-camera="${phase}">📷 Foto maken</button><button type="button" class="secondary" data-upload="${phase}">⬆ Uploaden</button></div><input type="file" accept="image/*" capture="environment" data-camera-input="${phase}" hidden><input type="file" accept="image/*" multiple data-upload-input="${phase}" hidden></div>`;
     }).join('');
-    const photoNotice=policy==='required'?'<div class="warning"><strong>Foto’s verplicht bij deze klus</strong><br><span class="small">Maak minimaal één foto vóór, tijdens en na de werkzaamheden.</span></div>':policy==='none'?'<div class="successbox"><strong>Foto’s niet nodig</strong><br><span class="small">Je kunt hieronder alsnog foto’s toevoegen als je dat wilt.</span></div>':'<div class="successbox"><strong>Foto’s optioneel</strong><br><span class="small">Je kunt voor, tijdens en na foto’s toevoegen zonder dat dit verplicht is.</span></div>';
+    const localPhotoInfo='<div class="successbox"><strong>Foto’s op al je apparaten</strong><br><span class="small">Dezelfde foto wordt bij de klus én onder Documenten → Klusfoto’s getoond. Er is maar één cloudbestand. Foto’s worden vóór upload verkleind tot ongeveer maximaal 250 KB per foto en gaan mee bij handmatige Sync.</span></div>';
+    const photoNotice=(policy==='required'?'<div class="warning"><strong>Foto’s verplicht bij deze klus</strong><br><span class="small">Maak minimaal één foto vóór, tijdens en na de werkzaamheden.</span></div>':policy==='none'?'<div class="successbox"><strong>Foto’s niet nodig</strong><br><span class="small">Je kunt hieronder alsnog foto’s toevoegen als je dat wilt.</span></div>':'<div class="successbox"><strong>Foto’s optioneel</strong><br><span class="small">Je kunt voor, tijdens en na foto’s toevoegen zonder dat dit verplicht is.</span></div>')+localPhotoInfo;
     modal(`${modalHead(j.title)}<div class="button-row"><button class="secondary" id="editThisJob">Bewerken</button><button class="primary" id="hoursThisJob">+ Uren</button><button class="secondary" id="quoteThisJob">+ Offerte</button><button class="secondary" id="invoiceThisJob">+ Factuur</button><button class="secondary" id="calendarThisJob">📅 Google Agenda</button></div><div class="card" style="margin-top:10px"><strong>${esc(c.name||j.clientName||'Geen klant')}</strong><div class="muted small">${nlDate(j.date)}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}${contact?'<br>'+contact:''}</div>${j.notes?`<p class="small">${esc(j.notes)}</p>`:''}</div><div class="section-title"><h2>Foto’s</h2><span class="muted small">${esc(photoPolicyText(policy))}</span></div>${photoNotice}<div class="job-photo-sections">${photoCards}</div><div class="section-title"><h2>Checklist</h2></div><div class="card">${checkHtml}</div><div class="section-title"><h2>Uren</h2><span class="muted small">${(entries.reduce((s,e)=>s+entryMinutes(e),0)/60).toFixed(2).replace('.',',')} u</span></div>${entries.length?`<div class="list">${entries.map(e=>`<div class="list-item clickable" data-time="${e.id}"><div class="main"><div class="title">${nlDate(entryDate(e))}</div><div class="sub">${esc(entryFrom(e))} - ${esc(entryTo(e))}${e.note?' · '+esc(e.note):''}</div></div><strong>${durationHM(entryMinutes(e))}</strong></div>`).join('')}</div>`:'<div class="empty">Nog geen uren.</div>'}`);
     $('#editThisJob').addEventListener('click',()=>{closeModal();editJob(id)});$('#hoursThisJob').addEventListener('click',()=>{closeModal();editTimeEntry(null,id)});$('#quoteThisJob').addEventListener('click',()=>{closeModal();createBusinessDoc('Offerte',{jobId:j.id,clientId:j.clientId,workDate:j.date})});$('#invoiceThisJob').addEventListener('click',()=>{closeModal();createBusinessDoc('Factuur',{jobId:j.id,clientId:j.clientId,workDate:j.date})});$('#calendarThisJob').addEventListener('click',()=>openGoogleCalendarForJob(j));$$('[data-time]').forEach(x=>x.addEventListener('click',()=>{editTimeEntry(x.dataset.time)}));$$('[data-jobcheck]').forEach(c=>c.addEventListener('change',async()=>{j.checklistState=j.checklistState||{};j.checklistState[c.dataset.jobcheck]=c.checked;await JKDB.put('jobs',j)}));
     $$('[data-camera]').forEach(b=>b.addEventListener('click',()=>document.querySelector(`[data-camera-input="${b.dataset.camera}"]`)?.click()));
@@ -537,12 +580,15 @@ const App = (() => {
   }
 
   async function renderDocuments(){
-    title('Documenten');const docs=await JKDB.all('documents');const counts={offerte:0,factuur:0,diversen:0};docs.forEach(d=>counts[docFolder(d)]++);
-    if(!['offerte','factuur','diversen'].includes(state.docFolder)){
-      $('#view').innerHTML=`<div class="button-row"><button class="primary" id="docQuote">+ Offerte</button><button class="primary" id="docInvoice">+ Factuur</button></div><div class="section-title"><h2>Kies een map</h2></div><div class="folder-grid"><button class="folder" data-folder="offerte"><span>📁</span><strong>Offertes</strong><small>${counts.offerte} bestanden</small></button><button class="folder" data-folder="factuur"><span>📁</span><strong>Facturen</strong><small>${counts.factuur} bestanden</small></button><button class="folder" data-folder="diversen"><span>📁</span><strong>Diversen</strong><small>${counts.diversen} bestanden</small></button></div><p class="muted small" style="margin-top:14px">Open een map om de documenten daarin te bekijken. Documenten uit verschillende mappen worden hier niet door elkaar getoond.</p>`;
+    title('Documenten');
+    const [docs,photos,jobs]=await Promise.all([JKDB.all('documents'),JKDB.all('jobPhotos'),JKDB.all('jobs')]);
+    const counts={offerte:0,factuur:0,diversen:0,klusfotos:photos.length};docs.forEach(d=>counts[docFolder(d)]++);
+    if(!['offerte','factuur','diversen','klusfotos'].includes(state.docFolder)){
+      $('#view').innerHTML=`<div class="button-row"><button class="primary" id="docQuote">+ Offerte</button><button class="primary" id="docInvoice">+ Factuur</button></div><div class="section-title"><h2>Kies een map</h2></div><div class="folder-grid"><button class="folder" data-folder="offerte"><span>📁</span><strong>Offertes</strong><small>${counts.offerte} bestanden</small></button><button class="folder" data-folder="factuur"><span>📁</span><strong>Facturen</strong><small>${counts.factuur} bestanden</small></button><button class="folder" data-folder="diversen"><span>📁</span><strong>Diversen</strong><small>${counts.diversen} bestanden</small></button><button class="folder" data-folder="klusfotos"><span>📷</span><strong>Klusfoto’s</strong><small>${counts.klusfotos} foto${counts.klusfotos===1?'':'’s'}</small></button></div><p class="muted small" style="margin-top:14px">Klusfoto’s gebruikt dezelfde fotorecords als de klus. Er wordt dus geen tweede cloudbestand opgeslagen. Na handmatige Sync zijn ze op je andere apparaten beschikbaar.</p>`;
       $('#docQuote').addEventListener('click',()=>createBusinessDoc('Offerte'));$('#docInvoice').addEventListener('click',()=>createBusinessDoc('Factuur'));$$('[data-folder]').forEach(x=>x.addEventListener('click',()=>{state.docFolder=x.dataset.folder;renderDocuments()}));
       return;
     }
+    if(state.docFolder==='klusfotos') return renderJobPhotoDocuments(photos,jobs);
     const folderLabel=state.docFolder==='offerte'?'Offertes':state.docFolder==='factuur'?'Facturen':'Diversen';
     $('#view').innerHTML=`<div class="button-row"><button class="secondary" id="backToFolders">← Mappen</button><button class="secondary" id="importDocs">Upload naar ${folderLabel}</button></div><div id="docList"></div>`;
     $('#backToFolders').addEventListener('click',()=>{state.docFolder=null;renderDocuments()});$('#importDocs').addEventListener('click',()=>chooseImportFolder());renderDocumentList(docs);
@@ -550,6 +596,34 @@ const App = (() => {
   function docFolder(d){const k=String(d.folder||d.kind||'').toLowerCase();return k.includes('offert')?'offerte':k.includes('fact')?'factuur':'diversen'}
   function docStatusHtml(d){const f=docFolder(d),m=d.meta||{};if(f==='factuur')return `<span class="status-chip ${m.sent?'on':''}">${m.sent?'✓ ':''}Verstuurd</span><span class="status-chip ${m.paid?'on':''}">${m.paid?'✓ ':''}Betaald</span>`;if(f==='offerte')return `<span class="status-chip ${m.sent?'on':''}">${m.sent?'✓ ':''}Verstuurd</span><span class="status-chip ${m.confirmed?'on':''}">${m.confirmed?'✓ ':''}Bevestigd</span>`;return ''}
   function renderDocumentList(docs){const c=$('#docList');if(!c)return;const filtered=docs.filter(d=>docFolder(d)===state.docFolder).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));c.innerHTML=`<div class="section-title"><h2>${state.docFolder==='offerte'?'Offertes':state.docFolder==='factuur'?'Facturen':'Diversen'}</h2></div>${filtered.length?`<div class="list">${filtered.map(d=>`<div class="list-item clickable" data-doc="${d.id}"><div class="document-card"><div class="doc-icon">PDF</div><div class="main"><div class="title">${esc(d.filename)}</div><div class="sub">${fmtDateTime(d.createdAt)} · ${esc(d.kind||'PDF')}</div><div class="status-row">${docStatusHtml(d)}</div></div></div><span>›</span></div>`).join('')}</div>`:'<div class="empty">Deze map is nog leeg.</div>'}`;$$('[data-doc]').forEach(x=>x.addEventListener('click',()=>showDocument(x.dataset.doc)))}
+  async function renderJobPhotoDocuments(photos,jobs){
+    const jobMap=new Map(jobs.map(j=>[j.id,j]));
+    const groups=new Map();
+    for(const p of photos.sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))){
+      const key=p.jobId||'zonder-klus';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(p);
+    }
+    const phaseOrder=['before','during','after'];
+    const html=[...groups.entries()].map(([jobId,list])=>{
+      const job=jobMap.get(jobId),title=job?.title||'Klus niet meer aanwezig',sub=[job?.clientName,nlDate(job?.date)].filter(Boolean).join(' · ');
+      const phases=phaseOrder.map(phase=>{
+        const items=list.filter(p=>p.phase===phase);if(!items.length)return '';
+        const meta=photoPhaseMeta[phase]||{label:phase,icon:'📷'};
+        return `<div class="photo-doc-phase"><div class="job-photo-head"><strong>${meta.icon} ${esc(meta.label)}</strong><span>${items.length} foto${items.length===1?'':'’s'}</span></div><div class="job-photo-grid">${items.map(p=>{const url=URL.createObjectURL(p.blob);return `<button class="job-photo-thumb photo-doc-thumb" type="button" data-photo-doc="${p.id}"><img src="${url}" alt="${esc(meta.label)} foto"></button>`}).join('')}</div></div>`;
+      }).join('');
+      return `<div class="card photo-doc-job"><h3>${esc(title)}</h3>${sub?`<div class="muted small">${esc(sub)}</div>`:''}<div class="photo-doc-phases">${phases}</div></div>`;
+    }).join('');
+    $('#view').innerHTML=`<div class="button-row"><button class="secondary" id="backToFolders">← Mappen</button></div><div class="section-title"><h2>Klusfoto’s</h2><span class="muted small">${photos.length} totaal</span></div><div class="successbox"><strong>Cloudfoto’s zonder dubbele opslag</strong><br><span class="small">Deze map toont exact dezelfde foto’s als bij de klus. Foto’s worden gecomprimeerd naar ongeveer maximaal 250 KB en bij handmatige Sync via Supabase beschikbaar op je andere apparaten.</span></div>${html||'<div class="empty">Nog geen klusfoto’s. Voeg ze toe vanuit een klus.</div>'}`;
+    $('#backToFolders').addEventListener('click',()=>{state.docFolder=null;renderDocuments()});
+    $$('[data-photo-doc]').forEach(b=>b.addEventListener('click',()=>showPhotoDocument(b.dataset.photoDoc)));
+  }
+  async function showPhotoDocument(id){
+    const p=await JKDB.get('jobPhotos',id);if(!p)return;
+    const j=p.jobId?await JKDB.get('jobs',p.jobId):null,meta=photoPhaseMeta[p.phase]||{label:'Foto',icon:'📷'},url=URL.createObjectURL(p.blob);
+    modal(`${modalHead(`${meta.icon} ${meta.label}`)}<div class="card"><img src="${url}" alt="Klusfoto" style="width:100%;max-height:62vh;object-fit:contain;border-radius:14px;background:#f2eee7"><h3 style="margin-top:12px">${esc(j?.title||'Klusfoto')}</h3><div class="muted small">${esc(p.name||'foto.jpg')} · ${fmtDateTime(p.createdAt)}${j?.clientName?' · '+esc(j.clientName):''}${p.compressedSize||p.blob?.size?' · '+humanBytes(p.compressedSize||p.blob?.size):''}</div><div class="button-row" style="margin-top:14px"><button class="primary" id="sharePhotoDoc">Delen / bewaar</button><button class="secondary" id="downloadPhotoDoc">Download</button><button class="danger-btn" id="deletePhotoDoc">Verwijderen</button></div></div>`);
+    $('#sharePhotoDoc').addEventListener('click',()=>shareBlob(p.blob,p.name||'klusfoto.jpg'));
+    $('#downloadPhotoDoc').addEventListener('click',()=>downloadBlob(p.blob,p.name||'klusfoto.jpg'));
+    $('#deletePhotoDoc').addEventListener('click',async()=>{if(!confirm('Deze foto verwijderen? De foto verdwijnt ook bij de gekoppelde klus.'))return;await JKDB.remove('jobPhotos',p.id);closeModal();toast('Foto verwijderd');if(state.route==='documents')renderDocuments();});
+  }
   function chooseImportFolder(){
     if(['offerte','factuur','diversen'].includes(state.docFolder)){state.importFolderTarget=state.docFolder;$('#hiddenExistingPdfInput').click();return;}
     modal(`${modalHead('PDF uploaden')}<p class="muted small">Kies in welke map je het bestand wilt plaatsen.</p><div class="grid two"><button class="quick" data-import-folder="offerte"><span class="emoji">📄</span><strong>Offertes</strong></button><button class="quick" data-import-folder="factuur"><span class="emoji">🧾</span><strong>Facturen</strong></button><button class="quick" data-import-folder="diversen"><span class="emoji">📁</span><strong>Diversen</strong></button></div>`);
@@ -652,13 +726,13 @@ const App = (() => {
   function showCloud(){
     const cs=JKCloud.status();
     if(cs.signedIn){
-      modal(`${modalHead('Synchronisatie')}<div class="card"><h3>Ingelogd</h3><p class="small"><strong>${esc(cs.email)}</strong></p><p class="muted small">Wijzigingen worden eerst alleen op dit apparaat opgeslagen. Er is geen automatische achtergrond-sync meer. Druk bovenin op Sync wanneer je klaar bent; dan worden je wijzigingen naar Supabase gestuurd en wijzigingen van je andere apparaten opgehaald.</p><div class="button-row"><button class="primary" id="syncNow">Nu synchroniseren</button><button class="secondary" id="cloudLogout">Uitloggen</button></div></div><div class="card"><h3>Cloud opschonen</h3><p class="muted small">Gebruik dit alleen op een apparaat waarop Klussen, Uren, Foto’s en Documenten nu correct zijn. Oude cloudrecords die op dit apparaat niet meer bestaan worden dan definitief verwijderd, zodat een nieuw apparaat ze niet meer terughaalt.</p><button class="danger-btn" id="pruneCloud" style="width:100%">Maak dit apparaat leidend voor Klussen, Uren, Foto’s en Documenten</button></div>`);
+      modal(`${modalHead('Synchronisatie')}<div class="card"><h3>Ingelogd</h3><p class="small"><strong>${esc(cs.email)}</strong></p><p class="muted small">Wijzigingen worden eerst alleen op dit apparaat opgeslagen. Er is geen automatische achtergrond-sync meer. Druk bovenin op Sync wanneer je klaar bent; dan worden je wijzigingen naar Supabase gestuurd en wijzigingen van je andere apparaten opgehaald. <strong>Klusfoto’s gaan gecomprimeerd mee</strong> naar Supabase, zodat ze op meerdere apparaten beschikbaar zijn.</p><div class="button-row"><button class="primary" id="syncNow">Nu synchroniseren</button><button class="secondary" id="cloudLogout">Uitloggen</button></div></div><div class="card"><h3>Cloud opschonen</h3><p class="muted small">Gebruik dit alleen op een apparaat waarop Klussen, Uren en Documenten nu correct zijn. Klusfoto’s synchroniseren ook via Supabase. Cloudopschoning hieronder beperkt zich nog steeds tot Klussen, Uren en Documenten. Oude cloudrecords die op dit apparaat niet meer bestaan worden dan definitief verwijderd, zodat een nieuw apparaat ze niet meer terughaalt.</p><button class="danger-btn" id="pruneCloud" style="width:100%">Maak dit apparaat leidend voor Klussen, Uren en Documenten</button></div>`);
       $('#syncNow').addEventListener('click',async()=>{closeModal();await manualSync();});
       $('#pruneCloud').addEventListener('click',async()=>{
         const ok=confirm('LET OP: gebruik dit alleen op een apparaat waarop Klussen, Urenregistraties, Foto’s en Documenten compleet en correct zijn. Oude cloudgegevens die hier niet meer staan worden definitief verwijderd. Doorgaan?');
         if(!ok)return;
         try{
-          const r=await JKCloud.pruneCloudToLocal(['documents','timeEntries','jobs','jobPhotos']);
+          const r=await JKCloud.pruneCloudToLocal(['documents','timeEntries','jobs']);
           alert(`${r.removed} oude cloudrecord${r.removed===1?'':'s'} verwijderd. Nieuwe apparaten zullen deze niet meer terughalen.`);
           closeModal(); render();
         }catch(e){alert('Cloud opschonen mislukt: '+e.message)}

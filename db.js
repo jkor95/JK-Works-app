@@ -3,6 +3,7 @@ const JKDB = (() => {
   const DB_VERSION = 5;
   const stores = ['mboxes','tools','checklists','clients','jobs','jobPhotos','timeEntries','pdfTemplates','documents','settings'];
   const internalStores = ['syncQueue','deleteMarkers'];
+  const localOnlyStores = new Set();
   let dbPromise;
 
   function open(){
@@ -31,7 +32,8 @@ const JKDB = (() => {
     const stamped={...obj};
     if(!opts.preserveTimestamp) stamped._syncUpdatedAt=new Date().toISOString();
     await putLocal(store,stamped);
-    if(!opts.localOnly && !window.__JK_SEEDING && window.JKCloud?.queuePut) window.JKCloud.queuePut(store,stamped).catch(()=>{});
+    const localOnly=!!opts.localOnly || localOnlyStores.has(store);
+    if(!localOnly && !window.__JK_SEEDING && window.JKCloud?.queuePut) window.JKCloud.queuePut(store,stamped).catch(()=>{});
     return stamped;
   }
   async function markDeleteLocal(store,id,deletedAt=new Date().toISOString()){
@@ -45,9 +47,10 @@ const JKDB = (() => {
   async function remove(store,id,opts={}){
     // Eerst een blijvende lokale verwijdermarkering opslaan. Hierdoor kan geen
     // oude of nog lopende upload dit record na verwijderen opnieuw tot leven brengen.
-    if(!opts.localOnly) await markDeleteLocal(store,id);
+    const localOnly=!!opts.localOnly || localOnlyStores.has(store);
+    if(!localOnly) await markDeleteLocal(store,id);
     await removeLocal(store,id);
-    if(!opts.localOnly && !window.__JK_SEEDING && window.JKCloud?.queueDelete){
+    if(!localOnly && !window.__JK_SEEDING && window.JKCloud?.queueDelete){
       await window.JKCloud.queueDelete(store,id);
     }
   }
@@ -313,5 +316,5 @@ const JKDB = (() => {
     }
   }
 
-  return {stores,open,all,get,put,remove,clear,id,seed,putLocal,removeLocal,markDeleteLocal,isDeletedLocal};
+  return {stores,localOnlyStores,open,all,get,put,remove,clear,id,seed,putLocal,removeLocal,markDeleteLocal,isDeletedLocal};
 })();
