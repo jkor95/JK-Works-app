@@ -1,4 +1,4 @@
-/* JK Works Dordrecht - persoonlijke PWA v37 */
+/* JK Works Dordrecht - persoonlijke PWA v38 */
 const App = (() => {
   const state = {route:'dashboard',gearTab:'mboxes',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,activeBlobUrl:null,reminderChecking:false,snoozedReminderJobs:new Set(),pendingCloudRefresh:false,pendingAuthRefresh:false};
   window.__JK_UI_BUSY=false;
@@ -39,75 +39,53 @@ const App = (() => {
     for(let i=0;i<2;i++)guess=new Date(Date.UTC(y,m-1,d,hh,mm,0)-tzOffsetMs(guess,timeZone));
     return guess;
   }
-  function icsEscape(v=''){
-    return String(v??'').replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');
-  }
-  function icsUtcStamp(date,time){
+  function calendarUtcStamp(date,time){
     const d=localCalendarDateToUtc(date,time);
     return d?d.toISOString().replace(/[-:]/g,'').replace(/\.000Z$/,'Z'):'';
   }
-  function icsNowStamp(){return new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');}
-  function safeIcsFilename(v='afspraak'){
-    const base=String(v||'afspraak').trim().replace(/[\\/:*?\"<>|]+/g,'-').replace(/\s+/g,' ').slice(0,80)||'afspraak';
-    return `${base}.ics`;
+  function calendarTimedRange(date,startTime,endTime){
+    const start=localCalendarDateToUtc(date,startTime);
+    if(!start)return '';
+    let end=endTime?localCalendarDateToUtc(date,endTime):null;
+    if(!end)end=new Date(start.getTime()+60*60*1000);
+    else if(end<=start)end=localCalendarDateToUtc(addDays(date,1),endTime);
+    const stamp=d=>d.toISOString().replace(/[-:]/g,'').replace(/\.000Z$/,'Z');
+    return `${stamp(start)}/${stamp(end)}`;
   }
-  function buildIcsEvent({title,date,start='',end='',description='',location=''}){
-    if(!date)return '';
-    const uid=`jkworks-${Date.now()}-${Math.random().toString(36).slice(2)}@jkworks-dordrecht`;
-    const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//JK Works Dordrecht//Agenda//NL','CALSCALE:GREGORIAN','METHOD:PUBLISH','BEGIN:VEVENT',`UID:${uid}`,`DTSTAMP:${icsNowStamp()}`];
-    if(start){
-      const dtStart=icsUtcStamp(date,start);
-      let endDate=date,dtEnd='';
-      if(end){
-        if(end<=start)endDate=addDays(date,1);
-        dtEnd=icsUtcStamp(endDate,end);
-      }
-      if(!dtEnd){const d=localCalendarDateToUtc(date,start);dtEnd=new Date(d.getTime()+60*60*1000).toISOString().replace(/[-:]/g,'').replace(/\.000Z$/,'Z');}
-      lines.push(`DTSTART:${dtStart}`,`DTEND:${dtEnd}`);
-    }else{
-      lines.push(`DTSTART;VALUE=DATE:${String(date).replaceAll('-','')}`,`DTEND;VALUE=DATE:${String(addDays(date,1)).replaceAll('-','')}`);
-    }
-    lines.push(`SUMMARY:${icsEscape(title||'JK Works')}`);
-    if(description)lines.push(`DESCRIPTION:${icsEscape(description)}`);
-    if(location)lines.push(`LOCATION:${icsEscape(location)}`);
-    lines.push('END:VEVENT','END:VCALENDAR');
-    return lines.join('\r\n')+'\r\n';
-  }
-  async function deliverCalendarIcs(ics,filename){
-    if(!ics){alert('Er zijn nog niet genoeg gegevens om een agenda-afspraak te maken.');return;}
-    const file=new File([ics],safeIcsFilename(filename),{type:'text/calendar;charset=utf-8'});
-    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
-      try{await navigator.share({files:[file],title:'Toevoegen aan agenda'});return;}catch(err){if(err?.name==='AbortError')return;console.warn('Agenda delen mislukt, download als fallback.',err);}
-    }
-    const url=URL.createObjectURL(file),a=document.createElement('a');
-    a.href=url;a.download=file.name;a.rel='noopener';document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),15000);
-    toast('Agenda-bestand gemaakt');
-  }
-  function calendarIcsForJob(j,extra={}){
+  function googleCalendarUrlForJob(j,extra={}){
     if(!j?.date)return '';
-    const start=jobStartTime(j),end=jobEndTime(j);
     const title=extra.title||`JK Works - ${j.title||'Klus'}`;
-    const description=[extra.kind&&extra.number?`${extra.kind}: ${extra.number}`:'',j.clientName?`Klant: ${j.clientName}`:'',j.phone?`Telefoon: ${j.phone}`:'',j.email?`E-mail: ${j.email}`:'',j.notes?`Notities: ${j.notes}`:''].filter(Boolean).join('\n');
+    const details=[extra.kind&&extra.number?`${extra.kind}: ${extra.number}`:'',j.clientName?`Klant: ${j.clientName}`:'',j.phone?`Telefoon: ${j.phone}`:'',j.email?`E-mail: ${j.email}`:'',j.notes?`Notities: ${j.notes}`:''].filter(Boolean).join('\n');
     const location=[j.street||j.address,j.postal,j.city].filter(Boolean).join(', ');
-    return buildIcsEvent({title,date:j.date,start,end,description,location});
+    const params=new URLSearchParams({action:'TEMPLATE',text:title,details,location,ctz:CALENDAR_TZ});
+    const start=jobStartTime(j),end=jobEndTime(j);
+    if(start){
+      const range=calendarTimedRange(j.date,start,end);
+      if(range)params.set('dates',range);
+    }
+    if(!params.has('dates'))params.set('dates',`${String(j.date).replaceAll('-','')}/${String(addDays(j.date,1)).replaceAll('-','')}`);
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
   }
   function openCalendarForJob(j,extra={}){
-    if(!j?.date){alert('Vul eerst een datum bij de klus in.');return;}
-    const ics=calendarIcsForJob(j,extra);
-    deliverCalendarIcs(ics,`JK Works - ${j.title||'Klus'}`);
+    const url=googleCalendarUrlForJob(j,extra);
+    if(!url){alert('Vul eerst een datum bij de klus in.');return;}
+    window.open(url,'_blank','noopener,noreferrer');
   }
-  function calendarIcsForTimeEntry(e,j={}){
-    const date=entryDate(e),from=entryFrom(e),to=entryTo(e);if(!date||!from||!to)return '';
+  function googleCalendarUrlForTimeEntry(e,j={}){
+    const date=entryDate(e),from=entryFrom(e),to=entryTo(e);
+    if(!date||!from||!to)return '';
     const clientName=j.clientName||'',jobTitle=j.title||e.jobTitle||'Werkuren';
     const title=`JK Works - ${jobTitle}${clientName?' - '+clientName:''}`;
-    const description=['Urenregistratie',clientName?`Klant: ${clientName}`:'',e.note?`Notitie: ${e.note}`:'',`Gewerkte tijd: ${from} - ${to}`,`Duur: ${durationHM(entryMinutes({date,from,to}))} uur`].filter(Boolean).join('\n');
+    const details=['Urenregistratie',clientName?`Klant: ${clientName}`:'',e.note?`Notitie: ${e.note}`:'',`Gewerkte tijd: ${from} - ${to}`,`Duur: ${durationHM(entryMinutes({date,from,to}))} uur`].filter(Boolean).join('\n');
     const location=[j.street||j.address,j.postal,j.city].filter(Boolean).join(', ');
-    return buildIcsEvent({title,date,start:from,end:to,description,location});
+    const params=new URLSearchParams({action:'TEMPLATE',text:title,details,location,ctz:CALENDAR_TZ});
+    params.set('dates',calendarTimedRange(date,from,to));
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
   }
   function openCalendarForTimeEntry(e,j={}){
-    const ics=calendarIcsForTimeEntry(e,j);if(!ics){alert('Vul eerst datum, van en tot in.');return;}
-    deliverCalendarIcs(ics,`JK Works - ${j.title||e.jobTitle||'Werkuren'}`);
+    const url=googleCalendarUrlForTimeEntry(e,j);
+    if(!url){alert('Vul eerst datum, van en tot in.');return;}
+    window.open(url,'_blank','noopener,noreferrer');
   }
   const durationHM=min=>`${Math.floor(min/60)}:${pad(Math.round(min%60))}`;
   function jobPlannedEnd(j){
@@ -380,7 +358,7 @@ const App = (() => {
     const j=await JKDB.get('jobs',id),entries=(await JKDB.all('timeEntries')).filter(e=>e.jobId===id).sort((a,b)=>entryDate(b).localeCompare(entryDate(a))),check=j.checklistId?await JKDB.get('checklists',j.checklistId):null,client=j.clientId?await JKDB.get('clients',j.clientId):null;
     const checkHtml=check?check.items.map((item,i)=>`<label class="checkline"><input type="checkbox" data-jobcheck="${i}" ${j.checklistState?.[i]?'checked':''}><span>${esc(item)}</span></label>`).join(''):'<span class="muted small">Geen checklist gekoppeld.</span>';
     const c=client||j,contact=[c.attention?`t.a.v. ${esc(c.attention)}`:'',c.street||j.address?esc(c.street||j.address):'',([c.postal,c.city].filter(Boolean).join(' ')?esc([c.postal,c.city].filter(Boolean).join(' ')):''),c.phone?esc(c.phone):'',c.email?esc(c.email):''].filter(Boolean).join('<br>');
-    modal(`${modalHead(j.title)}<div class="button-row"><button class="secondary" id="editThisJob">Bewerken</button><button class="primary" id="hoursThisJob">+ Uren</button><button class="secondary" id="quoteThisJob">+ Offerte</button><button class="secondary" id="invoiceThisJob">+ Factuur</button><button class="secondary" id="calendarThisJob">📅 Toevoegen aan agenda</button></div><div class="card" style="margin-top:10px"><strong>${esc(c.name||j.clientName||'Geen klant')}</strong><div class="muted small">${nlDate(j.date)}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}${contact?'<br>'+contact:''}</div>${j.notes?`<p class="small">${esc(j.notes)}</p>`:''}</div><div class="section-title"><h2>Checklist</h2></div><div class="card">${checkHtml}</div><div class="section-title"><h2>Uren</h2><span class="muted small">${(entries.reduce((s,e)=>s+entryMinutes(e),0)/60).toFixed(2).replace('.',',')} u</span></div>${entries.length?`<div class="list">${entries.map(e=>`<div class="list-item clickable" data-time="${e.id}"><div class="main"><div class="title">${nlDate(entryDate(e))}</div><div class="sub">${esc(entryFrom(e))} - ${esc(entryTo(e))}${e.note?' · '+esc(e.note):''}</div></div><strong>${durationHM(entryMinutes(e))}</strong></div>`).join('')}</div>`:'<div class="empty">Nog geen uren.</div>'}`);
+    modal(`${modalHead(j.title)}<div class="button-row"><button class="secondary" id="editThisJob">Bewerken</button><button class="primary" id="hoursThisJob">+ Uren</button><button class="secondary" id="quoteThisJob">+ Offerte</button><button class="secondary" id="invoiceThisJob">+ Factuur</button><button class="secondary" id="calendarThisJob">📅 Open in Google Agenda</button></div><div class="card" style="margin-top:10px"><strong>${esc(c.name||j.clientName||'Geen klant')}</strong><div class="muted small">${nlDate(j.date)}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}${contact?'<br>'+contact:''}</div>${j.notes?`<p class="small">${esc(j.notes)}</p>`:''}</div><div class="section-title"><h2>Checklist</h2></div><div class="card">${checkHtml}</div><div class="section-title"><h2>Uren</h2><span class="muted small">${(entries.reduce((s,e)=>s+entryMinutes(e),0)/60).toFixed(2).replace('.',',')} u</span></div>${entries.length?`<div class="list">${entries.map(e=>`<div class="list-item clickable" data-time="${e.id}"><div class="main"><div class="title">${nlDate(entryDate(e))}</div><div class="sub">${esc(entryFrom(e))} - ${esc(entryTo(e))}${e.note?' · '+esc(e.note):''}</div></div><strong>${durationHM(entryMinutes(e))}</strong></div>`).join('')}</div>`:'<div class="empty">Nog geen uren.</div>'}`);
     $('#editThisJob').addEventListener('click',()=>{closeModal();editJob(id)});$('#hoursThisJob').addEventListener('click',()=>{closeModal();editTimeEntry(null,id)});$('#quoteThisJob').addEventListener('click',()=>{closeModal();createBusinessDoc('Offerte',{jobId:j.id,clientId:j.clientId,workDate:j.date})});$('#invoiceThisJob').addEventListener('click',()=>{closeModal();createBusinessDoc('Factuur',{jobId:j.id,clientId:j.clientId,workDate:j.date})});$('#calendarThisJob').addEventListener('click',()=>openCalendarForJob(j));$$('[data-time]').forEach(x=>x.addEventListener('click',()=>{editTimeEntry(x.dataset.time)}));$$('[data-jobcheck]').forEach(c=>c.addEventListener('change',async()=>{j.checklistState=j.checklistState||{};j.checklistState[c.dataset.jobcheck]=c.checked;await JKDB.put('jobs',j)}));
   }
 
@@ -586,7 +564,7 @@ const App = (() => {
   async function showDocument(id){
     const d=await JKDB.get('documents',id),folder=docFolder(d),m=d.meta||{},linkedJob=m.jobId?await JKDB.get('jobs',m.jobId):null;
     const statusBox=folder==='factuur'?`<div class="card" style="margin-top:12px"><h3>Status factuur</h3><label class="checkline"><input type="checkbox" id="docSent" ${m.sent?'checked':''}><span>Verstuurd</span></label><label class="checkline"><input type="checkbox" id="docPaid" ${m.paid?'checked':''}><span>Betaald</span></label></div>`:folder==='offerte'?`<div class="card" style="margin-top:12px"><h3>Status offerte</h3><label class="checkline"><input type="checkbox" id="docSent" ${m.sent?'checked':''}><span>Verstuurd</span></label><label class="checkline"><input type="checkbox" id="docConfirmed" ${m.confirmed?'checked':''}><span>Bevestigd</span></label></div>`:'';
-    modal(`${modalHead(d.filename)}<div class="card"><div class="document-card"><div class="doc-icon">PDF</div><div><h3>${esc(d.filename)}</h3><div class="muted small">${esc(d.kind||'PDF')} · ${fmtDateTime(d.createdAt)}</div>${d.meta?.total!=null?`<div class="big-number" style="margin-top:8px">${money(d.meta.total)}</div>`:''}</div></div><div class="button-row" style="margin-top:14px"><button class="primary" id="previewDoc">Bekijk PDF</button><button class="secondary" id="shareDoc">Delen / bewaar in iCloud</button><button class="secondary" id="downloadDoc">Download</button>${folder==='offerte'||folder==='factuur'?'<button class="secondary" id="calendarDoc">📅 Toevoegen aan agenda</button>':''}</div><div id="pdfPreviewHost" class="pdf-preview-host" hidden></div>${folder==='offerte'&&d.meta?.lines?`<button class="secondary" id="quoteToInvoice" style="width:100%;margin-top:10px">Zet offerte om naar factuur</button>`:''}</div>${statusBox}<div class="card" style="margin-top:12px"><h3>Documentnaam</h3><div class="field"><label>Bestandsnaam</label><input id="docFilename" value="${esc(d.filename)}"></div><button class="secondary" id="renameDoc" style="width:100%">Naam opslaan</button></div><div class="card" style="margin-top:12px"><h3>Map</h3><div class="field"><label>Verplaats document naar</label><select id="moveDocFolder"><option value="offerte" ${folder==='offerte'?'selected':''}>Offertes</option><option value="factuur" ${folder==='factuur'?'selected':''}>Facturen</option><option value="diversen" ${folder==='diversen'?'selected':''}>Diversen</option></select></div></div><button class="danger-btn" id="delDoc" style="width:100%">Uit app verwijderen</button>`);
+    modal(`${modalHead(d.filename)}<div class="card"><div class="document-card"><div class="doc-icon">PDF</div><div><h3>${esc(d.filename)}</h3><div class="muted small">${esc(d.kind||'PDF')} · ${fmtDateTime(d.createdAt)}</div>${d.meta?.total!=null?`<div class="big-number" style="margin-top:8px">${money(d.meta.total)}</div>`:''}</div></div><div class="button-row" style="margin-top:14px"><button class="primary" id="previewDoc">Bekijk PDF</button><button class="secondary" id="shareDoc">Delen / bewaar in iCloud</button><button class="secondary" id="downloadDoc">Download</button>${folder==='offerte'||folder==='factuur'?'<button class="secondary" id="calendarDoc">📅 Open in Google Agenda</button>':''}</div><div id="pdfPreviewHost" class="pdf-preview-host" hidden></div>${folder==='offerte'&&d.meta?.lines?`<button class="secondary" id="quoteToInvoice" style="width:100%;margin-top:10px">Zet offerte om naar factuur</button>`:''}</div>${statusBox}<div class="card" style="margin-top:12px"><h3>Documentnaam</h3><div class="field"><label>Bestandsnaam</label><input id="docFilename" value="${esc(d.filename)}"></div><button class="secondary" id="renameDoc" style="width:100%">Naam opslaan</button></div><div class="card" style="margin-top:12px"><h3>Map</h3><div class="field"><label>Verplaats document naar</label><select id="moveDocFolder"><option value="offerte" ${folder==='offerte'?'selected':''}>Offertes</option><option value="factuur" ${folder==='factuur'?'selected':''}>Facturen</option><option value="diversen" ${folder==='diversen'?'selected':''}>Diversen</option></select></div></div><button class="danger-btn" id="delDoc" style="width:100%">Uit app verwijderen</button>`);
     $('#previewDoc').addEventListener('click',()=>{const host=$('#pdfPreviewHost');if(!host)return;if(!host.hidden){host.hidden=true;host.innerHTML='';if(state.activeBlobUrl){URL.revokeObjectURL(state.activeBlobUrl);state.activeBlobUrl=null;}$('#previewDoc').textContent='Bekijk PDF';return;}if(!(d.blob instanceof Blob)){alert('Dit PDF-bestand is nog niet lokaal beschikbaar. Synchroniseer opnieuw en probeer het nog eens.');return;}state.activeBlobUrl=URL.createObjectURL(d.blob);host.innerHTML=`<iframe class="pdf-preview-frame" src="${state.activeBlobUrl}#toolbar=0&navpanes=0" title="Voorbeeld ${esc(d.filename)}"></iframe>`;host.hidden=false;$('#previewDoc').textContent='Sluit voorbeeld';});
     $('#shareDoc').addEventListener('click',()=>shareBlob(d.blob,d.filename));$('#downloadDoc').addEventListener('click',()=>downloadBlob(d.blob,d.filename));$('#calendarDoc')?.addEventListener('click',async()=>{let job=linkedJob;if(!job){const jobs=await JKDB.all('jobs');const work=String(m.workDate||'');const clientName=normGearName(m.client?.name||'');job=jobs.find(j=>(!work||j.date===work||nlDate(j.date)===work)&&(!clientName||normGearName(j.clientName)===clientName));}if(!job){alert('Dit document is niet aan een klus gekoppeld. Open de offerte/factuur vanuit een klus om een agenda-afspraak te maken.');return;}openCalendarForJob(job,{kind:d.kind||folder,number:m.number||d.filename.replace(/\.pdf$/i,'')});});$('#quoteToInvoice')?.addEventListener('click',()=>{const meta=d.meta;closeModal();createBusinessDoc('Factuur',{jobId:meta.jobId,clientId:meta.clientId,client:meta.client,lines:meta.lines,workDate:meta.workDate})});
     const saveStatus=async()=>{d.meta=d.meta||{};if($('#docSent'))d.meta.sent=$('#docSent').checked;if($('#docPaid'))d.meta.paid=$('#docPaid').checked;if($('#docConfirmed'))d.meta.confirmed=$('#docConfirmed').checked;await JKDB.put('documents',d);toast('Status opgeslagen');};
@@ -700,7 +678,7 @@ const App = (() => {
   async function editTimeEntry(id,jobId=''){
     const jobs=(await JKDB.all('jobs')).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),old=id?await JKDB.get('timeEntries',id):null,e=old||{id:JKDB.id('time'),jobId,jobTitle:'',date:today(),from:'08:00',to:'16:30',note:''};
     if(old&&!e.date&&e.start){e.date=entryDate(e);e.from=entryFrom(e);e.to=entryTo(e)}
-    modal(`${modalHead(id?'Uren bewerken':'Uren toevoegen')}<form id="timeForm"><div class="field"><label>Klus</label><select name="jobId"><option value="">Algemene werkzaamheden</option>${jobs.map(j=>`<option value="${j.id}" ${j.id===e.jobId?'selected':''}>${esc(j.title)}${j.clientName?' · '+esc(j.clientName):''}</option>`).join('')}</select></div><div class="field"><label>Datum</label><input type="date" name="date" required value="${esc(e.date||today())}"></div><div class="form-grid"><div class="field"><label>Van</label><input type="time" name="from" required value="${esc(e.from||'')}"></div><div class="field"><label>Tot</label><input type="time" name="to" required value="${esc(e.to||'')}"></div></div><div class="field"><label>Notitie</label><input name="note" value="${esc(e.note||'')}" placeholder="Optioneel"></div><div class="card small" id="timePreview"></div><div class="button-row"><button class="primary">Opslaan</button><button type="button" class="secondary" id="calendarTime">📅 Toevoegen aan agenda</button>${id?'<button type="button" class="danger-btn" id="delTime">Verwijderen</button>':''}</div></form>`);
+    modal(`${modalHead(id?'Uren bewerken':'Uren toevoegen')}<form id="timeForm"><div class="field"><label>Klus</label><select name="jobId"><option value="">Algemene werkzaamheden</option>${jobs.map(j=>`<option value="${j.id}" ${j.id===e.jobId?'selected':''}>${esc(j.title)}${j.clientName?' · '+esc(j.clientName):''}</option>`).join('')}</select></div><div class="field"><label>Datum</label><input type="date" name="date" required value="${esc(e.date||today())}"></div><div class="form-grid"><div class="field"><label>Van</label><input type="time" name="from" required value="${esc(e.from||'')}"></div><div class="field"><label>Tot</label><input type="time" name="to" required value="${esc(e.to||'')}"></div></div><div class="field"><label>Notitie</label><input name="note" value="${esc(e.note||'')}" placeholder="Optioneel"></div><div class="card small" id="timePreview"></div><div class="button-row"><button class="primary">Opslaan</button><button type="button" class="secondary" id="calendarTime">📅 Open in Google Agenda</button>${id?'<button type="button" class="danger-btn" id="delTime">Verwijderen</button>':''}</div></form>`);
     const preview=()=>{const f=new FormData($('#timeForm')),tmp={date:f.get('date'),from:f.get('from'),to:f.get('to')};$('#timePreview').innerHTML=`Tijdsduur: <strong>${durationHM(entryMinutes(tmp))} uur</strong>`};$$('#timeForm input').forEach(x=>x.addEventListener('input',preview));preview();$('#calendarTime').addEventListener('click',()=>{const f=new FormData($('#timeForm')),j=jobs.find(x=>x.id===f.get('jobId'))||{};openCalendarForTimeEntry({jobTitle:j.title||e.jobTitle||'Algemene werkzaamheden',date:f.get('date'),from:f.get('from'),to:f.get('to'),note:f.get('note')},j)});$('#timeForm').addEventListener('submit',async ev=>{ev.preventDefault();const f=new FormData(ev.target),j=jobs.find(x=>x.id===f.get('jobId'));Object.assign(e,{jobId:j?.id||'',jobTitle:j?.title||'Algemene werkzaamheden',date:f.get('date'),from:f.get('from'),to:f.get('to'),note:f.get('note'),start:null,end:null});await JKDB.put('timeEntries',e);closeModal();toast('Uren opgeslagen');if(state.route==='dashboard')render();else showTimeEntries();});$('#delTime')?.addEventListener('click',async()=>{if(confirm('Deze urenregistratie verwijderen?')){await JKDB.remove('timeEntries',id);closeModal();showTimeEntries();}});
   }
 
