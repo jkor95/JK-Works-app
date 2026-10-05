@@ -1,13 +1,15 @@
-# JK Works Dordrecht - v35
+# JK Works Dordrecht App v37
 
-## Nieuw
-- Google Agenda vanuit Klussen opent op iPhone nu direct vanuit de tikactie, net als bij Urenregistratie. Dit voorkomt dat iOS de link blokkeert na een asynchrone databasecheck.
-- Klusdatum, starttijd en eindtijd worden rechtstreeks meegestuurd. Alleen oude klussen zonder opgeslagen tijd gebruiken nog de gekoppelde urenregistratie als fallback.
-- In Meer -> Bedrijfsgegevens kan een Google Agenda kalender-ID voor `Werk` worden ingesteld. Als die is ingevuld, wordt die kalender via de Google Agenda-link voorselecteerd.
-- Dezelfde kalenderkeuze wordt gebruikt voor Klussen, Urenregistratie, Offertes en Facturen.
+## Agenda via .ics
+- Google Agenda-links zijn vervangen door lokale .ics-agendabestanden.
+- Bij Klussen, Urenregistratie en gekoppelde Offertes/Facturen staat nu `Toevoegen aan agenda`.
+- Het .ics-bestand bevat titel, datum, begin- en eindtijd, klant, adres en notities waar beschikbaar.
+- Op iPhone wordt waar mogelijk het deelmenu geopend met het agenda-bestand; anders wordt het bestand gedownload.
+- Er is geen Google Cloud Console, Apps Script, Google API-key of Supabase Edge Function nodig.
+- Bij een klus zonder starttijd wordt een hele-dagafspraak gemaakt.
 
-## Google Agenda kalender-ID vinden
-Open Google Agenda op een computer -> Instellingen -> kies de agenda `Werk` -> Agenda integreren -> Agenda-ID. Plak die ID in Meer -> Bedrijfsgegevens.
+## Synchronisatie
+De handmatige Supabase-synchronisatie uit eerdere versies blijft ongewijzigd. Formulieren worden niet periodiek door cloud-sync ververst.
 
-## Updaten
-Vervang de bestanden in de bestaande GitHub Pages repository door deze versie en commit de wijziging. Er is geen nieuwe Supabase SQL nodig.
+## Installeren/updaten
+Vervang de bestaande bestanden in de GitHub Pages-repository door de bestanden uit deze map en commit de wijziging. Er is geen nieuwe Supabase SQL nodig.
