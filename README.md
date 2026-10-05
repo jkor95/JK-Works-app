@@ -1,4 +1,4 @@
-# JK Works Dordrecht app v38
+# JK Works Dordrecht app v39
 
 Deze versie gebruikt weer een gewone Google Agenda-link in plaats van een .ics-bestand.
 
