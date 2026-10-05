@@ -233,6 +233,27 @@ const JKCloud = (() => {
       document.dispatchEvent(new CustomEvent('jkcloud-sync',{detail:{state:'done',changed:localChanged}}));
     }finally{ syncing=false; }
   }
+
+  async function pruneCloudToLocal(stores=['documents','timeEntries','jobs']){
+    if(!isSignedIn()) throw new Error('Niet ingelogd.');
+    if(!navigator.onLine) throw new Error('Geen internetverbinding.');
+    const allowed=stores.filter(s=>JKDB.stores.includes(s));
+    const {data:rows,error}=await client.from('app_records').select('store,record_id').eq('user_id',user().id).in('store',allowed);
+    if(error) throw error;
+    const localIds=new Map();
+    for(const store of allowed){
+      localIds.set(store,new Set((await JKDB.all(store)).map(x=>x.id)));
+    }
+    let removed=0;
+    for(const row of rows||[]){
+      if(localIds.get(row.store)?.has(row.record_id)) continue;
+      await JKDB.markDeleteLocal(row.store,row.record_id);
+      await markDeleted(row.store,row.record_id);
+      removed++;
+    }
+    await syncNow();
+    return {removed,stores:allowed};
+  }
   function status(){ return {available:available(),signedIn:isSignedIn(),email:user()?.email||'',syncing}; }
-  return {init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,queuePut,queueDelete};
+  return {init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,queuePut,queueDelete,pruneCloudToLocal};
 })();

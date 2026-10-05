@@ -1,4 +1,4 @@
-/* JK Works Dordrecht - persoonlijke PWA v26 */
+/* JK Works Dordrecht - persoonlijke PWA v28 */
 const App = (() => {
   const state = {route:'dashboard',gearTab:'mboxes',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,activeBlobUrl:null};
   const PDFLIB_URL='https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';
@@ -11,7 +11,18 @@ const App = (() => {
   const addDays=(iso,days)=>{const d=new Date(`${iso}T12:00:00`);d.setDate(d.getDate()+days);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
   const nlDate=iso=>{if(!iso)return '';const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(m)return `${m[3]}-${m[2]}-${m[1]}`;const d=new Date(iso);return Number.isNaN(+d)?String(iso):new Intl.DateTimeFormat('nl-NL').format(d)};
   const fmtDateTime=v=>v?new Intl.DateTimeFormat('nl-NL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(v)):'-';
-  const jobTimeLabel=j=>j?.startTime?(j.endTime?`${j.startTime} - ${j.endTime}`:`${j.startTime}`):'';
+  function normalizeClockTime(v){
+    if(v==null)return '';
+    const s=String(v).trim();
+    const m=s.match(/(?:^|T|\s)(\d{1,2}):(\d{2})(?::\d{2})?(?:$|[+Z\s])/i) || s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if(!m)return '';
+    const h=Number(m[1]),min=Number(m[2]);
+    if(h<0||h>23||min<0||min>59)return '';
+    return `${pad(h)}:${pad(min)}`;
+  }
+  const jobStartTime=j=>normalizeClockTime(j?.startTime||j?.from||j?.start||j?.timeFrom||j?.beginTime||j?.begin||j?.start_time||'');
+  const jobEndTime=j=>normalizeClockTime(j?.endTime||j?.to||j?.end||j?.timeTo||j?.finishTime||j?.finish||j?.end_time||'');
+  const jobTimeLabel=j=>{const a=jobStartTime(j),b=jobEndTime(j);return a?(b?`${a} - ${b}`:a):'';};
   const CALENDAR_TZ='Europe/Amsterdam';
   function tzOffsetMs(instant,timeZone=CALENDAR_TZ){
     const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(instant).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
@@ -39,16 +50,38 @@ const App = (() => {
     const stamp=d=>d.toISOString().replace(/[-:]/g,'').replace(/\.000Z$/,'Z');
     return `${stamp(start)}/${stamp(end)}`;
   }
-  function googleCalendarUrlForJob(j,extra={}){
+  async function resolveJobCalendarTimes(j){
+    let start=jobStartTime(j),end=jobEndTime(j);
+    if(start)return {start,end};
+    // Fallback: oudere klussen of gesynchroniseerde records kunnen geen startTime/endTime
+    // hebben, terwijl er wel urenregistraties voor dezelfde klus en datum bestaan.
+    // In dat geval gebruiken we de vroegste start en laatste eindtijd van die dag.
+    if(j?.id && j?.date){
+      const entries=(await JKDB.all('timeEntries')).filter(e=>e.jobId===j.id && entryDate(e)===j.date);
+      const starts=entries.map(e=>normalizeClockTime(entryFrom(e))).filter(Boolean).sort();
+      const ends=entries.map(e=>normalizeClockTime(entryTo(e))).filter(Boolean).sort();
+      if(starts.length){ start=starts[0]; end=ends.length?ends.at(-1):''; }
+    }
+    return {start,end};
+  }
+  function googleCalendarUrlForJob(j,extra={},times={}){
     if(!j?.date)return '';
     const titleText=extra.title||`JK Works - ${j.title||'Klus'}`;
     const details=[extra.kind&&extra.number?`${extra.kind}: ${extra.number}`:'',j.clientName?`Klant: ${j.clientName}`:'',j.phone?`Telefoon: ${j.phone}`:'',j.email?`E-mail: ${j.email}`:'',j.notes?`Notities: ${j.notes}`:''].filter(Boolean).join('\n');
     const location=[j.street||j.address,j.postal,j.city].filter(Boolean).join(', ');
-    const params=new URLSearchParams({action:'TEMPLATE',text:titleText,details,location,ctz:'Europe/Amsterdam'});
-    params.set('dates',j.startTime?calendarTimedRange(j.date,j.startTime,j.endTime):`${String(j.date).replaceAll('-','')}/${String(addDays(j.date,1)).replaceAll('-','')}`);
+    const params=new URLSearchParams({action:'TEMPLATE',text:titleText,details,location,ctz:CALENDAR_TZ});
+    const start=normalizeClockTime(times.start||jobStartTime(j)),end=normalizeClockTime(times.end||jobEndTime(j));
+    params.set('dates',start?calendarTimedRange(j.date,start,end):`${String(j.date).replaceAll('-','')}/${String(addDays(j.date,1)).replaceAll('-','')}`);
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
   }
-  function openGoogleCalendarForJob(j,extra={}){const url=googleCalendarUrlForJob(j,extra);if(!url){alert('Vul eerst een datum bij de klus in.');return;}window.open(url,'_blank','noopener,noreferrer');}
+  async function openGoogleCalendarForJob(j,extra={}){
+    if(!j?.date){alert('Vul eerst een datum bij de klus in.');return;}
+    const times=await resolveJobCalendarTimes(j);
+    const url=googleCalendarUrlForJob(j,extra,times);
+    if(!url)return;
+    if(!times.start) console.warn('Google Agenda: geen starttijd bij klus gevonden; hele-dagafspraak gebruikt.',j);
+    window.open(url,'_blank','noopener,noreferrer');
+  }
   function googleCalendarUrlForTimeEntry(e,j={}){
     const date=entryDate(e),from=entryFrom(e),to=entryTo(e);if(!date||!from||!to)return '';
     const clientName=j.clientName||'';
@@ -391,8 +424,17 @@ const App = (() => {
   function showCloud(){
     const cs=JKCloud.status();
     if(cs.signedIn){
-      modal(`${modalHead('Synchronisatie')}<div class="card"><h3>Ingelogd</h3><p class="small"><strong>${esc(cs.email)}</strong></p><p class="muted small">Wijzigingen worden lokaal opgeslagen en, zodra internet beschikbaar is, naar Supabase gesynchroniseerd. Dezelfde login op iPhone en Mac gebruikt dezelfde gegevens.</p><div class="button-row"><button class="primary" id="syncNow">Nu synchroniseren</button><button class="secondary" id="cloudLogout">Uitloggen</button></div></div>`);
+      modal(`${modalHead('Synchronisatie')}<div class="card"><h3>Ingelogd</h3><p class="small"><strong>${esc(cs.email)}</strong></p><p class="muted small">Wijzigingen worden lokaal opgeslagen en, zodra internet beschikbaar is, naar Supabase gesynchroniseerd. Dezelfde login op iPhone en Mac gebruikt dezelfde gegevens.</p><div class="button-row"><button class="primary" id="syncNow">Nu synchroniseren</button><button class="secondary" id="cloudLogout">Uitloggen</button></div></div><div class="card"><h3>Cloud opschonen</h3><p class="muted small">Gebruik dit alleen op een apparaat waarop Klussen, Uren en Documenten nu correct zijn. Oude cloudrecords die op dit apparaat niet meer bestaan worden dan definitief verwijderd, zodat een nieuw apparaat ze niet meer terughaalt.</p><button class="danger-btn" id="pruneCloud" style="width:100%">Maak dit apparaat leidend voor Klussen, Uren en Documenten</button></div>`);
       $('#syncNow').addEventListener('click',async()=>{try{await JKCloud.syncNow();toast('Synchronisatie voltooid');closeModal();render();}catch(e){alert('Synchroniseren mislukt: '+e.message)}});
+      $('#pruneCloud').addEventListener('click',async()=>{
+        const ok=confirm('LET OP: gebruik dit alleen op een apparaat waarop Klussen, Urenregistraties en Documenten compleet en correct zijn. Oude cloudgegevens die hier niet meer staan worden definitief verwijderd. Doorgaan?');
+        if(!ok)return;
+        try{
+          const r=await JKCloud.pruneCloudToLocal(['documents','timeEntries','jobs']);
+          alert(`${r.removed} oude cloudrecord${r.removed===1?'':'s'} verwijderd. Nieuwe apparaten zullen deze niet meer terughalen.`);
+          closeModal(); render();
+        }catch(e){alert('Cloud opschonen mislukt: '+e.message)}
+      });
       $('#cloudLogout').addEventListener('click',async()=>{await JKCloud.signOut();closeModal();toast('Uitgelogd');});
     } else {
       modal(`${modalHead('Synchronisatie')}<div class="card"><h3>Inloggen</h3><p class="muted small">Gebruik op je iPhone en MacBook hetzelfde e-mailadres en wachtwoord.</p><form id="cloudForm"><div class="field"><label>E-mail</label><input type="email" name="email" required autocomplete="email"></div><div class="field"><label>Wachtwoord</label><input type="password" name="password" required minlength="6" autocomplete="current-password"></div><div class="button-row"><button class="primary" name="action" value="signin">Inloggen</button><button class="secondary" name="action" value="signup">Account maken</button></div></form></div>`);
