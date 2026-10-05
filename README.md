@@ -1,4 +1,4 @@
-# JK Works Dordrecht app v40
+# JK Works Dordrecht app v41
 
 Deze versie breidt **Algemene checklists** uit met praktische klusgerichte vertrek- en inpaklijsten.
 
@@ -17,3 +17,8 @@ Toegevoegd / bijgewerkt:
 De checklists verwijzen naar de bestaande Mboxen, organizers en losse gereedschappen in de app. Drinkfles staat standaard op alle relevante lijsten. Eten staat alleen op grotere / langere klussen; catering en kleine klussen bevatten expliciet geen eten.
 
 Geen Supabase SQL-wijziging nodig. De nieuwe standaardchecklists worden lokaal toegevoegd/bijgewerkt en gaan mee bij de eerstvolgende handmatige synchronisatie.
+
+## v41
+- Kluschecklists zijn verplaatst van Meer naar Materiaal als derde tab naast Inpakchecklists en Gereedschapregister.
+- Kluschecklists zijn nu direct afvinkbaar, met voortgang, Reset en Lijst bewerken.
+- Afvinkstatus van een kluschecklist staat los van de checkliststatus binnen een specifieke klus.
