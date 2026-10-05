@@ -2,7 +2,7 @@ const JKCloud = (() => {
   const SUPABASE_URL = 'https://ercqiavruotoclhvfzud.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_z4kkYgzjr-bYDEcSZlVciw_cP8MfOuX';
   const BUCKET = 'jkworks-files';
-  let client = null, session = null, syncing = false, autoSyncTimer = null;
+  let client = null, session = null, syncing = false;
 
   function available(){ return !!window.supabase?.createClient; }
   async function init(){
@@ -12,18 +12,14 @@ const JKCloud = (() => {
     });
     const {data} = await client.auth.getSession();
     session = data.session || null;
-    client.auth.onAuthStateChange((_event,s)=>{session=s||null; document.dispatchEvent(new CustomEvent('jkcloud-auth'));});
-    if(session && navigator.onLine) setTimeout(()=>syncNow().catch(console.warn),300);
-    window.addEventListener('online',()=>{ if(session && !window.__JK_UI_BUSY) syncNow().catch(()=>{}); });
-    window.addEventListener('focus',()=>{ if(session && navigator.onLine && !window.__JK_UI_BUSY) syncNow().catch(()=>{}); });
-    document.addEventListener('visibilitychange',()=>{
-      if(document.visibilityState==='visible' && session && navigator.onLine && !window.__JK_UI_BUSY) syncNow().catch(()=>{});
+    client.auth.onAuthStateChange((event,s)=>{
+      session=s||null;
+      // Een stille token-refresh mag de interface niet opnieuw opbouwen.
+      if(event==='SIGNED_IN' || event==='SIGNED_OUT' || event==='USER_UPDATED')
+        document.dispatchEvent(new CustomEvent('jkcloud-auth'));
     });
-    if(!autoSyncTimer){
-      autoSyncTimer=setInterval(()=>{
-        if(session && navigator.onLine && document.visibilityState==='visible' && !window.__JK_UI_BUSY) syncNow().catch(()=>{});
-      },120000);
-    }
+    // v33: geen automatische sync op openen, focus, online worden of timer.
+    // Synchronisatie gebeurt alleen na inloggen of wanneer de gebruiker op Sync drukt.
     return true;
   }
   function user(){ return session?.user || null; }
@@ -45,6 +41,7 @@ const JKCloud = (() => {
   async function queueOp(op){
     const q={id:`q_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,...op,queuedAt:new Date().toISOString()};
     await JKDB.putLocal('syncQueue',q);
+    document.dispatchEvent(new CustomEvent('jkcloud-queue'));
     return q;
   }
   async function hasLocalDelete(store,id){
@@ -58,25 +55,20 @@ const JKCloud = (() => {
   }
   async function queuePut(store,obj){
     if(!JKDB.stores.includes(store) || store==='settings' && obj.id==='cloudStatus') return;
-    // Een lokale delete-marker is definitief voor dit record-id. Oude async puts
-    // mogen een verwijdering nooit meer overschrijven.
     if(await hasLocalDelete(store,obj.id)) return;
-    if(!isSignedIn() || !navigator.onLine){ await queueOp({type:'put',store,recordId:obj.id}); return; }
-    try{ await pushRecord(store,obj); }catch(e){ await queueOp({type:'put',store,recordId:obj.id}); throw e; }
+    // v33: elke wijziging blijft lokaal staan tot de gebruiker handmatig synchroniseert.
+    // Houd per record alleen de nieuwste PUT in de wachtrij.
+    await removePendingPuts(store,obj.id);
+    await queueOp({type:'put',store,recordId:obj.id});
   }
   async function queueDelete(store,id){
     if(!JKDB.stores.includes(store)) return;
     await JKDB.markDeleteLocal(store,id);
     await removePendingPuts(store,id);
     const existing=(await JKDB.all('syncQueue')).find(q=>q.type==='delete'&&q.store===store&&q.recordId===id);
-    const q=existing||await queueOp({type:'delete',store,recordId:id});
-    if(!isSignedIn() || !navigator.onLine) return;
-    try{
-      await markDeleted(store,id);
-      await JKDB.removeLocal('syncQueue',q.id);
-    }catch(e){
-      console.warn('Cloud delete uitgesteld',store,id,e);
-    }
+    if(!existing) await queueOp({type:'delete',store,recordId:id});
+    else document.dispatchEvent(new CustomEvent('jkcloud-queue'));
+    // Cloud-delete wordt pas uitgevoerd bij handmatige synchronisatie.
   }
 
   async function encodeRecord(store,obj){
@@ -231,7 +223,7 @@ const JKCloud = (() => {
       }
       await JKDB.putLocal('settings',{id:'cloudStatus',lastSync:new Date().toISOString(),email:user().email});
       document.dispatchEvent(new CustomEvent('jkcloud-sync',{detail:{state:'done',changed:localChanged}}));
-    }finally{ syncing=false; }
+    }finally{ syncing=false; document.dispatchEvent(new CustomEvent('jkcloud-queue')); }
   }
 
   async function pruneCloudToLocal(stores=['documents','timeEntries','jobs']){
@@ -254,6 +246,7 @@ const JKCloud = (() => {
     await syncNow();
     return {removed,stores:allowed};
   }
+  async function pendingCount(){ return (await JKDB.all('syncQueue')).length; }
   function status(){ return {available:available(),signedIn:isSignedIn(),email:user()?.email||'',syncing}; }
-  return {init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,queuePut,queueDelete,pruneCloudToLocal};
+  return {init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,queuePut,queueDelete,pruneCloudToLocal,pendingCount};
 })();

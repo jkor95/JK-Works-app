@@ -149,3 +149,10 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 
 /* v32: uren per klant */
 .stat-year-field{margin:2px 0 14px;max-width:220px}.customer-hours-list{display:grid;gap:12px;margin-top:6px}.customer-hours-row{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:12px 13px}.customer-hours-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}.customer-hours-top strong{min-width:0;overflow-wrap:anywhere}.customer-hours-top span{white-space:nowrap;font-weight:800;color:var(--accent-dark)}.customer-hours-track{height:10px;border-radius:999px;background:var(--card2,#ecece8);overflow:hidden}.customer-hours-track i{display:block;height:100%;border-radius:999px;background:var(--accent,#9b7646)}
+
+/* v33 - handmatige synchronisatie */
+.top-actions{display:flex;align-items:center;gap:9px;flex:0 0 auto}
+.sync-btn{border:1px solid rgba(162,125,68,.32);background:#fff;color:#1e272d;min-height:42px;border-radius:999px;padding:0 13px;font-size:12px;font-weight:850;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 4px 14px rgba(30,39,45,.06)}
+.sync-btn.pending{background:#f7efe2;border-color:rgba(162,125,68,.55);color:#765723}
+.sync-btn:disabled{opacity:.55;cursor:default}
+@media(max-width:430px){.sync-btn{padding:0 10px}.sync-btn span{font-size:11px}.top-actions{gap:7px}}

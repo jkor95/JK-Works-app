@@ -1,4 +1,4 @@
-/* JK Works Dordrecht - persoonlijke PWA v31 */
+/* JK Works Dordrecht - persoonlijke PWA v33 */
 const App = (() => {
   const state = {route:'dashboard',gearTab:'mboxes',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,activeBlobUrl:null,reminderChecking:false,snoozedReminderJobs:new Set(),pendingCloudRefresh:false,pendingAuthRefresh:false};
   window.__JK_UI_BUSY=false;
@@ -200,6 +200,7 @@ const App = (() => {
     if(shell)shell.hidden=!signedIn;
     if(!signedIn){
       if($('#modalRoot'))$('#modalRoot').innerHTML='';
+      await refreshSyncButton();
       return;
     }
     if(!appReady){
@@ -211,6 +212,7 @@ const App = (() => {
       if(navigator.onLine)setTimeout(()=>ensurePdfLib().catch(()=>{}),1000);
     }
     await render();
+    await refreshSyncButton();
     setTimeout(()=>maybeShowCompletedJobReminder().catch(console.error),250);
   }
 
@@ -229,11 +231,35 @@ const App = (() => {
       if(uiBusy()){state.pendingAuthRefresh=true;return;}
       applyAuthState().catch(console.error);
     });
+    document.addEventListener('jkcloud-queue',()=>refreshSyncButton().catch(()=>{}));
     document.addEventListener('jkcloud-sync',e=>{
+      refreshSyncButton().catch(()=>{});
       if(!JKCloud.isSignedIn()||e.detail?.state!=='done'||!e.detail?.changed)return;
       if(uiBusy()){state.pendingCloudRefresh=true;return;}
       render().then(()=>setTimeout(()=>maybeShowCompletedJobReminder().catch(console.error),250));
     });
+  }
+  async function refreshSyncButton(){
+    const btn=$('#manualSyncBtn'); if(!btn)return;
+    const cs=JKCloud.status();
+    btn.hidden=!cs.signedIn;
+    if(!cs.signedIn)return;
+    const pending=await JKCloud.pendingCount();
+    btn.classList.toggle('pending',pending>0);
+    btn.disabled=cs.syncing||!navigator.onLine;
+    btn.innerHTML=cs.syncing?'↻ <span>Sync...</span>':`☁ <span>${pending?`Sync (${pending})`:'Sync'}</span>`;
+    btn.title=!navigator.onLine?'Geen internet - wijzigingen blijven lokaal':pending?`${pending} wijziging${pending===1?'':'en'} klaar om te synchroniseren`:'Handmatig synchroniseren';
+  }
+  async function manualSync(){
+    if(!JKCloud.isSignedIn()){toast('Log eerst in');return;}
+    if(!navigator.onLine){toast('Geen internet - wijzigingen blijven lokaal');return;}
+    if(uiBusy()){toast('Sluit eerst het invoerscherm');return;}
+    try{
+      await refreshSyncButton();
+      await JKCloud.syncNow();
+      await refreshSyncButton();
+      toast('Synchronisatie voltooid');
+    }catch(e){alert('Synchroniseren mislukt: '+e.message);await refreshSyncButton();}
   }
   function registerSW(){if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./service-worker.js').catch(()=>{});}
   function ensurePdfLib(){
@@ -251,6 +277,7 @@ const App = (() => {
   function bindNav(){
     $$('.nav-item').forEach(b=>b.addEventListener('click',()=>go(b.dataset.route)));
     $('#quickAddBtn').addEventListener('click',quickAdd);
+    $('#manualSyncBtn')?.addEventListener('click',manualSync);
   }
   function bindInputs(){
     $('#hiddenExistingPdfInput').addEventListener('change',async e=>{if(e.target.files.length)await importExistingPdfs([...e.target.files],state.importFolderTarget);e.target.value='';});
@@ -272,7 +299,7 @@ const App = (() => {
     window.__JK_UI_BUSY=false;
     setTimeout(()=>{
       flushDeferredUi().catch(console.error);
-      if(JKCloud.isSignedIn()&&navigator.onLine)JKCloud.syncNow().catch(()=>{});
+      refreshSyncButton().catch(()=>{});
     },50);
   }
   function modalHead(t){return `<div class="modal-head"><h2>${esc(t)}</h2><button class="close-btn" data-close>×</button></div>`}
@@ -582,8 +609,8 @@ const App = (() => {
   function showCloud(){
     const cs=JKCloud.status();
     if(cs.signedIn){
-      modal(`${modalHead('Synchronisatie')}<div class="card"><h3>Ingelogd</h3><p class="small"><strong>${esc(cs.email)}</strong></p><p class="muted small">Wijzigingen worden lokaal opgeslagen en, zodra internet beschikbaar is, naar Supabase gesynchroniseerd. Dezelfde login op iPhone en Mac gebruikt dezelfde gegevens.</p><div class="button-row"><button class="primary" id="syncNow">Nu synchroniseren</button><button class="secondary" id="cloudLogout">Uitloggen</button></div></div><div class="card"><h3>Cloud opschonen</h3><p class="muted small">Gebruik dit alleen op een apparaat waarop Klussen, Uren en Documenten nu correct zijn. Oude cloudrecords die op dit apparaat niet meer bestaan worden dan definitief verwijderd, zodat een nieuw apparaat ze niet meer terughaalt.</p><button class="danger-btn" id="pruneCloud" style="width:100%">Maak dit apparaat leidend voor Klussen, Uren en Documenten</button></div>`);
-      $('#syncNow').addEventListener('click',async()=>{try{await JKCloud.syncNow();toast('Synchronisatie voltooid');closeModal();render();}catch(e){alert('Synchroniseren mislukt: '+e.message)}});
+      modal(`${modalHead('Synchronisatie')}<div class="card"><h3>Ingelogd</h3><p class="small"><strong>${esc(cs.email)}</strong></p><p class="muted small">Wijzigingen worden eerst alleen op dit apparaat opgeslagen. Er is geen automatische achtergrond-sync meer. Druk bovenin op Sync wanneer je klaar bent; dan worden je wijzigingen naar Supabase gestuurd en wijzigingen van je andere apparaten opgehaald.</p><div class="button-row"><button class="primary" id="syncNow">Nu synchroniseren</button><button class="secondary" id="cloudLogout">Uitloggen</button></div></div><div class="card"><h3>Cloud opschonen</h3><p class="muted small">Gebruik dit alleen op een apparaat waarop Klussen, Uren en Documenten nu correct zijn. Oude cloudrecords die op dit apparaat niet meer bestaan worden dan definitief verwijderd, zodat een nieuw apparaat ze niet meer terughaalt.</p><button class="danger-btn" id="pruneCloud" style="width:100%">Maak dit apparaat leidend voor Klussen, Uren en Documenten</button></div>`);
+      $('#syncNow').addEventListener('click',async()=>{closeModal();await manualSync();});
       $('#pruneCloud').addEventListener('click',async()=>{
         const ok=confirm('LET OP: gebruik dit alleen op een apparaat waarop Klussen, Urenregistraties en Documenten compleet en correct zijn. Oude cloudgegevens die hier niet meer staan worden definitief verwijderd. Doorgaan?');
         if(!ok)return;

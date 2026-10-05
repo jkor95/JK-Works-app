@@ -18,3 +18,10 @@ Automatische cloud-synchronisatie pauzeert zolang een formulier of venster open 
 - Urenstatistieken uitgebreid met **Per klant**.
 - Per klant kan een kalenderjaar worden gekozen.
 - Toont uren per klant, totaaluren, aantal klanten en de klant met de meeste uren.
+
+
+## Handmatige synchronisatie (v33)
+
+Vanaf v33 synchroniseert de app niet meer automatisch op een timer, bij focus, bij terugkeren naar de app of na het sluiten van een formulier. Alle wijzigingen worden eerst lokaal opgeslagen. Gebruik de knop **Sync** bovenin de app wanneer je klaar bent met invoeren. De knop toont tussen haakjes hoeveel lokale wijzigingen nog wachten.
+
+Na inloggen wordt eenmalig gesynchroniseerd om het account op dat apparaat te laden. Daarna bepaalt de gebruiker zelf wanneer de volgende synchronisatie plaatsvindt.
