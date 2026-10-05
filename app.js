@@ -1,6 +1,6 @@
-/* JK Works Dordrecht - persoonlijke PWA v33 */
+/* JK Works Dordrecht - persoonlijke PWA v35 */
 const App = (() => {
-  const state = {route:'dashboard',gearTab:'mboxes',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,activeBlobUrl:null,reminderChecking:false,snoozedReminderJobs:new Set(),pendingCloudRefresh:false,pendingAuthRefresh:false};
+  const state = {route:'dashboard',gearTab:'mboxes',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,activeBlobUrl:null,reminderChecking:false,snoozedReminderJobs:new Set(),pendingCloudRefresh:false,pendingAuthRefresh:false,googleCalendarId:''};
   window.__JK_UI_BUSY=false;
   const PDFLIB_URL='https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';
   const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -26,6 +26,15 @@ const App = (() => {
   const jobEndTime=j=>normalizeClockTime(j?.endTime||j?.to||j?.end||j?.timeTo||j?.finishTime||j?.finish||j?.end_time||'');
   const jobTimeLabel=j=>{const a=jobStartTime(j),b=jobEndTime(j);return a?(b?`${a} - ${b}`:a):'';};
   const CALENDAR_TZ='Europe/Amsterdam';
+  async function loadCalendarPreferences(){
+    const company=await JKDB.get('settings','company').catch(()=>null);
+    state.googleCalendarId=String(company?.googleCalendarId||'').trim();
+  }
+  function addGoogleCalendarTarget(params){
+    // Google Calendar template links default to the primary calendar. When a
+    // calendar ID is configured we request that calendar via src.
+    if(state.googleCalendarId)params.set('src',state.googleCalendarId);
+  }
   function tzOffsetMs(instant,timeZone=CALENDAR_TZ){
     const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(instant).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
     const asUTC=Date.UTC(Number(parts.year),Number(parts.month)-1,Number(parts.day),Number(parts.hour),Number(parts.minute),Number(parts.second));
@@ -73,6 +82,7 @@ const App = (() => {
     const details=[extra.kind&&extra.number?`${extra.kind}: ${extra.number}`:'',j.clientName?`Klant: ${j.clientName}`:'',j.phone?`Telefoon: ${j.phone}`:'',j.email?`E-mail: ${j.email}`:'',j.notes?`Notities: ${j.notes}`:''].filter(Boolean).join('\n');
     const location=[j.street||j.address,j.postal,j.city].filter(Boolean).join(', ');
     const params=new URLSearchParams({action:'TEMPLATE',text:titleText,details,location,ctz:CALENDAR_TZ});
+    addGoogleCalendarTarget(params);
     const start=normalizeClockTime(times.start||jobStartTime(j)),end=normalizeClockTime(times.end||jobEndTime(j));
     // Gebruik exact dezelfde timed-range-opbouw als bij Urenregistratie, want die
     // route wordt door Google Agenda op mobiel correct als afspraak met tijd gelezen.
@@ -83,16 +93,36 @@ const App = (() => {
     if(!params.has('dates')) params.set('dates',`${String(j.date).replaceAll('-','')}/${String(addDays(j.date,1)).replaceAll('-','')}`);
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
   }
-  async function openGoogleCalendarForJob(j,extra={}){
-    const resolved=await resolveJobCalendarTimes(j);
-    const fresh=resolved.job||j;
-    if(!fresh?.date){alert('Vul eerst een datum bij de klus in.');return;}
-    if(!resolved.start){
-      const proceed=confirm('Bij deze klus kon geen starttijd worden gevonden. Google Agenda zou er daarom een hele-dagafspraak van maken. Toch doorgaan?');
-      if(!proceed)return;
+  function openGoogleCalendarForJob(j,extra={}){
+    if(!j?.date){alert('Vul eerst een datum bij de klus in.');return;}
+
+    // Belangrijk voor iPhone/PWA: open Google Agenda direct binnen dezelfde
+    // tikactie. Een window.open() NA een await wordt door iOS vaak als popup
+    // geblokkeerd. Als de klus zelf tijden heeft, is dus geen async stap nodig.
+    const directStart=jobStartTime(j),directEnd=jobEndTime(j);
+    if(directStart){
+      const url=googleCalendarUrlForJob(j,extra,{start:directStart,end:directEnd});
+      if(url)window.open(url,'_blank','noopener,noreferrer');
+      return;
     }
-    const url=googleCalendarUrlForJob(fresh,extra,resolved);
-    if(url)window.open(url,'_blank','noopener,noreferrer');
+
+    // Alleen voor oude klussen zonder opgeslagen tijden zoeken we asynchroon
+    // naar gekoppelde uren. Reserveer het venster meteen tijdens de tikactie.
+    const popup=window.open('about:blank','_blank');
+    try{if(popup)popup.opener=null;}catch(_e){}
+    (async()=>{
+      const resolved=await resolveJobCalendarTimes(j);
+      const fresh=resolved.job||j;
+      if(!fresh?.date){if(popup)popup.close();alert('Vul eerst een datum bij de klus in.');return;}
+      if(!resolved.start){
+        const proceed=confirm('Bij deze klus kon geen starttijd worden gevonden. Google Agenda zou er daarom een hele-dagafspraak van maken. Toch doorgaan?');
+        if(!proceed){if(popup)popup.close();return;}
+      }
+      const url=googleCalendarUrlForJob(fresh,extra,resolved);
+      if(!url){if(popup)popup.close();return;}
+      if(popup&&!popup.closed)popup.location.href=url;
+      else window.location.href=url;
+    })().catch(err=>{if(popup)popup.close();console.error(err);alert('Google Agenda openen lukte niet.');});
   }
   function googleCalendarUrlForTimeEntry(e,j={}){
     const date=entryDate(e),from=entryFrom(e),to=entryTo(e);if(!date||!from||!to)return '';
@@ -108,6 +138,7 @@ const App = (() => {
     ].filter(Boolean).join('\n');
     const location=[j.street||j.address,j.postal,j.city].filter(Boolean).join(', ');
     const params=new URLSearchParams({action:'TEMPLATE',text:titleText,details,location,ctz:'Europe/Amsterdam'});
+    addGoogleCalendarTarget(params);
     params.set('dates',calendarTimedRange(date,from,to));
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
   }
@@ -211,6 +242,7 @@ const App = (() => {
       appReady=true;
       if(navigator.onLine)setTimeout(()=>ensurePdfLib().catch(()=>{}),1000);
     }
+    await loadCalendarPreferences();
     await render();
     await refreshSyncButton();
     setTimeout(()=>maybeShowCompletedJobReminder().catch(console.error),250);
@@ -710,7 +742,15 @@ const App = (() => {
   async function editClient(id){const c=id?await JKDB.get('clients',id):{id:JKDB.id('client'),name:'',attention:'',street:'',postal:'',city:'',phone:'',email:'',notes:''};modal(`${modalHead(id?'Klant bewerken':'Nieuwe klant')}<form id="clientForm"><div class="field"><label>Naam/bedrijf</label><input name="name" required value="${esc(c.name)}"></div><div class="field"><label>T.a.v.</label><input name="attention" value="${esc(c.attention||'')}"></div><div class="field"><label>Adres</label><input name="street" value="${esc(c.street||'')}"></div><div class="form-grid"><div class="field"><label>Postcode</label><input name="postal" value="${esc(c.postal||'')}"></div><div class="field"><label>Plaats</label><input name="city" value="${esc(c.city||'')}"></div><div class="field"><label>Telefoon</label><input name="phone" value="${esc(c.phone||'')}"></div><div class="field"><label>E-mail</label><input type="email" name="email" value="${esc(c.email||'')}"></div><div class="field full"><label>Notities</label><textarea name="notes">${esc(c.notes||'')}</textarea></div></div><div class="button-row"><button class="primary">Opslaan</button>${id?'<button type="button" class="danger-btn" id="delClient">Verwijderen</button>':''}</div></form>`);$('#clientForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);['name','attention','street','postal','city','phone','email','notes'].forEach(k=>c[k]=f.get(k));await JKDB.put('clients',c);closeModal();toast('Klant opgeslagen');if(state.route==='more')render();});$('#delClient')?.addEventListener('click',async()=>{if(confirm('Klant verwijderen?')){await JKDB.remove('clients',id);closeModal();}});}
   async function showChecklists(){const cs=await JKDB.all('checklists');modal(`${modalHead('Algemene checklists')}<button class="primary" id="addCheck" style="width:100%;margin-bottom:12px">+ Nieuwe checklist</button><div class="list">${cs.map(c=>`<div class="list-item clickable" data-checklist="${c.id}"><div class="main"><div class="title">${esc(c.name)}</div><div class="sub">${c.items.length} punten</div></div><span>›</span></div>`).join('')}</div>`);$('#addCheck').addEventListener('click',()=>{editChecklist()});$$('[data-checklist]').forEach(x=>x.addEventListener('click',()=>{editChecklist(x.dataset.checklist)}));}
   async function editChecklist(id){const c=id?await JKDB.get('checklists',id):{id:JKDB.id('check'),name:'',items:[]};modal(`${modalHead(id?'Checklist bewerken':'Nieuwe checklist')}<form id="checkForm"><div class="field"><label>Naam</label><input name="name" required value="${esc(c.name)}"></div><div class="field"><label>Punten - één per regel</label><textarea name="items" style="min-height:260px">${esc(c.items.join('\n'))}</textarea></div><div class="button-row"><button class="primary">Opslaan</button>${id?'<button type="button" class="danger-btn" id="delCheck">Verwijderen</button>':''}</div></form>`);$('#checkForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);c.name=f.get('name');c.items=String(f.get('items')).split('\n').map(x=>x.trim()).filter(Boolean);await JKDB.put('checklists',c);closeModal();toast('Checklist opgeslagen')});$('#delCheck')?.addEventListener('click',async()=>{if(confirm('Checklist verwijderen?')){await JKDB.remove('checklists',id);closeModal();}})}
-  async function showCompany(){const c=await JKDB.get('settings','company');modal(`${modalHead('Bedrijfsgegevens')}<form id="companyForm"><div class="field"><label>Bedrijfsnaam</label><input name="companyName" value="${esc(c.companyName||'')}"></div><div class="field"><label>Naam</label><input name="owner" value="${esc(c.owner||'')}"></div><label class="checkline"><input type="checkbox" name="kor" ${c.kor?'checked':''}><span>Kleineondernemersregeling (KOR) actief</span></label><div class="field"><label>KOR sinds</label><input type="date" name="korSince" value="${esc(c.korSince||'')}"></div><div class="field"><label>Standaard uurtarief voor facturen</label><input type="number" step="0.01" name="defaultRate" value="${esc(c.defaultRate||'')}"></div><div class="field"><label>Notities</label><textarea name="notes">${esc(c.notes||'')}</textarea></div><button class="primary" style="width:100%">Opslaan</button></form>`);$('#companyForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);Object.assign(c,{companyName:f.get('companyName'),owner:f.get('owner'),kor:f.get('kor')==='on',korSince:f.get('korSince'),defaultRate:f.get('defaultRate'),notes:f.get('notes')});await JKDB.put('settings',c);closeModal();toast('Bedrijfsgegevens opgeslagen');});}
+  async function showCompany(){
+    const c=await JKDB.get('settings','company');
+    modal(`${modalHead('Bedrijfsgegevens')}<form id="companyForm"><div class="field"><label>Bedrijfsnaam</label><input name="companyName" value="${esc(c.companyName||'')}"></div><div class="field"><label>Naam</label><input name="owner" value="${esc(c.owner||'')}"></div><label class="checkline"><input type="checkbox" name="kor" ${c.kor?'checked':''}><span>Kleineondernemersregeling (KOR) actief</span></label><div class="field"><label>KOR sinds</label><input type="date" name="korSince" value="${esc(c.korSince||'')}"></div><div class="field"><label>Standaard uurtarief voor facturen</label><input type="number" step="0.01" name="defaultRate" value="${esc(c.defaultRate||'')}"></div><div class="card form-section"><h3>Google Agenda</h3><div class="field"><label>Kalender-ID voor Werk</label><input name="googleCalendarId" value="${esc(c.googleCalendarId||'')}" placeholder="bijv. ...@group.calendar.google.com"><small class="muted">Voor automatisch voorselecteren van je agenda Werk. Je vindt dit in Google Agenda op de computer via Instellingen → Werk → Agenda integreren → Agenda-ID. Laat leeg om je primaire/algemene agenda te gebruiken.</small></div></div><div class="field"><label>Notities</label><textarea name="notes">${esc(c.notes||'')}</textarea></div><button class="primary" style="width:100%">Opslaan</button></form>`);
+    $('#companyForm').addEventListener('submit',async e=>{
+      e.preventDefault();const f=new FormData(e.target);
+      Object.assign(c,{companyName:f.get('companyName'),owner:f.get('owner'),kor:f.get('kor')==='on',korSince:f.get('korSince'),defaultRate:f.get('defaultRate'),googleCalendarId:String(f.get('googleCalendarId')||'').trim(),notes:f.get('notes')});
+      await JKDB.put('settings',c);state.googleCalendarId=c.googleCalendarId||'';closeModal();toast('Bedrijfsgegevens opgeslagen');
+    });
+  }
 
   function showBackup(){modal(`${modalHead('Back-up & herstel')}<div class="card"><h3>iCloud-back-up maken</h3><p class="muted small">Maakt één bestand met klanten, uren, checklists en alle PDF's. Bewaar dat via de deelkaart in iCloud Drive.</p><button class="primary" id="exportBackup" style="width:100%">Maak volledige back-up</button></div><div class="card"><h3>Back-up terugzetten</h3><p class="muted small">Dit vervangt de huidige lokale appgegevens.</p><button class="secondary" id="importBackup" style="width:100%">Kies back-upbestand</button></div>`);$('#exportBackup').addEventListener('click',exportBackup);$('#importBackup').addEventListener('click',()=>$('#hiddenBackupInput').click())}
   async function blobToDataURL(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsDataURL(blob)})}

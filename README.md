@@ -1,34 +1,13 @@
-# JK Works Dordrecht - v31
+# JK Works Dordrecht - v35
 
-## Nieuw in v31
-- Een klus met datum, starttijd en eindtijd maakt automatisch een gekoppelde urenregistratie aan.
-- Als de klusplanning later wordt aangepast, wordt de automatische urenregistratie bijgewerkt.
-- Na de geplande eindtijd verschijnt bij de eerstvolgende keer dat de app wordt bekeken een herinnering: uren controleren en eventueel direct factureren.
-- De herinnering kan worden afgehandeld, naar de urenregistratie leiden, direct een factuur openen of tot de volgende appsessie worden uitgesteld.
+## Nieuw
+- Google Agenda vanuit Klussen opent op iPhone nu direct vanuit de tikactie, net als bij Urenregistratie. Dit voorkomt dat iOS de link blokkeert na een asynchrone databasecheck.
+- Klusdatum, starttijd en eindtijd worden rechtstreeks meegestuurd. Alleen oude klussen zonder opgeslagen tijd gebruiken nog de gekoppelde urenregistratie als fallback.
+- In Meer -> Bedrijfsgegevens kan een Google Agenda kalender-ID voor `Werk` worden ingesteld. Als die is ingevuld, wordt die kalender via de Google Agenda-link voorselecteerd.
+- Dezelfde kalenderkeuze wordt gebruikt voor Klussen, Urenregistratie, Offertes en Facturen.
+
+## Google Agenda kalender-ID vinden
+Open Google Agenda op een computer -> Instellingen -> kies de agenda `Werk` -> Agenda integreren -> Agenda-ID. Plak die ID in Meer -> Bedrijfsgegevens.
 
 ## Updaten
-Vervang de bestaande bestanden in de GitHub Pages repository door deze versie en commit de wijziging. Voor v31 is geen nieuwe Supabase SQL nodig.
-
-
-## v31 - invoer niet meer onderbroken
-Automatische cloud-synchronisatie pauzeert zolang een formulier of venster open staat. Na opslaan/sluiten wordt de synchronisatie hervat. De periodieke achtergrondcontrole is verlengd naar 2 minuten en veroorzaakt geen scherm-refresh tijdens invoer.
-
-
-## v32
-- Urenstatistieken uitgebreid met **Per klant**.
-- Per klant kan een kalenderjaar worden gekozen.
-- Toont uren per klant, totaaluren, aantal klanten en de klant met de meeste uren.
-
-
-## Handmatige synchronisatie (v33)
-
-Vanaf v33 synchroniseert de app niet meer automatisch op een timer, bij focus, bij terugkeren naar de app of na het sluiten van een formulier. Alle wijzigingen worden eerst lokaal opgeslagen. Gebruik de knop **Sync** bovenin de app wanneer je klaar bent met invoeren. De knop toont tussen haakjes hoeveel lokale wijzigingen nog wachten.
-
-Na inloggen wordt eenmalig gesynchroniseerd om het account op dat apparaat te laden. Daarna bepaalt de gebruiker zelf wanneer de volgende synchronisatie plaatsvindt.
-
-
-## v34 - stabiele formulieren
-- Geen automatische synchronisatie; alleen via de Sync-knop.
-- Formulieren sluiten niet meer door tikken op de achtergrond.
-- 'Lijst bewerken' vervangt het geopende venster direct, zonder tijdelijk terug te gaan naar de pagina.
-- Enter/Done in enkelregelige velden verstuurt het formulier niet onbedoeld.
+Vervang de bestanden in de bestaande GitHub Pages repository door deze versie en commit de wijziging. Er is geen nieuwe Supabase SQL nodig.

@@ -1,4 +1,4 @@
-const CACHE='jkworks-v34-stable-forms';
+const CACHE='jkworks-v35-google-calendar';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
