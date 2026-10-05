@@ -1,4 +1,4 @@
-const CACHE='jkworks-v33-manual-sync';
+const CACHE='jkworks-v34-stable-forms';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',

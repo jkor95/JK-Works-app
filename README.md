@@ -25,3 +25,10 @@ Automatische cloud-synchronisatie pauzeert zolang een formulier of venster open 
 Vanaf v33 synchroniseert de app niet meer automatisch op een timer, bij focus, bij terugkeren naar de app of na het sluiten van een formulier. Alle wijzigingen worden eerst lokaal opgeslagen. Gebruik de knop **Sync** bovenin de app wanneer je klaar bent met invoeren. De knop toont tussen haakjes hoeveel lokale wijzigingen nog wachten.
 
 Na inloggen wordt eenmalig gesynchroniseerd om het account op dat apparaat te laden. Daarna bepaalt de gebruiker zelf wanneer de volgende synchronisatie plaatsvindt.
+
+
+## v34 - stabiele formulieren
+- Geen automatische synchronisatie; alleen via de Sync-knop.
+- Formulieren sluiten niet meer door tikken op de achtergrond.
+- 'Lijst bewerken' vervangt het geopende venster direct, zonder tijdelijk terug te gaan naar de pagina.
+- Enter/Done in enkelregelige velden verstuurt het formulier niet onbedoeld.
