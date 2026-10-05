@@ -128,3 +128,20 @@ h1{color:var(--ink);letter-spacing:-.025em}
   .dash-month-chart{grid-template-columns:repeat(12,31px)}
   .material-actions>*{min-width:145px}
 }
+
+/* v25 - volledige app-login via Supabase */
+[hidden]{display:none!important}
+body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145deg,#1e272d 0%,#29343b 42%,#7f5f31 130%)}
+.auth-gate{min-height:100dvh;display:grid;place-items:center;padding:max(24px,env(safe-area-inset-top)) 18px max(24px,env(safe-area-inset-bottom));box-sizing:border-box}
+.auth-card{width:min(100%,420px);background:rgba(255,253,249,.98);border:1px solid rgba(226,216,201,.9);border-radius:26px;padding:28px 24px 22px;box-shadow:0 24px 70px rgba(0,0,0,.24);text-align:center}
+.auth-logo{width:92px;height:92px;object-fit:cover;border-radius:22px;border:1px solid rgba(162,125,68,.28);box-shadow:0 9px 24px rgba(30,39,45,.13);margin-bottom:15px}
+.auth-kicker{font-size:11px;font-weight:900;letter-spacing:.14em;color:var(--accent-dark);margin-bottom:7px}
+.auth-card h1{font-size:30px;line-height:1.05;margin:0 0 10px}
+.auth-intro{margin:0 auto 22px;max-width:330px;color:var(--muted);font-size:13px;line-height:1.5}
+.auth-form{text-align:left}
+.auth-form .field{margin-bottom:13px}
+.auth-submit{width:100%;min-height:48px;margin-top:4px;font-size:15px}
+.auth-submit:disabled{opacity:.65;cursor:wait}
+.auth-error{margin:12px 0 0;padding:10px 12px;border-radius:11px;background:#fff0ef;border:1px solid #f0c9c5;color:#9b332b;font-size:12px;line-height:1.4;text-align:left}
+.auth-note{margin:17px 2px 0;color:var(--muted);font-size:10px;line-height:1.45}
+@media(max-width:430px){.auth-card{padding:24px 18px 19px;border-radius:22px}.auth-logo{width:82px;height:82px}.auth-card h1{font-size:27px}}

@@ -13,8 +13,24 @@
   <link rel="stylesheet" href="styles.css" />
   <title>JK Works Dordrecht</title>
 </head>
-<body>
-  <div id="appShell">
+<body class="auth-locked">
+  <section id="authGate" class="auth-gate" aria-label="Inloggen">
+    <div class="auth-card">
+      <img src="assets/jk-works-logo.jpg" alt="JK Works Dordrecht" class="auth-logo">
+      <div class="auth-kicker">JK WORKS DORDRECHT</div>
+      <h1>Bedrijfsapp</h1>
+      <p class="auth-intro">Log in met je JK Works-account om de app te openen en je gegevens te synchroniseren.</p>
+      <form id="siteLoginForm" class="auth-form">
+        <div class="field"><label for="siteLoginEmail">E-mail</label><input id="siteLoginEmail" type="email" name="email" required autocomplete="email"></div>
+        <div class="field"><label for="siteLoginPassword">Wachtwoord</label><input id="siteLoginPassword" type="password" name="password" required minlength="6" autocomplete="current-password"></div>
+        <button class="primary auth-submit" type="submit">Inloggen</button>
+        <p id="siteLoginError" class="auth-error" role="alert" hidden></p>
+      </form>
+      <p class="auth-note">Dezelfde inlog gebruik je op je iPhone en MacBook. Je blijft ingelogd totdat je zelf uitlogt.</p>
+    </div>
+  </section>
+
+  <div id="appShell" hidden>
     <header class="topbar">
       <div class="brand-title"><img src="assets/jk-works-logo.jpg" alt="JK Works Dordrecht"><div><div class="eyebrow">JK WORKS DORDRECHT</div><h1 id="pageTitle">Dashboard</h1></div></div>
       <button id="quickAddBtn" class="icon-btn" aria-label="Snel toevoegen">+</button>
