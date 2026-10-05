@@ -1,14 +1,10 @@
-# JK Works Dordrecht App v29
+# JK Works Dordrecht - v30
 
-PWA voor JK Works Dordrecht.
+## Nieuw in v30
+- Een klus met datum, starttijd en eindtijd maakt automatisch een gekoppelde urenregistratie aan.
+- Als de klusplanning later wordt aangepast, wordt de automatische urenregistratie bijgewerkt.
+- Na de geplande eindtijd verschijnt bij de eerstvolgende keer dat de app wordt bekeken een herinnering: uren controleren en eventueel direct factureren.
+- De herinnering kan worden afgehandeld, naar de urenregistratie leiden, direct een factuur openen of tot de volgende appsessie worden uitgesteld.
 
-## Wijzigingen v29
-- Google Agenda bij Klussen leest bij het klikken altijd de nieuwste opgeslagen klus en gebruikt dezelfde tijdslogica als Urenregistratie.
-- Offertes en facturen tonen een duidelijke Google Agenda-knop bij de gekozen/gekoppelde klus.
-- Materiaal is gekoppeld: alle items uit Inpakchecklists verschijnen automatisch in het Gereedschapregister.
-- Nieuw (hand)gereedschap of materiaal dat in het register aan een locatie wordt gekoppeld, wordt automatisch toegevoegd aan die inpakchecklist.
-- Wijzigen/verplaatsen/verwijderen van een gekoppeld registeritem werkt ook door naar de inpakchecklist.
-
-## Update
-Vervang de bestaande bestanden in de GitHub Pages repository door de inhoud van deze map en commit de wijziging.
-Er is geen nieuwe Supabase SQL-migratie nodig voor v29.
+## Updaten
+Vervang de bestaande bestanden in de GitHub Pages repository door deze versie en commit de wijziging. Voor v30 is geen nieuwe Supabase SQL nodig.
