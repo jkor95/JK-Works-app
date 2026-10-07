@@ -1,4 +1,4 @@
-const CACHE='jkworks-v54-meldingen-afstrepen';
+const CACHE='jkworks-v55-openstaande-betalingen';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',

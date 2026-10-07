@@ -1,5 +1,15 @@
-# JK Works Dordrecht App v54
+# JK Works Dordrecht App v55
 
+
+
+## Nieuw in v55 - openstaande betalingen duidelijk zichtbaar
+
+- Klussen waarvan het interne bedrag nog niet als ontvangen is gemarkeerd krijgen over de hele rij een zachte rode/roze waarschuwing.
+- De klus toont duidelijk `OPENSTAAND` en `Nog te ontvangen`.
+- Bovenaan Klussen staat naast de bestaande totalen nu een apart blok **Openstaand**.
+- Openstaande bedragen worden afzonderlijk getoond voor **Factuur** en **Contant**, plus het gecombineerde totaal.
+- Alleen klussen met een berekend bedrag groter dan EUR 0 tellen mee als openstaand.
+- Dit blijft een intern betaaloverzicht en verandert niets aan het Jaaroverzicht Facturen.
 
 ## Nieuw in v54 - meldingen afstrepen
 
