@@ -1,6 +1,13 @@
-# JK Works Dordrecht App v56
+# JK Works Dordrecht App v57
 
 
+
+## Nieuw in v57 - statistieken hersteld
+
+- Bug opgelost waardoor Urenstatistieken niet meer openden.
+- Per week toegevoegd naast maand, kwartaal, kalenderjaar en klant.
+- Uren en interne bedragen (Factuur / Contant / totaal) zijn weer zichtbaar en de tabs zijn aanklikbaar.
+- Geen database- of Supabase-migratie nodig.
 
 ## Nieuw in v56 - openstaand pas na afloop van de klus
 

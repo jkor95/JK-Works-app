@@ -1,4 +1,4 @@
-const CACHE='jkworks-v56-betaling-na-klus';
+const CACHE='jkworks-v57-statistieken-fix';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',

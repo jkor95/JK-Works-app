@@ -1,4 +1,4 @@
-/* JK Works Dordrecht - persoonlijke PWA v56 */
+/* JK Works Dordrecht - persoonlijke PWA v57 */
 const App = (() => {
   const state = {route:'dashboard',gearTab:'mboxes',jobPaymentFilter:'all',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,pdfJsPromise:null,activeBlobUrl:null,reminderChecking:false,snoozedReminderJobs:new Set(),pendingCloudRefresh:false,pendingAuthRefresh:false,actionItems:[],notificationTimer:null};
   window.__JK_UI_BUSY=false;
@@ -1142,9 +1142,23 @@ const App = (() => {
   function hoursNumber(minutes){return Math.round((minutes/60)*100)/100}
   function hoursLabel(minutes){const h=hoursNumber(minutes);return h.toLocaleString('nl-NL',{minimumFractionDigits:h%1?1:0,maximumFractionDigits:2})+' u'}
   function monthName(i){return ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'][i]}
+  function isoWeekInfo(dateValue){
+    const d=new Date(String(dateValue||'')+'T12:00:00');
+    if(Number.isNaN(d.getTime()))return null;
+    const utc=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+    const day=utc.getUTCDay()||7;
+    utc.setUTCDate(utc.getUTCDate()+4-day);
+    const isoYear=utc.getUTCFullYear();
+    const yearStart=new Date(Date.UTC(isoYear,0,1));
+    const week=Math.ceil((((utc-yearStart)/86400000)+1)/7);
+    return {year:isoYear,week,key:`${isoYear}-W${String(week).padStart(2,'0')}`,label:`Week ${week} '${String(isoYear).slice(-2)}`};
+  }
   function statPeriodInfo(dateValue,mode){
     const d=new Date(String(dateValue||'')+'T12:00:00');
     if(Number.isNaN(d.getTime()))return null;
+    if(mode==='week'){
+      const w=isoWeekInfo(dateValue);return w?{key:w.key,label:w.label,sort:w.key}:null;
+    }
     if(mode==='month'){
       const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
       return {key,label:`${monthName(d.getMonth())} '${String(d.getFullYear()).slice(-2)}`,sort:key};
@@ -1164,6 +1178,18 @@ const App = (() => {
       if(!date){const linked=entries.filter(e=>e.jobId===j.id).map(entryDate).filter(Boolean).sort();date=linked[0]||''}
       const info=statPeriodInfo(date,mode);if(!info)continue;
       const b=ensure(info),amount=jobOwnAmount(j,entries,company);b.amount+=amount;if(jobPaymentType(j)==='cash')b.cashAmount+=amount;else b.invoiceAmount+=amount;
+    }
+    if(mode==='week'){
+      const arr=[];
+      const monday=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+      const dow=monday.getDay()||7;monday.setDate(monday.getDate()-(dow-1));
+      for(let i=11;i>=0;i--){
+        const d=new Date(monday);d.setDate(d.getDate()-(i*7));
+        const ymd=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const w=isoWeekInfo(ymd);if(!w)continue;
+        arr.push(map.get(w.key)||{key:w.key,label:w.label,sort:w.key,minutes:0,amount:0,invoiceAmount:0,cashAmount:0});
+      }
+      return arr;
     }
     if(mode==='month'){
       const arr=[];for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1),key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;arr.push(map.get(key)||{key,label:`${monthName(d.getMonth())} '${String(d.getFullYear()).slice(-2)}`,sort:key,minutes:0,amount:0,invoiceAmount:0,cashAmount:0})}return arr;
@@ -1197,14 +1223,14 @@ const App = (() => {
     return `<div class="kpi-row stats-kpis stats-kpis-money"><div class="kpi"><strong>${hoursLabel(totalMinutes)}</strong><span>Uren ${year}</span></div><div class="kpi"><strong>${money(totalAmount)}</strong><span>Intern totaal</span></div><div class="kpi"><strong>${money(invoiceAmount)}</strong><span>Factuur</span></div><div class="kpi"><strong>${money(cashAmount)}</strong><span>Contant</span></div></div><div class="customer-hours-list">${buckets.map(b=>`<div class="customer-hours-row"><div class="customer-hours-top"><strong>${esc(b.label)}</strong><span>${hoursLabel(b.minutes)} · ${money(b.amount)}</span></div><div class="customer-hours-track"><i style="width:${b.minutes?Math.max(3,(b.minutes/max)*100):0}%"></i></div><div class="customer-money-split"><span>Factuur ${money(b.invoiceAmount)}</span><span>Contant ${money(b.cashAmount)}</span></div></div>`).join('')}</div>`;
   }
   async function showTimeStats(){
-    const [entries,jobs,clients,company]=await Promise.all([JKDB.all('timeEntries'),JKDB.all('jobs'),JKDB.all('clients'),JKDB.getSetting('company')]);let mode='month';
+    const [entries,jobs,clients,company]=await Promise.all([JKDB.all('timeEntries'),JKDB.all('jobs'),JKDB.all('clients'),JKDB.get('settings','company')]);let mode='month';
     const years=[...new Set([...entries.map(e=>entryDate(e)),...jobs.map(j=>j.date)].filter(Boolean).map(v=>new Date(v+'T12:00:00')).filter(d=>!Number.isNaN(d.getTime())).map(d=>d.getFullYear()))].sort((a,b)=>b-a);
     if(!years.includes(new Date().getFullYear()))years.unshift(new Date().getFullYear());
     let customerYear=new Date().getFullYear();
     const draw=()=>{
       const customerMode=mode==='client';
       const content=customerMode?customerStatsHtml(customerStatBuckets(entries,jobs,clients,company,customerYear),customerYear):statsChartHtml(periodBuckets(entries,jobs,company,mode));
-      modal(`${modalHead('Uren & bedragen')}<div class="tabs"><button class="tab ${mode==='month'?'active':''}" data-stat-mode="month">Per maand</button><button class="tab ${mode==='quarter'?'active':''}" data-stat-mode="quarter">Per kwartaal</button><button class="tab ${mode==='year'?'active':''}" data-stat-mode="year">Per kalenderjaar</button><button class="tab ${mode==='client'?'active':''}" data-stat-mode="client">Per klant</button></div>${customerMode?`<div class="field stat-year-field"><label>Kalenderjaar</label><select id="customerStatsYear">${years.map(y=>`<option value="${y}" ${y===customerYear?'selected':''}>${y}</option>`).join('')}</select></div>`:''}${content}<p class="muted small stats-note">Uren komen uit je urenregistraties. Bedragen zijn alleen je interne klusberekening: uren × uurtarief + extra bedrag. Factuur en contant blijven apart zichtbaar. Deze bedragen worden niet gebruikt voor het Jaaroverzicht Facturen.</p>`);
+      modal(`${modalHead('Uren & bedragen')}<div class="tabs stats-tabs"><button type="button" class="tab ${mode==='week'?'active':''}" data-stat-mode="week">Per week</button><button type="button" class="tab ${mode==='month'?'active':''}" data-stat-mode="month">Per maand</button><button type="button" class="tab ${mode==='quarter'?'active':''}" data-stat-mode="quarter">Per kwartaal</button><button type="button" class="tab ${mode==='year'?'active':''}" data-stat-mode="year">Per kalenderjaar</button><button type="button" class="tab ${mode==='client'?'active':''}" data-stat-mode="client">Per klant</button></div>${customerMode?`<div class="field stat-year-field"><label>Kalenderjaar</label><select id="customerStatsYear">${years.map(y=>`<option value="${y}" ${y===customerYear?'selected':''}>${y}</option>`).join('')}</select></div>`:''}${content}<p class="muted small stats-note">Uren komen uit je urenregistraties. Bedragen zijn alleen je interne klusberekening: uren × uurtarief + extra bedrag. Factuur en contant blijven apart zichtbaar. Deze bedragen worden niet gebruikt voor het Jaaroverzicht Facturen.</p>`);
       $$('[data-stat-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.statMode;draw()}));
       $('#customerStatsYear')?.addEventListener('change',e=>{customerYear=Number(e.target.value);draw()});
     };draw();
