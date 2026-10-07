@@ -1,5 +1,13 @@
-# JK Works Dordrecht App v57
+# JK Works Dordrecht App v58
 
+
+
+## Nieuw in v58 - uren en bedrag direct naast elkaar
+- Statistieken per week, maand, kwartaal en kalenderjaar tonen nu per periode twee staven naast elkaar: **Uren** en **Bedrag**.
+- Boven iedere staaf staat de exacte waarde, bijvoorbeeld `10 u` en `€ 100,00`.
+- De twee staven gebruiken ieder hun eigen schaal, omdat uren en eurobedragen verschillende eenheden zijn.
+- Bij **Per klant** staan nu eveneens twee afzonderlijke balken per klant: uren en intern bedrag.
+- De splitsing Factuur / Contant blijft zichtbaar.
 
 
 ## Nieuw in v57 - statistieken hersteld
