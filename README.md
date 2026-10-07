@@ -1,6 +1,14 @@
-# JK Works Dordrecht App v55
+# JK Works Dordrecht App v56
 
 
+
+## Nieuw in v56 - openstaand pas na afloop van de klus
+
+- Klussen in de toekomst worden niet meer als onbetaald/openstaand gemarkeerd.
+- Een klus telt pas mee bij Openstaand nadat de geplande eindtijd is verstreken.
+- Als geen eindtijd is ingevuld, telt een klus vanaf de dag na de klusdatum als afgerond voor het betaaloverzicht.
+- Een klus die handmatig de status `afgerond` krijgt, telt direct als afgerond.
+- Dit geldt voor zowel Factuur als Contant en voor de rode markering van de klusregel.
 
 ## Nieuw in v55 - openstaande betalingen duidelijk zichtbaar
 
