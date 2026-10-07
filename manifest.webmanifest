@@ -2,6 +2,7 @@
   "name": "JK Works Dordrecht",
   "short_name": "JK Works",
   "description": "Persoonlijke bedrijfsapp voor JK Works Dordrecht",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

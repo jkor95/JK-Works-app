@@ -1,8 +1,10 @@
-/* JK Works Dordrecht - persoonlijke PWA v48 */
+/* JK Works Dordrecht - persoonlijke PWA v53 */
 const App = (() => {
-  const state = {route:'dashboard',gearTab:'mboxes',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,activeBlobUrl:null,reminderChecking:false,snoozedReminderJobs:new Set(),pendingCloudRefresh:false,pendingAuthRefresh:false};
+  const state = {route:'dashboard',gearTab:'mboxes',jobPaymentFilter:'all',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,pdfJsPromise:null,activeBlobUrl:null,reminderChecking:false,snoozedReminderJobs:new Set(),pendingCloudRefresh:false,pendingAuthRefresh:false,actionItems:[],notificationTimer:null};
   window.__JK_UI_BUSY=false;
   const PDFLIB_URL='https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';
+  const PDFJS_URL='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+  const PDFJS_WORKER_URL='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
   const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
   const esc=(v='')=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const money=v=>new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(Number(v||0));
@@ -25,6 +27,12 @@ const App = (() => {
   const jobStartTime=j=>normalizeClockTime(j?.startTime||j?.from||j?.start||j?.timeFrom||j?.beginTime||j?.begin||j?.start_time||'');
   const jobEndTime=j=>normalizeClockTime(j?.endTime||j?.to||j?.end||j?.timeTo||j?.finishTime||j?.finish||j?.end_time||'');
   const jobTimeLabel=j=>{const a=jobStartTime(j),b=jobEndTime(j);return a?(b?`${a} - ${b}`:a):'';};
+  const jobPaymentType=j=>j?.paymentType==='cash'?'cash':'invoice';
+  const jobPaymentLabel=j=>jobPaymentType(j)==='cash'?'Contant':'Factuur';
+  const jobRate=(j,company)=>num(j?.hourlyRate!==undefined&&j?.hourlyRate!==''?j.hourlyRate:company?.defaultRate||0);
+  const jobExtra=j=>num(j?.extraAmount||0);
+  function jobMinutes(j,entries){return (entries||[]).filter(e=>e.jobId===j.id).reduce((sum,e)=>sum+entryMinutes(e),0)}
+  function jobOwnAmount(j,entries,company){return Math.round(((jobMinutes(j,entries)/60)*jobRate(j,company)+jobExtra(j))*100)/100}
   const CALENDAR_TZ='Europe/Amsterdam';
   function tzOffsetMs(instant,timeZone=CALENDAR_TZ){
     const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(instant).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
@@ -97,6 +105,107 @@ const App = (() => {
     const d=localCalendarDateToUtc(endDate,end);
     return d && !Number.isNaN(+d) ? d : null;
   }
+
+  const DEFAULT_NOTIFICATION_PREFS={id:'notificationPrefs',badges:true,systemNotifications:false,hours:true,photos:true,quoteCreate:true,quoteSend:true,invoiceCreate:true,invoiceSend:true};
+  async function getNotificationPrefs(){return {...DEFAULT_NOTIFICATION_PREFS,...((await JKDB.get('settings','notificationPrefs'))||{})};}
+  function jobPlannedStart(j){
+    if(!j?.date)return null;
+    const start=jobStartTime(j)||'08:00',d=localCalendarDateToUtc(j.date,start);
+    return d&&!Number.isNaN(+d)?d:null;
+  }
+  function jobHasEnded(j,now=new Date()){
+    if(j?.status==='afgerond')return true;
+    const end=jobPlannedEnd(j);if(end)return end<=now;
+    return !!j?.date && j.date<today();
+  }
+  async function collectActionItems(){
+    const [prefs,jobs,entries,photos,docs]=await Promise.all([getNotificationPrefs(),JKDB.all('jobs'),JKDB.all('timeEntries'),JKDB.all('jobPhotos'),JKDB.all('documents')]);
+    const now=new Date(),todayIso=today(),items=[];
+    const docsByJob=new Map();
+    for(const d of docs){const jid=d?.meta?.jobId;if(!jid)continue;if(!docsByJob.has(jid))docsByJob.set(jid,[]);docsByJob.get(jid).push(d);}
+    const photosByJob=new Map();
+    for(const ph of photos){if(!photosByJob.has(ph.jobId))photosByJob.set(ph.jobId,[]);photosByJob.get(ph.jobId).push(ph);}
+    for(const j of jobs){
+      const ended=jobHasEnded(j,now),start=jobPlannedStart(j),started=ended||(start?start<=now:!!j.date&&j.date<=todayIso),directDocs=docsByJob.get(j.id)||[],jobName=String(j.clientName||'').trim().toLowerCase(),fuzzyDocs=docs.filter(d=>!d?.meta?.jobId&&j.date&&d?.meta?.workDate===j.date&&jobName&&String(d?.meta?.client?.name||'').trim().toLowerCase()===jobName),jobDocs=[...new Map([...directDocs,...fuzzyDocs].map(d=>[d.id,d])).values()],jobPhotos=photosByJob.get(j.id)||[];
+      const add=(x)=>items.push({jobId:j.id,jobTitle:j.title||'Klus',clientName:j.clientName||'',...x});
+      if(prefs.hours&&ended&&!j.completionPromptHandledAt){
+        const je=entries.filter(e=>e.jobId===j.id),auto=je.find(e=>e.id===j.autoTimeEntryId)||je.find(e=>e.autoFromJobSchedule===true);
+        add({key:`hours:${j.id}`,type:'hours',category:'Uren',icon:'🕒',title:auto?'Uren controleren':'Uren invoeren',detail:`${j.clientName||j.title||'Klus'} · ${nlDate(j.date)}`});
+      }
+      if(prefs.photos&&(j.photoPolicy||'optional')==='required'){
+        const has=phase=>jobPhotos.some(p=>p.phase===phase);
+        if(j.date&&j.date<=todayIso&&!has('before'))add({key:`photo:before:${j.id}`,type:'photo',phase:'before',category:'Foto’s',icon:'📷',title:'Foto vóór de klus maken',detail:`${j.clientName||j.title||'Klus'} · ${nlDate(j.date)}`});
+        if(started&&!has('during'))add({key:`photo:during:${j.id}`,type:'photo',phase:'during',category:'Foto’s',icon:'🔨',title:'Foto tijdens de klus maken',detail:`${j.clientName||j.title||'Klus'} · ${nlDate(j.date)}`});
+        if(ended&&!has('after'))add({key:`photo:after:${j.id}`,type:'photo',phase:'after',category:'Foto’s',icon:'✅',title:'Foto na de klus maken',detail:`${j.clientName||j.title||'Klus'} · ${nlDate(j.date)}`});
+      }
+      const quotes=jobDocs.filter(d=>docFolder(d)==='offerte'),invoices=jobDocs.filter(d=>docFolder(d)==='factuur');
+      if(prefs.quoteCreate&&j.quoteNeeded&&!quotes.length&&!ended)add({key:`quoteCreate:${j.id}`,type:'quoteCreate',category:'Offerte',icon:'📄',title:'Offerte opmaken',detail:`${j.clientName||j.title||'Klus'}${j.date?' · '+nlDate(j.date):''}`});
+      if(prefs.quoteSend)for(const d of quotes.filter(d=>!d.meta?.sent))add({key:`quoteSend:${d.id}`,type:'quoteSend',docId:d.id,category:'Offerte',icon:'📤',title:'Offerte versturen',detail:`${d.meta?.number||d.filename||j.clientName||j.title}`});
+      if(jobPaymentType(j)==='invoice'&&ended){
+        if(prefs.invoiceCreate&&!invoices.length)add({key:`invoiceCreate:${j.id}`,type:'invoiceCreate',category:'Factuur',icon:'🧾',title:'Factuur opmaken',detail:`${j.clientName||j.title||'Klus'} · ${nlDate(j.date)}`});
+        if(prefs.invoiceSend)for(const d of invoices.filter(d=>!d.meta?.sent))add({key:`invoiceSend:${d.id}`,type:'invoiceSend',docId:d.id,category:'Factuur',icon:'📤',title:'Factuur versturen',detail:`${d.meta?.number||d.filename||j.clientName||j.title}`});
+      }
+    }
+    return items;
+  }
+  async function updateAppBadge(count,prefs){
+    if(!('setAppBadge' in navigator))return;
+    try{if(prefs.badges&&count>0)await navigator.setAppBadge(count);else if('clearAppBadge' in navigator)await navigator.clearAppBadge();else await navigator.setAppBadge(0);}catch(e){console.debug('App-badge niet beschikbaar',e);}
+  }
+  async function maybeShowSystemActionNotification(items,prefs){
+    if(!prefs.systemNotifications||!items.length||!('Notification' in window)||Notification.permission!=='granted'||!('serviceWorker' in navigator))return;
+    const day=today(),storeKey='jkworks-notified-actions',seenRaw=localStorage.getItem(storeKey);let seen={day,keys:[]};
+    try{const parsed=JSON.parse(seenRaw||'{}');if(parsed?.day===day&&Array.isArray(parsed.keys))seen=parsed;}catch{}
+    const newItems=items.filter(i=>!seen.keys.includes(i.key));if(!newItems.length)return;
+    const first=newItems[0],extra=newItems.length-1,body=extra?`${first.title} - ${first.detail}. En nog ${extra} actie${extra===1?'':'s'}.`:`${first.title} - ${first.detail}`;
+    try{const reg=await navigator.serviceWorker.ready;await reg.showNotification('JK Works - actie nodig',{body,icon:'icons/icon-192.png',badge:'icons/icon-192.png',tag:'jkworks-actions',renotify:true,data:{url:'./'}});seen.keys=[...new Set([...seen.keys,...newItems.map(i=>i.key)])];localStorage.setItem(storeKey,JSON.stringify(seen));}catch(e){console.debug('Systeemmelding niet getoond',e);}
+  }
+  async function refreshActionBadges(showSystem=false){
+    if(!JKCloud.isSignedIn())return;
+    const [items,prefs]=await Promise.all([collectActionItems(),getNotificationPrefs()]);state.actionItems=items;
+    const btn=$('#notificationBtn'),countEl=$('#notificationCount');
+    if(btn){btn.hidden=false;btn.classList.toggle('has-actions',items.length>0);btn.title=items.length?`${items.length} actie${items.length===1?'':'s'} nodig`:'Geen openstaande acties';}
+    if(countEl){countEl.textContent=items.length>99?'99+':String(items.length);countEl.hidden=!items.length;}
+    await updateAppBadge(items.length,prefs);if(showSystem)await maybeShowSystemActionNotification(items,prefs);
+    return items;
+  }
+  function startNotificationTimer(){
+    if(state.notificationTimer)return;
+    state.notificationTimer=setInterval(()=>{if(document.visibilityState==='visible'&&!uiBusy())refreshActionBadges(true).catch(()=>{});},60000);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&JKCloud.isSignedIn())refreshActionBadges(true).catch(()=>{});});
+  }
+  async function runActionItem(item){
+    if(!item)return;closeModal();
+    if(item.type==='hours'){
+      const j=await JKDB.get('jobs',item.jobId);if(!j)return;if(!j.completionPromptHandledAt){j.completionPromptHandledAt=new Date().toISOString();await JKDB.put('jobs',j);}const es=(await JKDB.all('timeEntries')).filter(e=>e.jobId===j.id),auto=es.find(e=>e.id===j.autoTimeEntryId)||es.find(e=>e.autoFromJobSchedule===true);editTimeEntry(auto?.id||null,j.id);return;
+    }
+    if(item.type==='photo'){showJob(item.jobId);return;}
+    if(item.type==='quoteCreate'){const j=await JKDB.get('jobs',item.jobId);if(j)createBusinessDoc('Offerte',{jobId:j.id,clientId:j.clientId,workDate:j.date});return;}
+    if(item.type==='invoiceCreate'){const j=await JKDB.get('jobs',item.jobId);if(j)createBusinessDoc('Factuur',{jobId:j.id,clientId:j.clientId,workDate:j.date});return;}
+    if((item.type==='quoteSend'||item.type==='invoiceSend')&&item.docId){showDocument(item.docId);return;}
+  }
+  async function showActionCenter(){
+    const items=await refreshActionBadges(false)||[];
+    modal(`${modalHead('Acties')}<div class="card"><div class="section-inline"><h3>Actie nodig</h3><span class="pill ${items.length?'warn':'success'}">${items.length}</span></div><p class="muted small">Deze lijst wordt lokaal berekend uit je klussen, uren, foto’s, offertes en facturen. Tik op een actie om er direct naartoe te gaan.</p></div>${items.length?`<div class="action-list">${items.map((i,n)=>`<button class="action-row" type="button" data-action-index="${n}"><span class="action-emoji">${i.icon}</span><span class="action-main"><span class="action-category">${esc(i.category)}</span><strong>${esc(i.title)}</strong><small>${esc(i.detail||'')}</small></span><span>›</span></button>`).join('')}</div>`:'<div class="successbox"><strong>Alles bijgewerkt</strong><br><span class="small">Er zijn nu geen openstaande acties.</span></div>'}<button class="secondary" id="actionSettings" style="width:100%;margin-top:12px">Meldingsinstellingen</button>`);
+    $$('[data-action-index]').forEach(b=>b.addEventListener('click',()=>runActionItem(items[Number(b.dataset.actionIndex)])));
+    $('#actionSettings').addEventListener('click',()=>showNotificationSettings());
+  }
+  async function requestNotificationAccess(){
+    if(!('Notification' in window)){alert('Systeemmeldingen worden door deze browser niet ondersteund. De actie-badge in de app blijft wel werken.');return false;}
+    const standalone=window.matchMedia?.('(display-mode: standalone)')?.matches||navigator.standalone===true;
+    if(!standalone&&/iPhone|iPad|iPod/i.test(navigator.userAgent)){alert('Op iPhone werken webmeldingen alleen wanneer JK Works aan het beginscherm is toegevoegd en als web-app is geopend.');return false;}
+    try{const permission=await Notification.requestPermission();const prefs=await getNotificationPrefs();prefs.systemNotifications=permission==='granted';await JKDB.put('settings',prefs);await refreshActionBadges(permission==='granted');return permission==='granted';}catch(e){alert('Meldingstoestemming aanvragen lukte niet: '+(e.message||e));return false;}
+  }
+  function notificationPermissionLabel(){if(!('Notification' in window))return ['Niet ondersteund','blocked'];if(Notification.permission==='granted')return ['Toegestaan','on'];if(Notification.permission==='denied')return ['Geblokkeerd','blocked'];return ['Nog niet toegestaan',''];}
+  async function showNotificationSettings(){
+    const prefs=await getNotificationPrefs(),perm=notificationPermissionLabel();
+    const row=(name,label,desc)=>`<label class="notification-pref"><span class="pref-copy"><strong>${label}</strong><small>${desc}</small></span><input type="checkbox" name="${name}" ${prefs[name]?'checked':''}></label>`;
+    modal(`${modalHead('Meldingen')}<form id="notificationForm"><div class="card"><div class="section-inline"><h3>iPhone / browser</h3><span class="notification-status ${perm[1]}">${perm[0]}</span></div><p class="muted small">De rode app-badge werkt op ondersteunde geïnstalleerde web-apps. Systeemmeldingen kunnen op iPhone worden toegestaan als JK Works op het beginscherm staat.</p><div class="button-row"><button type="button" class="secondary" id="allowNotifications">Meldingen toestaan</button>${('Notification' in window&&Notification.permission==='granted')?'<button type="button" class="secondary" id="testNotification">Test melding</button>':''}</div>${row('badges','Badge op app-icoon','Toon het aantal openstaande acties op het JK Works-icoon.')}${('Notification' in window&&Notification.permission==='granted')?row('systemNotifications','Systeemmeldingen','Toon een melding wanneer tijdens gebruik van de app een nieuwe actie nodig wordt.'):''}</div><div class="card"><h3>Categorieën</h3>${row('hours','Uren invoeren / controleren','Na de geplande eindtijd van een klus.')}${row('photos','Foto’s maken','Bij verplichte voor-, tijdens- en na-foto’s.')}${row('quoteCreate','Offerte opmaken','Alleen als bij de klus “Offerte nodig” is aangevinkt.')}${row('quoteSend','Offerte versturen','Als een gekoppelde offerte nog niet als Verstuurd staat.')}${row('invoiceCreate','Factuur opmaken','Na een factuurklus als nog geen factuur is gemaakt.')}${row('invoiceSend','Factuur versturen','Als een gekoppelde factuur nog niet als Verstuurd staat.')}</div><button class="primary" style="width:100%">Instellingen opslaan</button></form>`);
+    $('#allowNotifications').addEventListener('click',async()=>{if(await requestNotificationAccess()){closeModal();showNotificationSettings();}});
+    $('#testNotification')?.addEventListener('click',async()=>{try{const reg=await navigator.serviceWorker.ready;await reg.showNotification('JK Works',{body:'Testmelding werkt.',icon:'icons/icon-192.png',badge:'icons/icon-192.png',tag:'jkworks-test'});}catch(e){alert('Testmelding lukte niet: '+(e.message||e));}});
+    $('#notificationForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),next={...prefs};['badges','systemNotifications','hours','photos','quoteCreate','quoteSend','invoiceCreate','invoiceSend'].forEach(k=>{if(k==='systemNotifications'&&(!('Notification' in window)||Notification.permission!=='granted')){next[k]=false;return;}next[k]=f.get(k)==='on';});await JKDB.put('settings',next);closeModal();toast('Meldingsinstellingen opgeslagen');await refreshActionBadges(false);if(state.route==='more')renderMore();});
+  }
+
   async function ensureJobTimeEntry(j){
     if(!j?.id || !j.date)return null;
     const from=jobStartTime(j),to=jobEndTime(j);
@@ -115,6 +224,7 @@ const App = (() => {
   }
   async function maybeShowCompletedJobReminder(){
     if(state.reminderChecking || !JKCloud.isSignedIn() || $('#modalRoot')?.children.length)return;
+    const notificationPrefs=await getNotificationPrefs();if(!notificationPrefs.hours)return;
     state.reminderChecking=true;
     try{
       const now=new Date();
@@ -190,10 +300,12 @@ const App = (() => {
     document.body.classList.toggle('auth-locked',!signedIn);
     if(gate)gate.hidden=signedIn;
     if(shell)shell.hidden=!signedIn;
-    const logoutBtn=$('#topLogoutBtn');
+    const logoutBtn=$('#topLogoutBtn'),notificationBtn=$('#notificationBtn');
     if(logoutBtn) logoutBtn.hidden=!signedIn;
+    if(notificationBtn) notificationBtn.hidden=!signedIn;
     if(!signedIn){
       if($('#modalRoot'))$('#modalRoot').innerHTML='';
+      if('clearAppBadge' in navigator)navigator.clearAppBadge().catch(()=>{});
       await refreshSyncButton();
       return;
     }
@@ -209,6 +321,8 @@ const App = (() => {
     
     await render();
     await refreshSyncButton();
+    await refreshActionBadges(true);
+    startNotificationTimer();
     setTimeout(()=>maybeShowCompletedJobReminder().catch(console.error),250);
   }
 
@@ -230,6 +344,7 @@ const App = (() => {
     document.addEventListener('jkcloud-queue',()=>refreshSyncButton().catch(()=>{}));
     document.addEventListener('jkcloud-sync',e=>{
       refreshSyncButton().catch(()=>{});
+      if(e.detail?.state==='done')refreshActionBadges(false).catch(()=>{});
       if(!JKCloud.isSignedIn()||e.detail?.state!=='done'||!e.detail?.changed)return;
       if(uiBusy()){state.pendingCloudRefresh=true;return;}
       render().then(()=>setTimeout(()=>maybeShowCompletedJobReminder().catch(console.error),250));
@@ -254,6 +369,7 @@ const App = (() => {
       await refreshSyncButton();
       await JKCloud.syncNow();
       await refreshSyncButton();
+      await refreshActionBadges(true);
       toast('Synchronisatie voltooid');
     }catch(e){alert('Synchroniseren mislukt: '+e.message);await refreshSyncButton();}
   }
@@ -270,10 +386,115 @@ const App = (() => {
     });
     return state.pdfLibPromise;
   }
+  function ensurePdfJs(){
+    if(window.pdfjsLib){
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER_URL;
+      return Promise.resolve(window.pdfjsLib);
+    }
+    if(state.pdfJsPromise)return state.pdfJsPromise;
+    state.pdfJsPromise=new Promise((resolve,reject)=>{
+      const s=document.createElement('script');s.src=PDFJS_URL;s.async=true;s.crossOrigin='anonymous';
+      const t=setTimeout(()=>{state.pdfJsPromise=null;s.remove();reject(new Error('PDF-leesmodule kon niet worden geladen. Controleer je internetverbinding.'));},18000);
+      s.onload=()=>{
+        clearTimeout(t);
+        if(!window.pdfjsLib){state.pdfJsPromise=null;reject(new Error('PDF-leesmodule niet beschikbaar.'));return;}
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER_URL;
+        resolve(window.pdfjsLib);
+      };
+      s.onerror=()=>{clearTimeout(t);state.pdfJsPromise=null;reject(new Error('PDF-leesmodule kon niet worden geladen. Controleer je internetverbinding.'));};
+      document.head.appendChild(s);
+    });
+    return state.pdfJsPromise;
+  }
+  function parsePdfDate(value){
+    const s=String(value||'').trim();let m=s.match(/\b(20\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})\b/);if(m)return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+    m=s.match(/\b(\d{1,2})[-\/.](\d{1,2})[-\/.](20\d{2})\b/);if(m)return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+    return '';
+  }
+  function parsePdfEuro(value){
+    let s=String(value||'').replace(/EUR|EURO|€/gi,'').replace(/\s/g,'').replace(/[^0-9,.-]/g,'');if(!s)return NaN;
+    if(s.includes(',')&&s.includes('.'))s=s.replace(/\./g,'').replace(',','.');
+    else if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');
+    else if((s.match(/\./g)||[]).length>1)s=s.replace(/\./g,'');
+    const n=Number(s);return Number.isFinite(n)?n:NaN;
+  }
+  async function extractPdfLines(blob){
+    await ensurePdfJs();
+    const data=new Uint8Array(await blob.arrayBuffer()),pdf=await window.pdfjsLib.getDocument({data}).promise,all=[];
+    for(let n=1;n<=pdf.numPages;n++){
+      const pg=await pdf.getPage(n),tc=await pg.getTextContent(),rows=[];
+      for(const item of tc.items||[]){
+        const str=String(item.str||'').trim();if(!str)continue;
+        const x=Number(item.transform?.[4]||0),y=Number(item.transform?.[5]||0);
+        let row=rows.find(r=>Math.abs(r.y-y)<=2.5);if(!row){row={y,items:[]};rows.push(row);}row.items.push({x,str});
+      }
+      rows.sort((a,b)=>b.y-a.y);
+      for(const row of rows){row.items.sort((a,b)=>a.x-b.x);const line=row.items.map(i=>i.str).join(' ').replace(/\s+/g,' ').trim();if(line)all.push(line);}
+    }
+    return all;
+  }
+  function firstLabeledValue(lines,labels){
+    for(let i=0;i<lines.length;i++)for(const re of labels){
+      const m=lines[i].match(re);if(!m)continue;
+      const same=String(m[1]||'').replace(/^\s*[:#-]?\s*/,'').trim();if(same)return same;
+      for(let j=i+1;j<Math.min(lines.length,i+4);j++){const next=lines[j].trim();if(next)return next;}
+    }return '';
+  }
+  function parseImportedBusinessPdf(lines,folder,company){
+    const flat=lines.join(' '),lower=flat.toLowerCase(),ownName=String(company?.companyName||'JK Works Dordrecht').toLowerCase();
+    const businessVerified=lower.includes('jk works dordrecht')||lower.includes(ownName)||/420\s*78161/.test(flat)||/nl\s*005477968b66/i.test(flat);
+    const numberLabels=folder==='factuur'?[/(?:factuurnummer|factuur\s*nr\.?|factuurnr\.?)\s*[:#-]?\s*(.+)$/i]:[/(?:offertenummer|offerte\s*nr\.?|offertenr\.?)\s*[:#-]?\s*(.+)$/i];
+    let number=firstLabeledValue(lines,numberLabels).split(/\s+(?=(?:datum|werkzaamheden|factuurdatum|offertedatum|geldig|vervaldatum)\b)|\|/i)[0].trim();
+    if(!number){const m=flat.match(folder==='factuur'?/\bFAC[-\s_/]?20\d{2}[-\s_/]?\d+\b/i:/\bOFF[-\s_/]?20\d{2}[-\s_/]?\d+\b/i);if(m)number=m[0].replace(/\s+/g,'-');}
+    const dateLabels=folder==='factuur'?[/factuurdatum\s*[:#-]?\s*(.*)$/i,/datum\s+factuur\s*[:#-]?\s*(.*)$/i]:[/offertedatum\s*[:#-]?\s*(.*)$/i,/datum\s+offerte\s*[:#-]?\s*(.*)$/i,/^datum\s*[:#-]?\s*(.*)$/i];
+    let date=parsePdfDate(firstLabeledValue(lines,dateLabels));
+    if(!date){for(const line of lines.slice(0,25)){date=parsePdfDate(line);if(date)break;}}
+    let workDate=parsePdfDate(firstLabeledValue(lines,[/(?:datum\s+werkzaamheden|werkzaamheden\s+op|prestatiedatum|datum\s+prestatie)\s*[:#-]?\s*(.*)$/i]));
+    let total=NaN;
+    const totalLabels=[/totaal\s+te\s+betalen/i,/factuurbedrag/i,/te\s+betalen/i,/eindtotaal/i,/totaal/i];
+    for(const re of totalLabels){for(let i=lines.length-1;i>=0;i--){if(!re.test(lines[i]))continue;const amounts=lines[i].match(/(?:EUR|€)?\s*-?\d[\d.]*,\d{2}|(?:EUR|€)\s*-?\d+(?:\.\d{2})?/gi)||[];if(amounts.length){const n=parsePdfEuro(amounts[amounts.length-1]);if(Number.isFinite(n)){total=n;break;}}}if(Number.isFinite(total))break;}
+    const clientAnchors=[/^(?:factuur\s+aan|offerte\s+voor|klant|klantgegevens|debiteur|aan)\s*[:#-]?\s*(.*)$/i];
+    let clientName=firstLabeledValue(lines,[/^(?:naam\s*\/\s*bedrijf|naam\s+bedrijf|bedrijfsnaam)\s*[:#-]?\s*(.*)$/i]),clientAddress=firstLabeledValue(lines,[/^adres\s*[:#-]?\s*(.*)$/i]),clientPostalCity=firstLabeledValue(lines,[/^(?:postcode\s*\/\s*plaats|postcode\s+plaats)\s*[:#-]?\s*(.*)$/i]);
+    for(let i=0;i<lines.length&&!clientName;i++)for(const re of clientAnchors){const m=lines[i].match(re);if(!m)continue;let candidates=[];if((m[1]||'').trim())candidates.push(m[1].trim());for(let j=i+1;j<Math.min(lines.length,i+6);j++)candidates.push(lines[j].trim());candidates=candidates.filter(Boolean).filter(v=>!/^(t\.a\.v\.?|adres|postcode|plaats|telefoon|e-?mail)\b/i.test(v));clientName=candidates.find(v=>!v.toLowerCase().includes('jk works')&&!/420\s*78161/.test(v)&&!/@/.test(v))||'';const postal=candidates.find(v=>/\b\d{4}\s?[A-Z]{2}\b/i.test(v));if(postal)clientPostalCity=postal;const addr=candidates.find(v=>/\b\d+[a-z]?\b/i.test(v)&&v!==clientPostalCity&&v!==clientName);if(addr)clientAddress=addr;break;}
+    if(!clientName){
+      const idx=lines.findIndex(v=>/^t\.a\.v\./i.test(v));if(idx>0&&idx<lines.length-1)clientName=lines[idx+1].replace(/^t\.a\.v\.\s*/i,'').trim();
+    }
+    const findMoneyByLabel=(regex)=>{for(let i=lines.length-1;i>=0;i--){if(!regex.test(lines[i]))continue;const amounts=lines[i].match(/(?:EUR|€)?\s*-?\d[\d.]*,\d{2}|(?:EUR|€)\s*-?\d+(?:\.\d{2})?/gi)||[];if(amounts.length){const n=parsePdfEuro(amounts[amounts.length-1]);if(Number.isFinite(n))return n;}}return null;};
+    const subtotalExVat=findMoneyByLabel(/subtotaal.*(?:excl|exclusief).*btw/i),vatAmount=findMoneyByLabel(/btw\s*bedrag/i);
+    const korDetected=/kleineondernemersregeling|vrijgesteld\s+van\s+btw|btw\s*[- ]?vrijgesteld|\bKOR\b/i.test(flat);
+    let parsedLines=[];
+    const header=lines.findIndex(v=>/omschrijving/i.test(v)&&/(aantal|prijs|bedrag|totaal)/i.test(v));
+    if(header>=0){
+      for(let i=header+1;i<Math.min(lines.length,header+25);i++){
+        const line=lines[i];if(/^(sub)?totaal\b|totaal\s+te\s+betalen|btw\b/i.test(line))break;
+        const amts=[...(line.matchAll(/(?:EUR|€)?\s*(-?\d[\d.]*,\d{2})/gi))].map(m=>({raw:m[0],value:parsePdfEuro(m[0]),index:m.index}));
+        const qm=line.match(/^\s*(\d+(?:[,.]\d+)?)\s+(.+)/);
+        if(qm&&amts.length){const qty=parsePdfEuro(qm[1]);const price=amts.length>=2?amts[amts.length-2].value:amts[0].value;let desc=qm[2].slice(0,Math.max(0,(amts[0].index||0)-qm[1].length)).replace(/(?:EUR|€)\s*$/i,'').trim();if(!desc)desc=qm[2].replace(/(?:EUR|€)?\s*-?\d[\d.]*,\d{2}.*$/i,'').trim();if(desc)parsedLines.push({qty:Number.isFinite(qty)?qty:1,description:desc,price:Number.isFinite(price)?price:0,source:'pdf'});}
+      }
+    }
+    return {businessVerified,number,date,workDate,total:Number.isFinite(total)?total:null,subtotalExVat,vatAmount,client:{name:clientName,address:clientAddress,postalCity:clientPostalCity},lines:parsedLines,korDetected,textLength:flat.length};
+  }
+  async function parseStoredBusinessDocument(doc,company,force=false){
+    const folder=docFolder(doc);if(!['factuur','offerte'].includes(folder)||!(doc.blob instanceof Blob))return doc;
+    const meta=doc.meta||{};if(!force&&meta.pdfParseVersion===1)return doc;
+    try{
+      const lines=await extractPdfLines(doc.blob),parsed=parseImportedBusinessPdf(lines,folder,company);
+      doc.meta={...meta,manualImport:meta.manualImport!==false,pdfParseVersion:1,pdfParsedAt:new Date().toISOString(),businessVerified:parsed.businessVerified,pdfTextReadable:parsed.textLength>40,pdfParseError:'',number:parsed.number||meta.number||'',docDate:parsed.date||meta.docDate||'',workDate:parsed.workDate||meta.workDate||'',total:parsed.total??meta.total,subtotalExVat:parsed.subtotalExVat??meta.subtotalExVat,vatAmount:parsed.vatAmount??meta.vatAmount,client:{...(meta.client||{}),...(parsed.client||{})},lines:parsed.lines.length?parsed.lines:(meta.lines||[]),korDetected:parsed.korDetected||meta.korDetected||false};
+      if(!parsed.businessVerified)doc.meta.pdfParseError='JK Works-bedrijfsgegevens niet herkend in deze PDF.';
+      else if(parsed.textLength<=40)doc.meta.pdfParseError='PDF bevat nauwelijks uitleesbare tekst (mogelijk een scan/afbeelding).';
+    }catch(e){doc.meta={...meta,manualImport:true,pdfParseVersion:1,pdfParsedAt:new Date().toISOString(),pdfParseError:String(e.message||e)};}
+    await JKDB.put('documents',doc);return doc;
+  }
+  async function reprocessImportedBusinessDocs(force=false){
+    const [docs,company]=await Promise.all([JKDB.all('documents'),JKDB.get('settings','company')]);let checked=0,recognized=0;
+    for(const d of docs){const folder=docFolder(d),m=d.meta||{},looksImported=['factuur','offerte'].includes(folder)&&d.blob instanceof Blob&&(m.manualImport||(!m.number&&!m.lines));if(!looksImported)continue;if(!force&&m.pdfParseVersion===1)continue;checked++;await parseStoredBusinessDocument(d,company,force);if(d.meta?.businessVerified)recognized++;}
+    return {checked,recognized};
+  }
   function bindNav(){
     $$('.nav-item').forEach(b=>b.addEventListener('click',()=>go(b.dataset.route)));
     $('#quickAddBtn').addEventListener('click',quickAdd);
     $('#manualSyncBtn')?.addEventListener('click',manualSync);
+    $('#notificationBtn')?.addEventListener('click',showActionCenter);
     $('#topLogoutBtn')?.addEventListener('click',async()=>{
       if(!confirm('Wil je uitloggen bij JK Works?'))return;
       try{
@@ -315,6 +536,7 @@ const App = (() => {
     setTimeout(()=>{
       flushDeferredUi().catch(console.error);
       refreshSyncButton().catch(()=>{});
+      refreshActionBadges(false).catch(()=>{});
     },50);
   }
   function modalHead(t){return `<div class="modal-head"><h2>${esc(t)}</h2><button class="close-btn" data-close>×</button></div>`}
@@ -367,16 +589,27 @@ const App = (() => {
   }
 
   async function renderJobs(){
-    title('Klussen');const jobs=(await JKDB.all('jobs')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-    $('#view').innerHTML=`<div class="button-row"><button class="primary" id="newJob">+ Nieuwe klus</button></div><div class="section-title"><h2>Klussen</h2></div>${jobs.length?`<div class="list">${jobs.map(j=>`<div class="list-item clickable" data-job="${j.id}"><div class="main"><div class="title">${esc(j.title)}</div><div class="sub">${esc(j.clientName||'Geen klant')} · ${nlDate(j.date)||'geen datum'}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}</div></div><span class="pill ${j.status==='afgerond'?'success':'warn'}">${esc(j.status||'open')}</span></div>`).join('')}</div>`:'<div class="empty">Nog geen klussen.</div>'}`;
-    $('#newJob').addEventListener('click',()=>editJob());$$('[data-job]').forEach(x=>x.addEventListener('click',()=>showJob(x.dataset.job)));
+    title('Klussen');
+    const [allJobs,entries,company]=await Promise.all([JKDB.all('jobs'),JKDB.all('timeEntries'),JKDB.get('settings','company')]);
+    const jobs=allJobs.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    const invoiceJobs=jobs.filter(j=>jobPaymentType(j)==='invoice'),cashJobs=jobs.filter(j=>jobPaymentType(j)==='cash');
+    const sumAmount=list=>list.reduce((sum,j)=>sum+jobOwnAmount(j,entries,company),0);
+    const totalMinutes=jobs.reduce((sum,j)=>sum+jobMinutes(j,entries),0);
+    const visible=state.jobPaymentFilter==='invoice'?invoiceJobs:state.jobPaymentFilter==='cash'?cashJobs:jobs;
+    $('#view').innerHTML=`<div class="button-row"><button class="primary" id="newJob">+ Nieuwe klus</button></div>
+      <div class="card" style="margin-top:12px"><div class="section-inline"><h3>Snel overzicht</h3><span class="muted small">intern, geen factuur</span></div><div class="kpi-row"><div class="kpi"><strong>${hoursLabel(totalMinutes)}</strong><span>Geregistreerd</span></div><div class="kpi"><strong>${money(sumAmount(invoiceJobs))}</strong><span>Factuur</span></div><div class="kpi"><strong>${money(sumAmount(cashJobs))}</strong><span>Contant</span></div></div><p class="muted small" style="margin-bottom:0">Berekening: geregistreerde uren × uurtarief + eventueel extra bedrag. Dit overzicht maakt geen factuur en wordt niet opgenomen in het Jaaroverzicht Facturen.</p></div>
+      <div class="tabs" style="margin-top:12px"><button class="tab ${state.jobPaymentFilter==='all'?'active':''}" data-jpf="all">Alles</button><button class="tab ${state.jobPaymentFilter==='invoice'?'active':''}" data-jpf="invoice">Factuur</button><button class="tab ${state.jobPaymentFilter==='cash'?'active':''}" data-jpf="cash">Contant</button></div>
+      <div class="section-title"><h2>Klussen</h2></div>${visible.length?`<div class="list">${visible.map(j=>{const mins=jobMinutes(j,entries),amount=jobOwnAmount(j,entries,company),ptype=jobPaymentType(j);return `<div class="list-item clickable" data-job="${j.id}"><div class="main"><div class="title">${esc(j.title)}</div><div class="sub">${esc(j.clientName||'Geen klant')} · ${nlDate(j.date)||'geen datum'}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}</div><div class="sub">${hoursLabel(mins)} · ${money(amount)} · <strong>${ptype==='cash'?'Contant':'Factuur'}</strong>${j.paymentPaid?' · ✓ ontvangen':''}</div></div><span class="pill ${j.status==='afgerond'?'success':'warn'}">${esc(j.status||'open')}</span></div>`}).join('')}</div>`:'<div class="empty">Geen klussen in deze selectie.</div>'}`;
+    $('#newJob').addEventListener('click',()=>editJob());
+    $$('[data-job]').forEach(x=>x.addEventListener('click',()=>showJob(x.dataset.job)));
+    $$('[data-jpf]').forEach(b=>b.addEventListener('click',()=>{state.jobPaymentFilter=b.dataset.jpf;renderJobs()}));
   }
   async function editJob(id){
-    const j=id?await JKDB.get('jobs',id):{id:JKDB.id('job'),title:'',clientId:'',clientName:'',attention:'',street:'',postal:'',city:'',phone:'',email:'',date:today(),startTime:'',endTime:'',status:'open',notes:'',checklistId:'',checklistState:{},photoPolicy:'optional'};
-    const [clients,checks]=await Promise.all([JKDB.all('clients'),JKDB.all('checklists')]);
+    const j=id?await JKDB.get('jobs',id):{id:JKDB.id('job'),title:'',clientId:'',clientName:'',attention:'',street:'',postal:'',city:'',phone:'',email:'',date:today(),startTime:'',endTime:'',status:'open',notes:'',checklistId:'',checklistState:{},photoPolicy:'optional',paymentType:'invoice',hourlyRate:'',extraAmount:'',paymentPaid:false,quoteNeeded:false};
+    const [clients,checks,company]=await Promise.all([JKDB.all('clients'),JKDB.all('checklists'),JKDB.get('settings','company')]);
     const linked=clients.find(c=>c.id===j.clientId);
     const initial={name:linked?.name||j.clientName||'',attention:linked?.attention||j.attention||'',street:linked?.street||j.street||j.address||'',postal:linked?.postal||j.postal||'',city:linked?.city||j.city||'',phone:linked?.phone||j.phone||'',email:linked?.email||j.email||''};
-    modal(`${modalHead(id?'Klus bewerken':'Nieuwe klus')}<form id="jobForm"><div class="card form-section"><h3>Klus</h3><div class="field"><label>Omschrijving klus</label><input name="title" required value="${esc(j.title)}"></div><div class="form-grid"><div class="field"><label>Datum werkzaamheden</label><input type="date" name="date" value="${esc(j.date||'')}"></div><div class="field"><label>Starttijd</label><input type="time" name="startTime" value="${esc(j.startTime||'')}"></div><div class="field"><label>Eindtijd</label><input type="time" name="endTime" value="${esc(j.endTime||'')}"></div><div class="field"><label>Status</label><select name="status"><option ${j.status==='open'?'selected':''}>open</option><option ${j.status==='gepland'?'selected':''}>gepland</option><option ${j.status==='afgerond'?'selected':''}>afgerond</option></select></div></div><p class="muted small">De datum en tijden worden gebruikt voor de agenda-afspraak én automatisch als urenregistratie aangemaakt. Na de geplande eindtijd krijg je bij de eerstvolgende opening een herinnering om de uren te controleren en de factuur te maken.</p></div><div class="card form-section"><h3>Klantgegevens</h3><div class="field"><label>Kies bestaande klant</label><select name="clientId" id="jobClientPick"><option value="">Nieuwe klant / handmatig</option>${clients.map(c=>`<option value="${c.id}" ${j.clientId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>Naam/bedrijf</label><input name="clientName" required value="${esc(initial.name)}"></div><div class="field"><label>T.a.v.</label><input name="attention" value="${esc(initial.attention)}"></div><div class="field"><label>Adres</label><input name="street" value="${esc(initial.street)}"></div><div class="form-grid"><div class="field"><label>Postcode</label><input name="postal" value="${esc(initial.postal)}"></div><div class="field"><label>Plaats</label><input name="city" value="${esc(initial.city)}"></div><div class="field"><label>Telefoon</label><input name="phone" value="${esc(initial.phone)}"></div><div class="field"><label>E-mail</label><input type="email" name="email" value="${esc(initial.email)}"></div></div><p class="muted small">Deze klantgegevens worden ook gebruikt voor offertes en facturen. Wijzig je hier een gekoppelde klant, dan wordt de klantkaart bijgewerkt zodat alles gelijk blijft.</p></div><div class="card form-section"><div class="field"><label>Checklist</label><select name="checklistId" id="jobChecklistPick"><option value="">Geen</option>${checks.map(c=>`<option value="${c.id}" ${j.checklistId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>Foto's voor / tijdens / na</label><select name="photoPolicy" id="jobPhotoPolicy"><option value="none" ${(j.photoPolicy||'optional')==='none'?'selected':''}>Niet nodig bij deze klus</option><option value="optional" ${(j.photoPolicy||'optional')==='optional'?'selected':''}>Optioneel</option><option value="required" ${(j.photoPolicy||'optional')==='required'?'selected':''}>Verplicht voor, tijdens en na</option></select><small class="muted">Bij Catering / horeca wordt automatisch ‘Niet nodig’ voorgesteld. Bij andere kluschecklists wordt ‘Verplicht’ voorgesteld; je kunt dit altijd zelf wijzigen.</small></div><div class="field"><label>Notities</label><textarea name="notes">${esc(j.notes||'')}</textarea></div></div><div class="button-row"><button class="primary">Opslaan</button>${id?'<button type="button" class="danger-btn" id="delJob">Verwijderen</button>':''}</div></form>`);
+    modal(`${modalHead(id?'Klus bewerken':'Nieuwe klus')}<form id="jobForm"><div class="card form-section"><h3>Klus</h3><div class="field"><label>Omschrijving klus</label><input name="title" required value="${esc(j.title)}"></div><div class="form-grid"><div class="field"><label>Datum werkzaamheden</label><input type="date" name="date" value="${esc(j.date||'')}"></div><div class="field"><label>Starttijd</label><input type="time" name="startTime" value="${esc(j.startTime||'')}"></div><div class="field"><label>Eindtijd</label><input type="time" name="endTime" value="${esc(j.endTime||'')}"></div><div class="field"><label>Status</label><select name="status"><option ${j.status==='open'?'selected':''}>open</option><option ${j.status==='gepland'?'selected':''}>gepland</option><option ${j.status==='afgerond'?'selected':''}>afgerond</option></select></div></div><p class="muted small">De datum en tijden worden gebruikt voor de agenda-afspraak én automatisch als urenregistratie aangemaakt. Na de geplande eindtijd krijg je bij de eerstvolgende opening een herinnering om de uren te controleren en de factuur te maken.</p></div><div class="card form-section"><h3>Klantgegevens</h3><div class="field"><label>Kies bestaande klant</label><select name="clientId" id="jobClientPick"><option value="">Nieuwe klant / handmatig</option>${clients.map(c=>`<option value="${c.id}" ${j.clientId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>Naam/bedrijf</label><input name="clientName" required value="${esc(initial.name)}"></div><div class="field"><label>T.a.v.</label><input name="attention" value="${esc(initial.attention)}"></div><div class="field"><label>Adres</label><input name="street" value="${esc(initial.street)}"></div><div class="form-grid"><div class="field"><label>Postcode</label><input name="postal" value="${esc(initial.postal)}"></div><div class="field"><label>Plaats</label><input name="city" value="${esc(initial.city)}"></div><div class="field"><label>Telefoon</label><input name="phone" value="${esc(initial.phone)}"></div><div class="field"><label>E-mail</label><input type="email" name="email" value="${esc(initial.email)}"></div></div><p class="muted small">Deze klantgegevens worden ook gebruikt voor offertes en facturen. Wijzig je hier een gekoppelde klant, dan wordt de klantkaart bijgewerkt zodat alles gelijk blijft.</p></div><div class="card form-section"><h3>Eigen betaaloverzicht</h3><div class="form-grid"><div class="field"><label>Afhandeling</label><select name="paymentType"><option value="invoice" ${jobPaymentType(j)==='invoice'?'selected':''}>Factuur</option><option value="cash" ${jobPaymentType(j)==='cash'?'selected':''}>Contant</option></select></div><div class="field"><label>Uurtarief voor interne berekening</label><input type="number" step="0.01" min="0" name="hourlyRate" value="${esc(j.hourlyRate!==undefined&&j.hourlyRate!==''?j.hourlyRate:(company?.defaultRate||''))}"></div><div class="field"><label>Extra bedrag / materiaal</label><input type="number" step="0.01" min="0" name="extraAmount" value="${esc(j.extraAmount||'')}"></div><div class="field"><label>Betaalstatus</label><label class="checkline"><input type="checkbox" name="paymentPaid" ${j.paymentPaid?'checked':''}><span>Betaling ontvangen</span></label></div><label class="checkline"><input type="checkbox" name="quoteNeeded" ${j.quoteNeeded?'checked':''}><span>Offerte nodig voor deze klus</span></label></div><p class="muted small">Alleen voor je eigen snelle overzicht. De app rekent geregistreerde uren × uurtarief + extra bedrag. Dit maakt geen factuur en deze bedragen komen niet in het Jaaroverzicht Facturen. Het vinkje ‘Offerte nodig’ wordt gebruikt voor je actiemeldingen.</p></div><div class="card form-section"><div class="field"><label>Checklist</label><select name="checklistId" id="jobChecklistPick"><option value="">Geen</option>${checks.map(c=>`<option value="${c.id}" ${j.checklistId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>Foto's voor / tijdens / na</label><select name="photoPolicy" id="jobPhotoPolicy"><option value="none" ${(j.photoPolicy||'optional')==='none'?'selected':''}>Niet nodig bij deze klus</option><option value="optional" ${(j.photoPolicy||'optional')==='optional'?'selected':''}>Optioneel</option><option value="required" ${(j.photoPolicy||'optional')==='required'?'selected':''}>Verplicht voor, tijdens en na</option></select><small class="muted">Bij Catering / horeca wordt automatisch ‘Niet nodig’ voorgesteld. Bij andere kluschecklists wordt ‘Verplicht’ voorgesteld; je kunt dit altijd zelf wijzigen.</small></div><div class="field"><label>Notities</label><textarea name="notes">${esc(j.notes||'')}</textarea></div></div><div class="button-row"><button class="primary">Opslaan</button>${id?'<button type="button" class="danger-btn" id="delJob">Verwijderen</button>':''}</div></form>`);
     const fillFromClient=(client)=>{if(!client)return;const form=$('#jobForm');form.elements.clientName.value=client.name||'';form.elements.attention.value=client.attention||'';form.elements.street.value=client.street||'';form.elements.postal.value=client.postal||'';form.elements.city.value=client.city||'';form.elements.phone.value=client.phone||'';form.elements.email.value=client.email||'';};
     $('#jobClientPick').addEventListener('change',e=>fillFromClient(clients.find(c=>c.id===e.target.value)));
     let photoPolicyTouched=!!id;
@@ -386,7 +619,7 @@ const App = (() => {
       const ch=checks.find(c=>c.id===e.target.value),name=String(ch?.name||'').toLowerCase();
       $('#jobPhotoPolicy').value=!ch?'optional':name.includes('catering')||name.includes('horeca')?'none':'required';
     });
-    $('#jobForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);let clientId=f.get('clientId'),client=clients.find(c=>c.id===clientId);const values={name:String(f.get('clientName')||'').trim(),attention:f.get('attention')||'',street:f.get('street')||'',postal:f.get('postal')||'',city:f.get('city')||'',phone:f.get('phone')||'',email:f.get('email')||''};if(client){Object.assign(client,values);await JKDB.put('clients',client);}else if(values.name){client={id:JKDB.id('client'),...values,notes:''};clientId=client.id;await JKDB.put('clients',client);}const oldSchedule=`${j.date||''}|${jobStartTime(j)}|${jobEndTime(j)}`;Object.assign(j,{title:f.get('title'),clientId:clientId||'',clientName:values.name,attention:values.attention,street:values.street,address:values.street,postal:values.postal,city:values.city,phone:values.phone,email:values.email,date:f.get('date'),startTime:f.get('startTime')||'',endTime:f.get('endTime')||'',status:f.get('status'),checklistId:f.get('checklistId'),photoPolicy:f.get('photoPolicy')||'optional',notes:f.get('notes')});const newSchedule=`${j.date||''}|${jobStartTime(j)}|${jobEndTime(j)}`;if(oldSchedule!==newSchedule)j.completionPromptHandledAt=null;await JKDB.put('jobs',j);const autoEntry=await ensureJobTimeEntry(j);closeModal();toast(autoEntry?'Klus en urenregistratie opgeslagen':'Klus opgeslagen - vul start- en eindtijd in voor automatische uren');render();});
+    $('#jobForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);let clientId=f.get('clientId'),client=clients.find(c=>c.id===clientId);const values={name:String(f.get('clientName')||'').trim(),attention:f.get('attention')||'',street:f.get('street')||'',postal:f.get('postal')||'',city:f.get('city')||'',phone:f.get('phone')||'',email:f.get('email')||''};if(client){Object.assign(client,values);await JKDB.put('clients',client);}else if(values.name){client={id:JKDB.id('client'),...values,notes:''};clientId=client.id;await JKDB.put('clients',client);}const oldSchedule=`${j.date||''}|${jobStartTime(j)}|${jobEndTime(j)}`;Object.assign(j,{title:f.get('title'),clientId:clientId||'',clientName:values.name,attention:values.attention,street:values.street,address:values.street,postal:values.postal,city:values.city,phone:values.phone,email:values.email,date:f.get('date'),startTime:f.get('startTime')||'',endTime:f.get('endTime')||'',status:f.get('status'),paymentType:f.get('paymentType')==='cash'?'cash':'invoice',hourlyRate:f.get('hourlyRate')||'',extraAmount:f.get('extraAmount')||'',paymentPaid:f.get('paymentPaid')==='on',quoteNeeded:f.get('quoteNeeded')==='on',checklistId:f.get('checklistId'),photoPolicy:f.get('photoPolicy')||'optional',notes:f.get('notes')});const newSchedule=`${j.date||''}|${jobStartTime(j)}|${jobEndTime(j)}`;if(oldSchedule!==newSchedule)j.completionPromptHandledAt=null;await JKDB.put('jobs',j);const autoEntry=await ensureJobTimeEntry(j);closeModal();toast(autoEntry?'Klus en urenregistratie opgeslagen':'Klus opgeslagen - vul start- en eindtijd in voor automatische uren');render();});
     $('#delJob')?.addEventListener('click',async()=>{if(confirm('Klus verwijderen?')){if(j.autoTimeEntryId)await JKDB.remove('timeEntries',j.autoTimeEntryId).catch(()=>{});for(const p of (await JKDB.all('jobPhotos')).filter(x=>x.jobId===j.id))await JKDB.remove('jobPhotos',p.id);await JKDB.remove('jobs',j.id);closeModal();render();}});
   }
   const photoPhaseMeta={before:{label:'Voor',icon:'📷'},during:{label:'Tijdens',icon:'🔨'},after:{label:'Na',icon:'✅'}};
@@ -425,7 +658,7 @@ const App = (() => {
     await JKDB.put('jobPhotos',{id:JKDB.id('photo'),jobId,phase,blob,name,originalSize,compressedSize:blob?.size||0,createdAt:new Date().toISOString()});
   }
   async function showJob(id){
-    const j=await JKDB.get('jobs',id),entries=(await JKDB.all('timeEntries')).filter(e=>e.jobId===id).sort((a,b)=>entryDate(b).localeCompare(entryDate(a))),check=j.checklistId?await JKDB.get('checklists',j.checklistId):null,client=j.clientId?await JKDB.get('clients',j.clientId):null;
+    const j=await JKDB.get('jobs',id),entries=(await JKDB.all('timeEntries')).filter(e=>e.jobId===id).sort((a,b)=>entryDate(b).localeCompare(entryDate(a))),check=j.checklistId?await JKDB.get('checklists',j.checklistId):null,client=j.clientId?await JKDB.get('clients',j.clientId):null,company=await JKDB.get('settings','company');
     const photos=(await JKDB.all('jobPhotos')).filter(p=>p.jobId===id).sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
     const checkHtml=check?check.items.map((item,i)=>`<label class="checkline"><input type="checkbox" data-jobcheck="${i}" ${j.checklistState?.[i]?'checked':''}><span>${esc(item)}</span></label>`).join(''):'<span class="muted small">Geen checklist gekoppeld.</span>';
     const c=client||j,contact=[c.attention?`t.a.v. ${esc(c.attention)}`:'',c.street||j.address?esc(c.street||j.address):'',([c.postal,c.city].filter(Boolean).join(' ')?esc([c.postal,c.city].filter(Boolean).join(' ')):''),c.phone?esc(c.phone):'',c.email?esc(c.email):''].filter(Boolean).join('<br>');
@@ -437,7 +670,9 @@ const App = (() => {
     }).join('');
     const localPhotoInfo='<div class="successbox"><strong>Foto’s op al je apparaten</strong><br><span class="small">Dezelfde foto wordt bij de klus én onder Documenten → Klusfoto’s getoond. Er is maar één cloudbestand. Foto’s worden vóór upload verkleind tot ongeveer maximaal 250 KB per foto en gaan mee bij handmatige Sync.</span></div>';
     const photoNotice=(policy==='required'?'<div class="warning"><strong>Foto’s verplicht bij deze klus</strong><br><span class="small">Maak minimaal één foto vóór, tijdens en na de werkzaamheden.</span></div>':policy==='none'?'<div class="successbox"><strong>Foto’s niet nodig</strong><br><span class="small">Je kunt hieronder alsnog foto’s toevoegen als je dat wilt.</span></div>':'<div class="successbox"><strong>Foto’s optioneel</strong><br><span class="small">Je kunt voor, tijdens en na foto’s toevoegen zonder dat dit verplicht is.</span></div>')+localPhotoInfo;
-    modal(`${modalHead(j.title)}<div class="button-row"><button class="secondary" id="editThisJob">Bewerken</button><button class="primary" id="hoursThisJob">+ Uren</button><button class="secondary" id="quoteThisJob">+ Offerte</button><button class="secondary" id="invoiceThisJob">+ Factuur</button><button class="secondary" id="calendarThisJob">📅 Google Agenda</button></div><div class="card" style="margin-top:10px"><strong>${esc(c.name||j.clientName||'Geen klant')}</strong><div class="muted small">${nlDate(j.date)}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}${contact?'<br>'+contact:''}</div>${j.notes?`<p class="small">${esc(j.notes)}</p>`:''}</div><div class="section-title"><h2>Foto’s</h2><span class="muted small">${esc(photoPolicyText(policy))}</span></div>${photoNotice}<div class="job-photo-sections">${photoCards}</div><div class="section-title"><h2>Checklist</h2></div><div class="card">${checkHtml}</div><div class="section-title"><h2>Uren</h2><span class="muted small">${(entries.reduce((s,e)=>s+entryMinutes(e),0)/60).toFixed(2).replace('.',',')} u</span></div>${entries.length?`<div class="list">${entries.map(e=>`<div class="list-item clickable" data-time="${e.id}"><div class="main"><div class="title">${nlDate(entryDate(e))}</div><div class="sub">${esc(entryFrom(e))} - ${esc(entryTo(e))}${e.note?' · '+esc(e.note):''}</div></div><strong>${durationHM(entryMinutes(e))}</strong></div>`).join('')}</div>`:'<div class="empty">Nog geen uren.</div>'}`);
+
+    const ownMinutes=entries.reduce((sum,e)=>sum+entryMinutes(e),0),ownRate=jobRate(j,company),ownExtra=jobExtra(j),ownTotal=jobOwnAmount(j,entries,company);
+    const paymentCard=`<div class="section-title"><h2>Eigen betaaloverzicht</h2><span class="pill ${jobPaymentType(j)==='cash'?'warn':'success'}">${esc(jobPaymentLabel(j))}</span></div><div class="card"><div class="kpi-row"><div class="kpi"><strong>${hoursLabel(ownMinutes)}</strong><span>Uren</span></div><div class="kpi"><strong>${money(ownRate)}</strong><span>Uurtarief</span></div><div class="kpi"><strong>${money(ownTotal)}</strong><span>Totaal</span></div></div><div class="muted small">${hoursLabel(ownMinutes)} × ${money(ownRate)}${ownExtra?` + ${money(ownExtra)} extra`:''} = <strong>${money(ownTotal)}</strong> · ${j.paymentPaid?'✓ betaling ontvangen':'nog niet als ontvangen gemarkeerd'}</div><div class="muted small" style="margin-top:6px">Dit is alleen je interne rekensom en wordt niet opgenomen in het Jaaroverzicht Facturen.</div></div>`;    modal(`${modalHead(j.title)}<div class="button-row"><button class="secondary" id="editThisJob">Bewerken</button><button class="primary" id="hoursThisJob">+ Uren</button><button class="secondary" id="quoteThisJob">+ Offerte</button><button class="secondary" id="invoiceThisJob">+ Factuur</button><button class="secondary" id="calendarThisJob">📅 Google Agenda</button></div><div class="card" style="margin-top:10px"><strong>${esc(c.name||j.clientName||'Geen klant')}</strong><div class="muted small">${nlDate(j.date)}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}${contact?'<br>'+contact:''}</div>${j.notes?`<p class="small">${esc(j.notes)}</p>`:''}</div>${paymentCard}<div class="section-title"><h2>Foto’s</h2><span class="muted small">${esc(photoPolicyText(policy))}</span></div>${photoNotice}<div class="job-photo-sections">${photoCards}</div><div class="section-title"><h2>Checklist</h2></div><div class="card">${checkHtml}</div><div class="section-title"><h2>Uren</h2><span class="muted small">${(entries.reduce((s,e)=>s+entryMinutes(e),0)/60).toFixed(2).replace('.',',')} u</span></div>${entries.length?`<div class="list">${entries.map(e=>`<div class="list-item clickable" data-time="${e.id}"><div class="main"><div class="title">${nlDate(entryDate(e))}</div><div class="sub">${esc(entryFrom(e))} - ${esc(entryTo(e))}${e.note?' · '+esc(e.note):''}</div></div><strong>${durationHM(entryMinutes(e))}</strong></div>`).join('')}</div>`:'<div class="empty">Nog geen uren.</div>'}`);
     $('#editThisJob').addEventListener('click',()=>{closeModal();editJob(id)});$('#hoursThisJob').addEventListener('click',()=>{closeModal();editTimeEntry(null,id)});$('#quoteThisJob').addEventListener('click',()=>{closeModal();createBusinessDoc('Offerte',{jobId:j.id,clientId:j.clientId,workDate:j.date})});$('#invoiceThisJob').addEventListener('click',()=>{closeModal();createBusinessDoc('Factuur',{jobId:j.id,clientId:j.clientId,workDate:j.date})});$('#calendarThisJob').addEventListener('click',()=>openGoogleCalendarForJob(j));$$('[data-time]').forEach(x=>x.addEventListener('click',()=>{editTimeEntry(x.dataset.time)}));$$('[data-jobcheck]').forEach(c=>c.addEventListener('change',async()=>{j.checklistState=j.checklistState||{};j.checklistState[c.dataset.jobcheck]=c.checked;await JKDB.put('jobs',j)}));
     $$('[data-camera]').forEach(b=>b.addEventListener('click',()=>document.querySelector(`[data-camera-input="${b.dataset.camera}"]`)?.click()));
     $$('[data-upload]').forEach(b=>b.addEventListener('click',()=>document.querySelector(`[data-upload-input="${b.dataset.upload}"]`)?.click()));
@@ -594,7 +829,7 @@ const App = (() => {
     $('#backToFolders').addEventListener('click',()=>{state.docFolder=null;renderDocuments()});$('#importDocs').addEventListener('click',()=>chooseImportFolder());renderDocumentList(docs);
   }
   function invoiceReportDate(d){
-    const raw=String(d?.meta?.docDate||d?.createdAt||'');
+    const raw=String(d?.meta?.docDate||((d?.meta?.manualImport||d?.meta?.pdfParseVersion)?'':d?.createdAt)||'');
     const m=raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
     return m?`${m[1]}-${m[2]}-${m[3]}`:'';
   }
@@ -609,11 +844,14 @@ const App = (() => {
     if(line)lines.push(line);return lines;
   }
   async function showAnnualInvoiceReport(){
+    toast("Handmatig geüploade PDF's controleren...");
+    const scan=await reprocessImportedBusinessDocs(false);
+    if(scan.checked)toast(`${scan.recognized} van ${scan.checked} geüploade PDF${scan.checked===1?'':'s'} herkend`);
     const docs=(await JKDB.all('documents')).filter(d=>docFolder(d)==='factuur');
     const years=[...new Set(docs.map(invoiceReportYear).filter(Boolean))].sort((a,b)=>b-a);
     if(!years.length)years.push(new Date().getFullYear());
     const options=years.map(y=>`<option value="${y}">${y}</option>`).join('');
-    modal(`${modalHead('Jaaroverzicht facturen')}<div class="card"><p>Maak een PDF-overzicht van je verkoopfacturen per kalenderjaar.</p><div class="field"><label>Kalenderjaar</label><select id="annualInvoiceYear">${options}</select></div><div class="muted small">Het overzicht bevat factuurnummer, datum, klant, werkzaamheden, aantallen/prijzen, totaalbedrag en betaalstatus voor zover deze gegevens in de app zijn opgeslagen. De originele facturen blijven de fiscale brondocumenten.</div><button class="secondary" id="downloadAnnualInvoices" style="width:100%;margin-top:14px">Download jaaroverzicht PDF</button></div>`);
+    modal(`${modalHead('Jaaroverzicht facturen')}<div class="card"><p>Maak een PDF-overzicht van je verkoopfacturen per kalenderjaar.</p><div class="field"><label>Kalenderjaar</label><select id="annualInvoiceYear">${options}</select></div><div class="muted small">Handmatig geüploade facturen worden automatisch uitgelezen, ook als ze een ander sjabloon hebben. Herkende factuurnummers, datums, klantgegevens, bedragen, regels en KOR-vermelding worden meegenomen. De originele facturen blijven de fiscale brondocumenten.</div><button class="secondary" id="downloadAnnualInvoices" style="width:100%;margin-top:14px">Download jaaroverzicht PDF</button></div>`);
     $('#downloadAnnualInvoices').addEventListener('click',async()=>{
       const year=Number($('#annualInvoiceYear').value);const btn=$('#downloadAnnualInvoices');btn.disabled=true;btn.textContent='PDF maken...';
       try{await generateAnnualInvoiceReport(year);closeModal();toast(`Jaaroverzicht ${year} gedownload`);}catch(err){console.error(err);alert('Jaaroverzicht maken mislukt: '+(err.message||err));btn.disabled=false;btn.textContent='Download jaaroverzicht PDF';}
@@ -638,9 +876,9 @@ const App = (() => {
     let iy=y-20;const companyName=company?.companyName||'JK Works Dordrecht',owner=company?.owner||'Jeremy Korstanje';
     page.drawText(pdfSafeText(companyName),{x:M+14,y:iy,size:12,font:bold,color:dark});iy-=16;page.drawText(pdfSafeText(owner),{x:M+14,y:iy,size:9,font:regular,color:dark});iy-=14;page.drawText('Van Blanckenburgstraat 72, 3314 WP Dordrecht',{x:M+14,y:iy,size:8.5,font:regular,color:dark});iy-=14;page.drawText('KVK 42078161  |  BTW-ID NL005477968B66',{x:M+14,y:iy,size:8.5,font:regular,color:dark});
     y-=114;
-    const structured=invoices.filter(d=>Number.isFinite(Number(d?.meta?.total))),total=structured.reduce((s,d)=>s+Number(d.meta.total||0),0),paid=structured.filter(d=>d.meta?.paid).reduce((s,d)=>s+Number(d.meta.total||0),0),open=total-paid;
+    const structured=invoices.filter(d=>d?.meta?.total!=null&&d.meta.total!==''&&Number.isFinite(Number(d.meta.total))),total=structured.reduce((s,d)=>s+Number(d.meta.total||0),0),paid=structured.filter(d=>d.meta?.paid).reduce((s,d)=>s+Number(d.meta.total||0),0),open=total-paid,vatTotal=invoices.reduce((s,d)=>s+(d.meta?.vatAmount!=null&&Number.isFinite(Number(d.meta.vatAmount))?Number(d.meta.vatAmount):0),0);
     page.drawText('Samenvatting',{x:M,y:y-12,size:13,font:bold,color:dark});y-=28;
-    const stats=[['Aantal facturen',String(invoices.length)],['Totaal factuurbedragen',reportMoney(total)],['Betaald gemarkeerd',reportMoney(paid)],['Openstaand gemarkeerd',reportMoney(open)]];
+    const stats=[['Aantal facturen',String(invoices.length)],['Totaal factuurbedragen',reportMoney(total)],['Waarvan uitgelezen btw',reportMoney(vatTotal)],['Betaald gemarkeerd',reportMoney(paid)],['Openstaand gemarkeerd',reportMoney(open)]];
     for(const [a,b] of stats)labelValue(a,b);
     if(company?.kor){labelValue('KOR',company.korSince?`Actief sinds ${nlDate(company.korSince)}`:'Actief');}
     if(structured.length!==invoices.length){text(`${invoices.length-structured.length} factuur/facturen hebben geen gestructureerd totaalbedrag in de app en zijn daarom niet meegenomen in de totaalsommen. Controleer daarvoor de originele PDF.`,M,8.5,bold,bronze,contentW,11);y-=4;}
@@ -648,7 +886,7 @@ const App = (() => {
     page.drawLine({start:{x:M,y},end:{x:W-M,y},thickness:0.7,color:line});y-=18;
     page.drawText('Facturen',{x:M,y:y-10,size:14,font:bold,color:dark});y-=28;
     for(const d of invoices){
-      const m=d.meta||{},number=invoiceReportNumber(d),date=invoiceReportDate(d),client=m.client||{},amount=Number.isFinite(Number(m.total))?reportMoney(m.total):'Zie originele factuur',status=m.paid?'Betaald':(m.sent?'Verstuurd / niet als betaald gemarkeerd':'Niet als verstuurd gemarkeerd');
+      const m=d.meta||{},number=invoiceReportNumber(d),date=invoiceReportDate(d),client=m.client||{},amount=(m.total!=null&&m.total!==''&&Number.isFinite(Number(m.total)))?reportMoney(m.total):'Zie originele factuur',status=m.paid?'Betaald':(m.sent?'Verstuurd / niet als betaald gemarkeerd':'Niet als verstuurd gemarkeerd');
       ensure(94);
       page.drawRectangle({x:M,y:y-24,width:contentW,height:24,color:light});
       page.drawText(pdfSafeText(number),{x:M+10,y:y-16,size:9.5,font:bold,color:dark});
@@ -657,12 +895,12 @@ const App = (() => {
       const address=[client.address,client.postalCity].filter(Boolean).join(', ');if(address)labelValue('Adres afnemer',address);
       if(m.workDate)labelValue('Datum prestatie',nlDate(m.workDate));
       labelValue('Status',status);
-      const inKor=!!(company?.kor&&company?.korSince&&date&&date>=company.korSince);labelValue('BTW/KOR',inKor?'KOR - vrijgesteld van btw':'Zie originele factuur voor btw-specificatie');
+      const inKor=!!(m.korDetected||(company?.kor&&company?.korSince&&date&&date>=company.korSince));labelValue('BTW/KOR',inKor?'KOR - vrijgesteld van btw':'Zie originele factuur voor btw-specificatie');if(m.vatAmount!=null&&Number.isFinite(Number(m.vatAmount)))labelValue('BTW-bedrag',reportMoney(m.vatAmount));
       const lines=(m.lines||[]).filter(l=>String(l?.description||'').trim()||num(l?.qty)||num(l?.price));
       if(lines.length){
         ensure(28);page.drawText('Werkzaamheden / regels',{x:M,y:y-9,size:8,font:bold,color:muted});y-=17;
         for(const l of lines){const q=num(l.qty),p=num(l.price),lt=q*p,desc=String(l.description||'Omschrijving');const prefix=`${String(l.qty||'1')} x `,suffix=` @ ${reportMoney(p)} = ${reportMoney(lt)}`;const whole=prefix+desc+suffix;text(whole,M+10,8.2,regular,dark,contentW-20,10.5);}
-      }else{text('Geen gestructureerde factuurregels opgeslagen - raadpleeg de originele PDF.',M+10,8.2,regular,muted,contentW-20,10.5);}
+      }else{text(m.manualImport?'Geen betrouwbare factuurregels automatisch herkend - overige gegevens zijn wel uit de PDF overgenomen. Raadpleeg voor de regels de originele PDF.':'Geen gestructureerde factuurregels opgeslagen - raadpleeg de originele PDF.',M+10,8.2,regular,muted,contentW-20,10.5);}
       y-=6;page.drawLine({start:{x:M,y},end:{x:W-M,y},thickness:0.5,color:line});y-=15;
     }
     const pages=pdf.getPages(),generated=new Intl.DateTimeFormat('nl-NL',{day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date());
@@ -671,7 +909,7 @@ const App = (() => {
   }
   function docFolder(d){const k=String(d.folder||d.kind||'').toLowerCase();return k.includes('offert')?'offerte':k.includes('fact')?'factuur':'diversen'}
   function docStatusHtml(d){const f=docFolder(d),m=d.meta||{};if(f==='factuur')return `<span class="status-chip ${m.sent?'on':''}">${m.sent?'✓ ':''}Verstuurd</span><span class="status-chip ${m.paid?'on':''}">${m.paid?'✓ ':''}Betaald</span>`;if(f==='offerte')return `<span class="status-chip ${m.sent?'on':''}">${m.sent?'✓ ':''}Verstuurd</span><span class="status-chip ${m.confirmed?'on':''}">${m.confirmed?'✓ ':''}Bevestigd</span>`;return ''}
-  function renderDocumentList(docs){const c=$('#docList');if(!c)return;const filtered=docs.filter(d=>docFolder(d)===state.docFolder).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));c.innerHTML=`<div class="section-title"><h2>${state.docFolder==='offerte'?'Offertes':state.docFolder==='factuur'?'Facturen':'Diversen'}</h2></div>${filtered.length?`<div class="list">${filtered.map(d=>`<div class="list-item clickable" data-doc="${d.id}"><div class="document-card"><div class="doc-icon">PDF</div><div class="main"><div class="title">${esc(d.filename)}</div><div class="sub">${fmtDateTime(d.createdAt)} · ${esc(d.kind||'PDF')}</div><div class="status-row">${docStatusHtml(d)}</div></div></div><span>›</span></div>`).join('')}</div>`:'<div class="empty">Deze map is nog leeg.</div>'}`;$$('[data-doc]').forEach(x=>x.addEventListener('click',()=>showDocument(x.dataset.doc)))}
+  function renderDocumentList(docs){const c=$('#docList');if(!c)return;const filtered=docs.filter(d=>docFolder(d)===state.docFolder).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));c.innerHTML=`<div class="section-title"><h2>${state.docFolder==='offerte'?'Offertes':state.docFolder==='factuur'?'Facturen':'Diversen'}</h2></div>${filtered.length?`<div class="list">${filtered.map(d=>{const m=d.meta||{},parsed=m.manualImport&&m.pdfParseVersion===1?(m.businessVerified?' · PDF uitgelezen':' · PDF controle nodig'):'';return `<div class="list-item clickable" data-doc="${d.id}"><div class="document-card"><div class="doc-icon">PDF</div><div class="main"><div class="title">${esc(d.filename)}</div><div class="sub">${m.docDate?nlDate(m.docDate):fmtDateTime(d.createdAt)} · ${esc(d.kind||'PDF')}${parsed}</div>${m.total!=null?`<div class="sub"><strong>${money(m.total)}</strong>${m.number?' · '+esc(m.number):''}</div>`:''}<div class="status-row">${docStatusHtml(d)}</div></div></div><span>›</span></div>`}).join('')}</div>`:'<div class="empty">Deze map is nog leeg.</div>'}`;$$('[data-doc]').forEach(x=>x.addEventListener('click',()=>showDocument(x.dataset.doc)))}
   async function renderJobPhotoDocuments(photos,jobs){
     const jobMap=new Map(jobs.map(j=>[j.id,j]));
     const groups=new Map();
@@ -705,13 +943,56 @@ const App = (() => {
     modal(`${modalHead('PDF uploaden')}<p class="muted small">Kies in welke map je het bestand wilt plaatsen.</p><div class="grid two"><button class="quick" data-import-folder="offerte"><span class="emoji">📄</span><strong>Offertes</strong></button><button class="quick" data-import-folder="factuur"><span class="emoji">🧾</span><strong>Facturen</strong></button><button class="quick" data-import-folder="diversen"><span class="emoji">📁</span><strong>Diversen</strong></button></div>`);
     $$('[data-import-folder]').forEach(b=>b.addEventListener('click',()=>{state.importFolderTarget=b.dataset.importFolder;closeModal();$('#hiddenExistingPdfInput').click();}));
   }
-  async function importExistingPdfs(files,folder='diversen'){let count=0;folder=['offerte','factuur','diversen'].includes(folder)?folder:'diversen';for(const file of files){if(!file.name.toLowerCase().endsWith('.pdf'))continue;await JKDB.put('documents',{id:JKDB.id('doc'),filename:file.name,kind:folder==='offerte'?'Offerte':folder==='factuur'?'Factuur':'Diversen',folder,blob:new Blob([await file.arrayBuffer()],{type:'application/pdf'}),createdAt:new Date().toISOString(),meta:{sent:false,paid:false,confirmed:false}});count++;}toast(`${count} PDF${count===1?'':'s'} geüpload naar ${folder==='offerte'?'Offertes':folder==='factuur'?'Facturen':'Diversen'}`);state.docFolder=folder;if(state.route==='documents')renderDocuments();}
+  async function importExistingPdfs(files,folder='diversen'){
+    let count=0,recognized=0,failed=0;folder=['offerte','factuur','diversen'].includes(folder)?folder:'diversen';const company=await JKDB.get('settings','company');
+    for(const file of files){
+      if(!file.name.toLowerCase().endsWith('.pdf'))continue;
+      const doc={id:JKDB.id('doc'),filename:file.name,kind:folder==='offerte'?'Offerte':folder==='factuur'?'Factuur':'Diversen',folder,blob:new Blob([await file.arrayBuffer()],{type:'application/pdf'}),createdAt:new Date().toISOString(),meta:{sent:false,paid:false,confirmed:false,manualImport:true}};
+      await JKDB.put('documents',doc);count++;
+      if(['offerte','factuur'].includes(folder)){toast(`PDF uitlezen: ${file.name}`);await parseStoredBusinessDocument(doc,company,true);if(doc.meta?.businessVerified)recognized++;else failed++;}
+    }
+    if(['offerte','factuur'].includes(folder)&&count)toast(`${count} PDF${count===1?'':'s'} geüpload · ${recognized} automatisch herkend${failed?` · ${failed} controle nodig`:''}`);else toast(`${count} PDF${count===1?'':'s'} geüpload naar Diversen`);
+    state.docFolder=folder;if(state.route==='documents')renderDocuments();
+  }
 
   async function nextDocNumber(kind){
     const prefix=kind==='Factuur'?'FAC':'OFF',year=new Date().getFullYear(),docs=await JKDB.all('documents');let max=0;for(const d of docs){const n=d.meta?.number||d.number||d.filename||'',m=String(n).match(new RegExp(`${prefix}-${year}-(\\d+)`,'i'));if(m)max=Math.max(max,Number(m[1]));}return `${prefix}-${year}-${String(max+1).padStart(3,'0')}`;
   }
+  function businessJobContext(job,checklists=[]){
+    const checklist=checklists.find(c=>c.id===job?.checklistId);
+    return `${job?.title||''} ${checklist?.name||''}`.toLowerCase();
+  }
+  function jobTimeRange(job){
+    const start=String(job?.startTime||'').trim(),end=String(job?.endTime||'').trim();
+    if(start&&end)return `${start} - ${end}`;
+    if(start)return `vanaf ${start}`;
+    return '';
+  }
+  function linkedQuoteNumber(job,documents=[]){
+    if(!job?.id)return '';
+    const quotes=documents.filter(d=>docFolder(d)==='offerte'&&d.meta?.jobId===job.id).sort((a,b)=>{
+      const ac=a.meta?.confirmed?1:0,bc=b.meta?.confirmed?1:0;if(ac!==bc)return bc-ac;
+      return String(b.meta?.docDate||b.createdAt||'').localeCompare(String(a.meta?.docDate||a.createdAt||''));
+    });
+    return String(quotes[0]?.meta?.number||'').trim();
+  }
+  function businessDescriptionForJob(job,kind,documents=[],checklists=[]){
+    if(!job)return 'Werkzaamheden';
+    const ctx=businessJobContext(job,checklists),date=job.date?nlDate(job.date):'',time=jobTimeRange(job);
+    if(/catering|horeca/.test(ctx))return ['Cateringwerkzaamheden',date,time].filter(Boolean).join(' - ');
+    if(/keuken/.test(ctx)){
+      if(kind==='Factuur'){
+        const quote=linkedQuoteNumber(job,documents);
+        return `Keuken plaatsen en afwerken conform geaccepteerde offerte/opdracht${quote?' '+quote:''}`;
+      }
+      return 'Keuken plaatsen en afwerken';
+    }
+    const title=String(job.title||'').trim();
+    if(title&&!/^werkuren$/i.test(title))return [title,date].filter(Boolean).join(' - ');
+    return ['Werkzaamheden',date].filter(Boolean).join(' - ');
+  }
   async function createBusinessDoc(kind,prefill={}){
-    const [clients,entries,company,jobs]=await Promise.all([JKDB.all('clients'),JKDB.all('timeEntries'),JKDB.get('settings','company'),JKDB.all('jobs')]);
+    const [clients,entries,company,jobs,checklists,documents]=await Promise.all([JKDB.all('clients'),JKDB.all('timeEntries'),JKDB.get('settings','company'),JKDB.all('jobs'),JKDB.all('checklists'),JKDB.all('documents')]);
     const number=await nextDocNumber(kind),isInvoice=kind==='Factuur',docDate=today();
     const initialWorkDate=prefill.workDate||'';
     const maxQuoteDeadline=()=>{
@@ -731,19 +1012,26 @@ const App = (() => {
     const lines=(prefill.lines||[]).slice(0,4);while(lines.length<4)lines.push({qty:'',description:'',price:''});
     const pClient=prefill.client||{};
     const prefillJob=jobs.find(j=>j.id===prefill.jobId)||null;
-    modal(`${modalHead('Nieuwe '+kind.toLowerCase())}<form id="businessDocForm"><div class="card form-section"><h3>Document</h3><div class="field"><label>Kies klus</label><select id="jobPick" required><option value="">Selecteer een klus</option>${jobs.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(j=>`<option value="${j.id}" ${prefill.jobId===j.id?'selected':''}>${esc(j.title)}${j.clientName?' · '+esc(j.clientName):''}${j.date?' · '+nlDate(j.date):''}</option>`).join('')}</select><small class="muted">De gekozen klus wordt gebruikt voor klantgegevens, datum werkzaamheden en de koppeling met uren. De klusnaam wordt niet als documentregel toegevoegd.</small><button type="button" class="secondary" id="calendarBusinessJob" style="margin-top:8px">📅 Zet gekozen klus in agenda</button></div><div class="form-grid"><div class="field"><label>${kind}nummer</label><input name="number" required value="${esc(number)}"></div><div class="field"><label>${isInvoice?'Factuurdatum':'Datum'}</label><input type="date" name="docDate" required value="${esc(docDate)}"></div><div class="field"><label>${isInvoice?'Datum werkzaamheden':'Werkzaamheden op'}</label>${isInvoice?`<input name="workDate" placeholder="bijv. 04-10-2026" value="${esc(initialWorkDate)}">`:`<input type="date" name="workDate" value="${esc(initialWorkDate)}">`}</div><div class="field"><label>${isInvoice?'Vervaldatum':'Geldig t/m'}</label><input type="date" name="deadline" required value="${esc(deadline)}" ${isInvoice?'':`max="${esc(deadline)}"`}>${isInvoice?'<small class="muted">Standaard 14 dagen na de factuurdatum. Je kunt de vervaldatum handmatig aanpassen.</small>':'<small class="muted">Automatisch maximaal 4 weken na offertedatum, of uiterlijk de dag vóór de werkzaamheden.</small>'}</div></div></div>
+    if(prefillJob){
+      const suggested=businessDescriptionForJob(prefillJob,kind,documents,checklists),current=String(lines[0]?.description||'').trim();
+      const kitchenInvoice=isInvoice&&/keuken/.test(businessJobContext(prefillJob,checklists))&&/^Keuken plaatsen en afwerken$/i.test(current);
+      if(!current||/^Werkuren$/i.test(current)||kitchenInvoice)lines[0].description=suggested;
+    }
+    modal(`${modalHead('Nieuwe '+kind.toLowerCase())}<form id="businessDocForm"><div class="card form-section"><h3>Document</h3><div class="field"><label>Kies klus</label><select id="jobPick" required><option value="">Selecteer een klus</option>${jobs.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(j=>`<option value="${j.id}" ${prefill.jobId===j.id?'selected':''}>${esc(j.title)}${j.clientName?' · '+esc(j.clientName):''}${j.date?' · '+nlDate(j.date):''}</option>`).join('')}</select><small class="muted">De gekozen klus wordt gebruikt voor klantgegevens, datum werkzaamheden en de koppeling met uren. De app maakt op basis van de gekozen klus automatisch een passende omschrijving op regel 1. Je kunt deze omschrijving altijd zelf aanpassen.</small><button type="button" class="secondary" id="calendarBusinessJob" style="margin-top:8px">📅 Zet gekozen klus in agenda</button></div><div class="form-grid"><div class="field"><label>${kind}nummer</label><input name="number" required value="${esc(number)}"></div><div class="field"><label>${isInvoice?'Factuurdatum':'Datum'}</label><input type="date" name="docDate" required value="${esc(docDate)}"></div><div class="field"><label>${isInvoice?'Datum werkzaamheden':'Werkzaamheden op'}</label>${isInvoice?`<input name="workDate" placeholder="bijv. 04-10-2026" value="${esc(initialWorkDate)}">`:`<input type="date" name="workDate" value="${esc(initialWorkDate)}">`}</div><div class="field"><label>${isInvoice?'Vervaldatum':'Geldig t/m'}</label><input type="date" name="deadline" required value="${esc(deadline)}" ${isInvoice?'':`max="${esc(deadline)}"`}>${isInvoice?'<small class="muted">Standaard 14 dagen na de factuurdatum. Je kunt de vervaldatum handmatig aanpassen.</small>':'<small class="muted">Automatisch maximaal 4 weken na offertedatum, of uiterlijk de dag vóór de werkzaamheden.</small>'}</div></div></div>
       <div class="card form-section"><h3>Klant</h3><div class="field"><label>Kies bestaande klant</label><select id="clientPick"><option value="">Handmatig invullen</option>${clients.map(c=>`<option value="${c.id}" ${prefill.clientId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>Naam/bedrijf</label><input name="clientName" value="${esc(pClient.name||'')}"></div><div class="field"><label>T.a.v.</label><input name="attention" value="${esc(pClient.attention||'')}"></div><div class="field"><label>Adres</label><input name="address" value="${esc(pClient.address||pClient.street||'')}"></div><div class="field"><label>Postcode/Plaats</label><input name="postalCity" value="${esc(pClient.postalCity||[pClient.postal,pClient.city].filter(Boolean).join(' '))}"></div><div class="form-grid"><div class="field"><label>Telefoon</label><input name="phone" value="${esc(pClient.phone||'')}"></div><div class="field"><label>E-mail</label><input type="email" name="email" value="${esc(pClient.email||'')}"></div></div><p class="muted small">Kies je een bestaande klant, dan worden alle klantgegevens automatisch overgenomen.</p></div>
-      <div class="card form-section"><div class="section-inline"><h3>Werkzaamheden / materiaal</h3><span class="muted small">max. 4 regels in huidig sjabloon</span></div><div class="line-head"><span>Aantal</span><span>Omschrijving</span><span>Prijs p/st</span><span>Totaal</span></div>${lines.map((l,i)=>`<div class="invoice-line" data-line="${i}"><input inputmode="decimal" name="qty${i}" placeholder="1" value="${esc(l.qty||'')}"><input name="desc${i}" placeholder="${isInvoice&&i===0?'Werkuren':'Omschrijving'}" value="${esc(isInvoice&&i===0?(l.description||'Werkuren'):(l.description||''))}" ${isInvoice&&i===0?'readonly':''}><input inputmode="decimal" name="price${i}" placeholder="0,00" value="${esc(l.price||'')}"><output id="lineTotal${i}">€ 0,00</output></div>`).join('')}<div class="doc-total"><span>Totaal te betalen</span><strong id="grandTotal">€ 0,00</strong></div></div>
-      ${entries.length?`<div class="card form-section"><div class="section-inline"><h3>Uren uit urenregistratie</h3><span class="muted small">optioneel</span></div><p class="muted small">Selecteer registraties van de gekozen klus. De app telt ze op en zet ze als één werkurenregel op regel 1.</p><div class="hours-select">${entries.sort((a,b)=>entryDate(b).localeCompare(entryDate(a))).slice(0,30).map(e=>`<label class="packing-row"><input type="checkbox" data-hour-entry="${e.id}"><span><strong>${nlDate(entryDate(e))}</strong> · ${esc(e.jobTitle||'Algemeen')} · ${durationHM(entryMinutes(e))} u</span></label>`).join('')}</div><div class="form-grid" style="margin-top:10px"><div class="field"><label>Uurtarief voor geselecteerde uren</label><input id="hourRate" inputmode="decimal" value="${esc(company?.defaultRate||'')}"></div><div class="field action-field"><button type="button" class="secondary" id="hoursToLine">Voeg geselecteerde uren toe</button></div></div></div>`:''}
+      <div class="card form-section"><div class="section-inline"><h3>Werkzaamheden / materiaal</h3><span class="muted small">max. 4 regels in huidig sjabloon</span></div><div class="line-head"><span>Aantal</span><span>Omschrijving</span><span>Prijs p/st</span><span>Totaal</span></div>${lines.map((l,i)=>`<div class="invoice-line" data-line="${i}"><input inputmode="decimal" name="qty${i}" placeholder="1" value="${esc(l.qty||'')}"><input name="desc${i}" placeholder="${i===0?'Passende werkzaamheden':'Omschrijving'}" value="${esc(l.description||'')}"><input inputmode="decimal" name="price${i}" placeholder="0,00" value="${esc(l.price||'')}"><output id="lineTotal${i}">€ 0,00</output></div>`).join('')}<div class="doc-total"><span>Totaal te betalen</span><strong id="grandTotal">€ 0,00</strong></div></div>
+      ${entries.length?`<div class="card form-section"><div class="section-inline"><h3>Uren uit urenregistratie</h3><span class="muted small">optioneel</span></div><p class="muted small">Selecteer registraties van de gekozen klus. De app telt ze op en zet ze op regel 1 met een passende omschrijving voor de gekozen klus; uren en uurtarief blijven apart zichtbaar.</p><div class="hours-select">${entries.sort((a,b)=>entryDate(b).localeCompare(entryDate(a))).slice(0,30).map(e=>`<label class="packing-row"><input type="checkbox" data-hour-entry="${e.id}"><span><strong>${nlDate(entryDate(e))}</strong> · ${esc(e.jobTitle||'Algemeen')} · ${durationHM(entryMinutes(e))} u</span></label>`).join('')}</div><div class="form-grid" style="margin-top:10px"><div class="field"><label>Uurtarief voor geselecteerde uren</label><input id="hourRate" inputmode="decimal" value="${esc(company?.defaultRate||'')}"></div><div class="field action-field"><button type="button" class="secondary" id="hoursToLine">Voeg geselecteerde uren toe</button></div></div></div>`:''}
       <div class="button-row"><button class="primary">Maak PDF</button><button type="button" class="secondary" data-close>Annuleren</button></div></form>`);
 
     function recalc(){let grand=0;for(let i=0;i<4;i++){const q=num($(`[name=qty${i}]`).value),p=num($(`[name=price${i}]`).value),t=q*p;grand+=t;$(`#lineTotal${i}`).textContent=money(t)}$('#grandTotal').textContent=money(grand);return grand}
     $$('[name^=qty], [name^=price]').forEach(x=>x.addEventListener('input',recalc));recalc();
     const fillDocClient=(c)=>{if(!c)return;$('#clientPick').value=c.id||'';$('[name=clientName]').value=c.name||'';$('[name=attention]').value=c.attention||'';$('[name=address]').value=c.street||c.address||'';$('[name=postalCity]').value=c.postalCity||[c.postal,c.city].filter(Boolean).join(' ');$('[name=phone]').value=c.phone||'';$('[name=email]').value=c.email||'';};
     $('#clientPick').addEventListener('change',e=>fillDocClient(clients.find(x=>x.id===e.target.value)));
-    $('#jobPick').addEventListener('change',async e=>{const j=jobs.find(x=>x.id===e.target.value);if(!j)return;let c=j.clientId?clients.find(x=>x.id===j.clientId):null;if(!c)c={id:j.clientId||'',name:j.clientName||'',attention:j.attention||'',street:j.street||j.address||'',postal:j.postal||'',city:j.city||'',phone:j.phone||'',email:j.email||''};fillDocClient(c);if(j.date)$('[name=workDate]').value=isInvoice?nlDate(j.date):j.date;if(!isInvoice){const ev=new Event('change');$('[name=workDate]').dispatchEvent(ev);}});
+    const desc0=$('[name=desc0]');
+    if(desc0){desc0.dataset.autoDescription=String(desc0.value||'').trim()?'0':'1';desc0.addEventListener('input',e=>e.target.dataset.autoDescription='0');}
+    $('#jobPick').addEventListener('change',async e=>{const j=jobs.find(x=>x.id===e.target.value);if(!j)return;let c=j.clientId?clients.find(x=>x.id===j.clientId):null;if(!c)c={id:j.clientId||'',name:j.clientName||'',attention:j.attention||'',street:j.street||j.address||'',postal:j.postal||'',city:j.city||'',phone:j.phone||'',email:j.email||''};fillDocClient(c);if(j.date)$('[name=workDate]').value=isInvoice?nlDate(j.date):j.date;const description=businessDescriptionForJob(j,kind,documents,checklists);if(desc0&&(!desc0.value.trim()||desc0.dataset.autoDescription==='1'||/^Werkuren$/i.test(desc0.value.trim()))){desc0.value=description;desc0.dataset.autoDescription='1';}if(!isInvoice){const ev=new Event('change');$('[name=workDate]').dispatchEvent(ev);}});
     if(prefill.clientId)$('#clientPick').dispatchEvent(new Event('change'));
-    if(prefillJob)$('#jobPick').dispatchEvent(new Event('change'));
+    if(prefillJob){if(desc0&&!String(prefill.lines?.[0]?.description||'').trim())desc0.dataset.autoDescription='1';$('#jobPick').dispatchEvent(new Event('change'));}
     if(isInvoice){
       const syncInvoiceDeadline=()=>{const issue=$('[name=docDate]').value||docDate,el=$('[name=deadline]');if(!el.value||el.dataset.auto!=='0')el.value=addDays(issue,14);el.dataset.auto=el.dataset.auto||'1';};
       $('[name=docDate]').addEventListener('change',syncInvoiceDeadline);
@@ -755,7 +1043,7 @@ const App = (() => {
       $('[name=docDate]').addEventListener('change',syncQuoteDeadline);$('[name=workDate]').addEventListener('change',syncQuoteDeadline);$('[name=deadline]').addEventListener('input',e=>e.target.dataset.auto='0');syncQuoteDeadline();
     }
     $('#calendarBusinessJob')?.addEventListener('click',()=>{const j=jobs.find(x=>x.id===$('#jobPick').value);if(!j){alert('Selecteer eerst een klus.');return;}openGoogleCalendarForJob(j,{kind,number:document.querySelector('[name=number]')?.value||''});});
-    $('#hoursToLine')?.addEventListener('click',()=>{const ids=$$('[data-hour-entry]:checked').map(x=>x.dataset.hourEntry);if(!ids.length){alert('Selecteer eerst één of meer urenregistraties.');return}const jobId=$('#jobPick').value;let selected=entries.filter(e=>ids.includes(e.id));if(jobId){const matching=selected.filter(e=>!e.jobId||e.jobId===jobId);if(matching.length!==selected.length){alert('Selecteer alleen urenregistraties die bij de gekozen klus horen.');return;}selected=matching;}const minutes=selected.reduce((s,e)=>s+entryMinutes(e),0),hours=Math.round(minutes/60*100)/100,rate=num($('#hourRate').value);const idx=0,dates=[...new Set(selected.map(entryDate))].sort();$(`[name=qty${idx}]`).value=String(hours).replace('.',',');$(`[name=desc${idx}]`).value='Werkuren';$(`[name=price${idx}]`).value=rate?String(rate).replace('.',','):'';if(!$('[name=workDate]').value&&dates.length)$('[name=workDate]').value=dates.length===1?nlDate(dates[0]):`${nlDate(dates[0])} t/m ${nlDate(dates.at(-1))}`;recalc();toast('Geregistreerde uren op regel 1 gezet');});
+    $('#hoursToLine')?.addEventListener('click',()=>{const ids=$$('[data-hour-entry]:checked').map(x=>x.dataset.hourEntry);if(!ids.length){alert('Selecteer eerst één of meer urenregistraties.');return}const jobId=$('#jobPick').value;let selected=entries.filter(e=>ids.includes(e.id));if(jobId){const matching=selected.filter(e=>!e.jobId||e.jobId===jobId);if(matching.length!==selected.length){alert('Selecteer alleen urenregistraties die bij de gekozen klus horen.');return;}selected=matching;}const minutes=selected.reduce((s,e)=>s+entryMinutes(e),0),hours=Math.round(minutes/60*100)/100,rate=num($('#hourRate').value);const idx=0,dates=[...new Set(selected.map(entryDate))].sort(),job=jobs.find(j=>j.id===jobId),description=businessDescriptionForJob(job,kind,documents,checklists);$(`[name=qty${idx}]`).value=String(hours).replace('.',',');const desc=$(`[name=desc${idx}]`);if(desc&&(!desc.value.trim()||desc.dataset.autoDescription==='1'||/^Werkuren$/i.test(desc.value.trim()))){desc.value=description;desc.dataset.autoDescription='1';}$(`[name=price${idx}]`).value=rate?String(rate).replace('.',','):'';if(!$('[name=workDate]').value&&dates.length)$('[name=workDate]').value=dates.length===1?nlDate(dates[0]):`${nlDate(dates[0])} t/m ${nlDate(dates.at(-1))}`;recalc();toast('Geregistreerde uren met passende omschrijving op regel 1 gezet');});
     $('#businessDocForm').addEventListener('submit',async e=>{e.preventDefault();const selectedJob=jobs.find(x=>x.id===$('#jobPick').value);if(!selectedJob){alert('Selecteer eerst een klus.');return;}const f=new FormData(e.target),items=[];for(let i=0;i<4;i++)items.push({qty:f.get(`qty${i}`),description:f.get(`desc${i}`),price:f.get(`price${i}`)});let chosenDeadline=f.get('deadline');if(isInvoice){if(!chosenDeadline)chosenDeadline=addDays(f.get('docDate'),14);}else{const max=maxQuoteDeadline();if(!chosenDeadline||chosenDeadline>max)chosenDeadline=max;}const data={kind,number:f.get('number'),docDate:f.get('docDate'),workDate:f.get('workDate'),deadline:chosenDeadline,jobId:$('#jobPick').value,clientId:$('#clientPick').value,client:{name:f.get('clientName'),attention:f.get('attention'),address:f.get('address'),postalCity:f.get('postalCity'),phone:f.get('phone'),email:f.get('email')},lines:items,total:recalc()};try{const d=await generateBusinessPdf(data);closeModal();toast(kind+' opgeslagen');state.docFolder=isInvoice?'factuur':'offerte';await showDocument(d.id);if(state.route==='documents')renderDocuments();}catch(err){console.error(err);alert('PDF maken mislukt: '+err.message)}});
   }
   function setPdfText(form,name,value){try{const f=form.getTextField(name);f.setText(String(value??''));f.setFontSize(12);}catch(e){console.warn('PDF field',name,e.message)}}
@@ -770,10 +1058,15 @@ const App = (() => {
   async function showDocument(id){
     const d=await JKDB.get('documents',id),folder=docFolder(d),m=d.meta||{},linkedJob=m.jobId?await JKDB.get('jobs',m.jobId):null;
     const statusBox=folder==='factuur'?`<div class="card" style="margin-top:12px"><h3>Status factuur</h3><label class="checkline"><input type="checkbox" id="docSent" ${m.sent?'checked':''}><span>Verstuurd</span></label><label class="checkline"><input type="checkbox" id="docPaid" ${m.paid?'checked':''}><span>Betaald</span></label></div>`:folder==='offerte'?`<div class="card" style="margin-top:12px"><h3>Status offerte</h3><label class="checkline"><input type="checkbox" id="docSent" ${m.sent?'checked':''}><span>Verstuurd</span></label><label class="checkline"><input type="checkbox" id="docConfirmed" ${m.confirmed?'checked':''}><span>Bevestigd</span></label></div>`:'';
-    modal(`${modalHead(d.filename)}<div class="card"><div class="document-card"><div class="doc-icon">PDF</div><div><h3>${esc(d.filename)}</h3><div class="muted small">${esc(d.kind||'PDF')} · ${fmtDateTime(d.createdAt)}</div>${d.meta?.total!=null?`<div class="big-number" style="margin-top:8px">${money(d.meta.total)}</div>`:''}</div></div><div class="button-row" style="margin-top:14px"><button class="primary" id="previewDoc">Bekijk PDF</button><button class="secondary" id="shareDoc">Delen / bewaar in iCloud</button><button class="secondary" id="downloadDoc">Download</button>${folder==='offerte'||folder==='factuur'?'<button class="secondary" id="calendarDoc">📅 Google Agenda</button>':''}</div><div id="pdfPreviewHost" class="pdf-preview-host" hidden></div>${folder==='offerte'&&d.meta?.lines?`<button class="secondary" id="quoteToInvoice" style="width:100%;margin-top:10px">Zet offerte om naar factuur</button>`:''}</div>${statusBox}<div class="card" style="margin-top:12px"><h3>Documentnaam</h3><div class="field"><label>Bestandsnaam</label><input id="docFilename" value="${esc(d.filename)}"></div><button class="secondary" id="renameDoc" style="width:100%">Naam opslaan</button></div><div class="card" style="margin-top:12px"><h3>Map</h3><div class="field"><label>Verplaats document naar</label><select id="moveDocFolder"><option value="offerte" ${folder==='offerte'?'selected':''}>Offertes</option><option value="factuur" ${folder==='factuur'?'selected':''}>Facturen</option><option value="diversen" ${folder==='diversen'?'selected':''}>Diversen</option></select></div></div><button class="danger-btn" id="delDoc" style="width:100%">Uit app verwijderen</button>`);
+    const importedDataCard=(['factuur','offerte'].includes(folder)&&m.manualImport)?`<div class="card" style="margin-top:12px"><h3>Uitgelezen documentgegevens</h3>${m.pdfParseError?`<div class="warning small">${esc(m.pdfParseError)}</div>`:`<div class="successbox small">PDF automatisch uitgelezen${m.businessVerified?' en JK Works herkend':''}.</div>`}<div class="form-grid"><div class="field"><label>${folder==='factuur'?'Factuurnummer':'Offertenummer'}</label><input id="parsedDocNumber" value="${esc(m.number||'')}"></div><div class="field"><label>${folder==='factuur'?'Factuurdatum':'Offertedatum'}</label><input id="parsedDocDate" type="date" value="${esc(m.docDate||'')}"></div><div class="field"><label>Klant</label><input id="parsedClientName" value="${esc(m.client?.name||'')}"></div><div class="field"><label>Totaalbedrag</label><input id="parsedTotal" inputmode="decimal" value="${m.total!=null?esc(String(m.total).replace('.',',')):''}"></div></div><label class="checkline"><input type="checkbox" id="parsedKor" ${m.korDetected?'checked':''}><span>KOR / vrijgesteld van btw staat op dit document</span></label><div class="button-row"><button class="secondary" id="saveParsedDoc">Gegevens opslaan</button><button class="ghost" id="reparseDoc">PDF opnieuw uitlezen</button></div><p class="muted small">Deze gegevens worden gebruikt voor het jaaroverzicht. Je kunt ze corrigeren als een afwijkend PDF-sjabloon niet perfect wordt herkend.</p></div>`:'';
+    modal(`${modalHead(d.filename)}<div class="card"><div class="document-card"><div class="doc-icon">PDF</div><div><h3>${esc(d.filename)}</h3><div class="muted small">${esc(d.kind||'PDF')} · ${fmtDateTime(d.createdAt)}</div>${d.meta?.total!=null?`<div class="big-number" style="margin-top:8px">${money(d.meta.total)}</div>`:''}</div></div><div class="button-row" style="margin-top:14px"><button class="primary" id="previewDoc">Bekijk PDF</button><button class="secondary" id="shareDoc">Delen / bewaar in iCloud</button><button class="secondary" id="downloadDoc">Download</button>${folder==='offerte'||folder==='factuur'?'<button class="secondary" id="calendarDoc">📅 Google Agenda</button>':''}</div><div id="pdfPreviewHost" class="pdf-preview-host" hidden></div>${folder==='offerte'&&d.meta?.lines?`<button class="secondary" id="quoteToInvoice" style="width:100%;margin-top:10px">Zet offerte om naar factuur</button>`:''}</div>${importedDataCard}${statusBox}<div class="card" style="margin-top:12px"><h3>Documentnaam</h3><div class="field"><label>Bestandsnaam</label><input id="docFilename" value="${esc(d.filename)}"></div><button class="secondary" id="renameDoc" style="width:100%">Naam opslaan</button></div><div class="card" style="margin-top:12px"><h3>Map</h3><div class="field"><label>Verplaats document naar</label><select id="moveDocFolder"><option value="offerte" ${folder==='offerte'?'selected':''}>Offertes</option><option value="factuur" ${folder==='factuur'?'selected':''}>Facturen</option><option value="diversen" ${folder==='diversen'?'selected':''}>Diversen</option></select></div></div><button class="danger-btn" id="delDoc" style="width:100%">Uit app verwijderen</button>`);
     $('#previewDoc').addEventListener('click',()=>{const host=$('#pdfPreviewHost');if(!host)return;if(!host.hidden){host.hidden=true;host.innerHTML='';if(state.activeBlobUrl){URL.revokeObjectURL(state.activeBlobUrl);state.activeBlobUrl=null;}$('#previewDoc').textContent='Bekijk PDF';return;}if(!(d.blob instanceof Blob)){alert('Dit PDF-bestand is nog niet lokaal beschikbaar. Synchroniseer opnieuw en probeer het nog eens.');return;}state.activeBlobUrl=URL.createObjectURL(d.blob);host.innerHTML=`<iframe class="pdf-preview-frame" src="${state.activeBlobUrl}#toolbar=0&navpanes=0" title="Voorbeeld ${esc(d.filename)}"></iframe>`;host.hidden=false;$('#previewDoc').textContent='Sluit voorbeeld';});
     $('#shareDoc').addEventListener('click',()=>shareBlob(d.blob,d.filename));$('#downloadDoc').addEventListener('click',()=>downloadBlob(d.blob,d.filename));$('#calendarDoc')?.addEventListener('click',async()=>{let job=linkedJob;if(!job){const jobs=await JKDB.all('jobs');const work=String(m.workDate||'');const clientName=normGearName(m.client?.name||'');job=jobs.find(j=>(!work||j.date===work||nlDate(j.date)===work)&&(!clientName||normGearName(j.clientName)===clientName));}if(!job){alert('Dit document is niet aan een klus gekoppeld. Open de offerte/factuur vanuit een klus om een agenda-afspraak te maken.');return;}openGoogleCalendarForJob(job,{kind:d.kind||folder,number:m.number||d.filename.replace(/\.pdf$/i,'')});});$('#quoteToInvoice')?.addEventListener('click',()=>{const meta=d.meta;closeModal();createBusinessDoc('Factuur',{jobId:meta.jobId,clientId:meta.clientId,client:meta.client,lines:meta.lines,workDate:meta.workDate})});
-    const saveStatus=async()=>{d.meta=d.meta||{};if($('#docSent'))d.meta.sent=$('#docSent').checked;if($('#docPaid'))d.meta.paid=$('#docPaid').checked;if($('#docConfirmed'))d.meta.confirmed=$('#docConfirmed').checked;await JKDB.put('documents',d);toast('Status opgeslagen');};
+    $('#saveParsedDoc')?.addEventListener('click',async()=>{
+      d.meta=d.meta||{};d.meta.number=$('#parsedDocNumber').value.trim();d.meta.docDate=$('#parsedDocDate').value;d.meta.client={...(d.meta.client||{}),name:$('#parsedClientName').value.trim()};const raw=$('#parsedTotal').value.trim();d.meta.total=raw?num(raw):null;d.meta.korDetected=$('#parsedKor').checked;d.meta.businessVerified=true;d.meta.pdfParseError='';await JKDB.put('documents',d);toast('Documentgegevens opgeslagen');
+    });
+    $('#reparseDoc')?.addEventListener('click',async()=>{const btn=$('#reparseDoc');btn.disabled=true;btn.textContent='PDF uitlezen...';const company=await JKDB.get('settings','company');await parseStoredBusinessDocument(d,company,true);closeModal();toast(d.meta?.businessVerified?'PDF opnieuw uitgelezen':'PDF uitgelezen - controleer de gegevens');showDocument(d.id);});
+    const saveStatus=async()=>{d.meta=d.meta||{};if($('#docSent'))d.meta.sent=$('#docSent').checked;if($('#docPaid'))d.meta.paid=$('#docPaid').checked;if($('#docConfirmed'))d.meta.confirmed=$('#docConfirmed').checked;await JKDB.put('documents',d);toast('Status opgeslagen');refreshActionBadges(false).catch(()=>{});};
     $('#docSent')?.addEventListener('change',saveStatus);$('#docPaid')?.addEventListener('change',saveStatus);$('#docConfirmed')?.addEventListener('change',saveStatus);
     $('#renameDoc').addEventListener('click',async()=>{
       let name=String($('#docFilename').value||'').trim();
@@ -795,8 +1088,8 @@ const App = (() => {
 
   async function renderMore(){
     title('Meer');const [clients,entries,company,backup,cloudStatus]=await Promise.all([JKDB.all('clients'),JKDB.all('timeEntries'),JKDB.get('settings','company'),JKDB.get('settings','backup'),JKDB.get('settings','cloudStatus')]);const cs=JKCloud.status();
-    $('#view').innerHTML=`<div class="list"><div class="list-item clickable" id="cloudMenu"><div class="main"><div class="title">☁️ Synchronisatie</div><div class="sub">${cs.signedIn?(cs.email+' · '+(cloudStatus?.lastSync?'laatst '+fmtDateTime(cloudStatus.lastSync):'nog niet gesynchroniseerd')):'Niet ingelogd'}</div></div><span>›</span></div><div class="list-item clickable" id="timeMenu"><div class="main"><div class="title">🕒 Urenregistratie</div><div class="sub">${entries.length} registraties · handmatig van-tot</div></div><span>›</span></div><div class="list-item clickable" id="timeStatsMenu"><div class="main"><div class="title">📊 Urenstatistieken</div><div class="sub">Grafieken per maand, kwartaal en kalenderjaar</div></div><span>›</span></div><div class="list-item clickable" id="clientMenu"><div class="main"><div class="title">👥 Klanten</div><div class="sub">${clients.length} klanten</div></div><span>›</span></div><div class="list-item clickable" id="companyMenu"><div class="main"><div class="title">🏢 Bedrijfsgegevens</div><div class="sub">${esc(company?.companyName||'JK Works Dordrecht')}</div></div><span>›</span></div><div class="list-item clickable" id="backupMenu"><div class="main"><div class="title">☁️ Back-up & herstel</div><div class="sub">${backup?.lastBackup?'Laatst '+fmtDateTime(backup.lastBackup):'Nog geen back-up'}</div></div><span>›</span></div></div>`;
-    $('#cloudMenu').addEventListener('click',showCloud);$('#timeMenu').addEventListener('click',showTimeEntries);$('#timeStatsMenu').addEventListener('click',showTimeStats);$('#clientMenu').addEventListener('click',showClients);$('#companyMenu').addEventListener('click',showCompany);$('#backupMenu').addEventListener('click',showBackup);
+    $('#view').innerHTML=`<div class="list"><div class="list-item clickable" id="cloudMenu"><div class="main"><div class="title">☁️ Synchronisatie</div><div class="sub">${cs.signedIn?(cs.email+' · '+(cloudStatus?.lastSync?'laatst '+fmtDateTime(cloudStatus.lastSync):'nog niet gesynchroniseerd')):'Niet ingelogd'}</div></div><span>›</span></div><div class="list-item clickable" id="notificationMenu"><div class="main"><div class="title">🔔 Meldingen</div><div class="sub">Acties, badges en meldingen per categorie</div></div><span>›</span></div><div class="list-item clickable" id="timeMenu"><div class="main"><div class="title">🕒 Urenregistratie</div><div class="sub">${entries.length} registraties · handmatig van-tot</div></div><span>›</span></div><div class="list-item clickable" id="timeStatsMenu"><div class="main"><div class="title">📊 Urenstatistieken</div><div class="sub">Grafieken per maand, kwartaal en kalenderjaar</div></div><span>›</span></div><div class="list-item clickable" id="clientMenu"><div class="main"><div class="title">👥 Klanten</div><div class="sub">${clients.length} klanten</div></div><span>›</span></div><div class="list-item clickable" id="companyMenu"><div class="main"><div class="title">🏢 Bedrijfsgegevens</div><div class="sub">${esc(company?.companyName||'JK Works Dordrecht')}</div></div><span>›</span></div><div class="list-item clickable" id="backupMenu"><div class="main"><div class="title">☁️ Back-up & herstel</div><div class="sub">${backup?.lastBackup?'Laatst '+fmtDateTime(backup.lastBackup):'Nog geen back-up'}</div></div><span>›</span></div></div>`;
+    $('#cloudMenu').addEventListener('click',showCloud);$('#notificationMenu').addEventListener('click',showNotificationSettings);$('#timeMenu').addEventListener('click',showTimeEntries);$('#timeStatsMenu').addEventListener('click',showTimeStats);$('#clientMenu').addEventListener('click',showClients);$('#companyMenu').addEventListener('click',showCompany);$('#backupMenu').addEventListener('click',showBackup);
   }
 
   function showCloud(){
@@ -824,54 +1117,69 @@ const App = (() => {
   function hoursNumber(minutes){return Math.round((minutes/60)*100)/100}
   function hoursLabel(minutes){const h=hoursNumber(minutes);return h.toLocaleString('nl-NL',{minimumFractionDigits:h%1?1:0,maximumFractionDigits:2})+' u'}
   function monthName(i){return ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'][i]}
-  function periodBuckets(entries,mode){
-    const now=new Date(), map=new Map();
-    for(const e of entries){const d=new Date(entryDate(e)+'T12:00:00');if(Number.isNaN(d.getTime()))continue;let key,label,sort;
-      if(mode==='month'){key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;label=`${monthName(d.getMonth())} '${String(d.getFullYear()).slice(-2)}`;sort=key}
-      else if(mode==='quarter'){const q=Math.floor(d.getMonth()/3)+1;key=`${d.getFullYear()}-Q${q}`;label=`Q${q} '${String(d.getFullYear()).slice(-2)}`;sort=`${d.getFullYear()}-${q}`}
-      else {key=String(d.getFullYear());label=key;sort=key}
-      const b=map.get(key)||{key,label,sort,minutes:0};b.minutes+=entryMinutes(e);map.set(key,b);
-    }
+  function statPeriodInfo(dateValue,mode){
+    const d=new Date(String(dateValue||'')+'T12:00:00');
+    if(Number.isNaN(d.getTime()))return null;
     if(mode==='month'){
-      const arr=[];for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1),key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;arr.push(map.get(key)||{key,label:`${monthName(d.getMonth())} '${String(d.getFullYear()).slice(-2)}`,sort:key,minutes:0})}return arr;
+      const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      return {key,label:`${monthName(d.getMonth())} '${String(d.getFullYear()).slice(-2)}`,sort:key};
     }
     if(mode==='quarter'){
-      const arr=[];const cq=Math.floor(now.getMonth()/3)+1;for(let i=7;i>=0;i--){let q=cq-i,y=now.getFullYear();while(q<=0){q+=4;y--}while(q>4){q-=4;y++}const key=`${y}-Q${q}`;arr.push(map.get(key)||{key,label:`Q${q} '${String(y).slice(-2)}`,sort:`${y}-${q}`,minutes:0})}return arr;
+      const q=Math.floor(d.getMonth()/3)+1,key=`${d.getFullYear()}-Q${q}`;
+      return {key,label:`Q${q} '${String(d.getFullYear()).slice(-2)}`,sort:`${d.getFullYear()}-${q}`};
     }
-    const years=[...map.values()].sort((a,b)=>a.sort.localeCompare(b.sort));if(!years.length)years.push({key:String(now.getFullYear()),label:String(now.getFullYear()),sort:String(now.getFullYear()),minutes:0});return years;
+    const key=String(d.getFullYear());return {key,label:key,sort:key};
+  }
+  function periodBuckets(entries,jobs,company,mode){
+    const now=new Date(), map=new Map();
+    const ensure=info=>{let b=map.get(info.key);if(!b){b={...info,minutes:0,amount:0,invoiceAmount:0,cashAmount:0};map.set(info.key,b)}return b};
+    for(const e of entries){const info=statPeriodInfo(entryDate(e),mode);if(!info)continue;ensure(info).minutes+=entryMinutes(e)}
+    for(const j of jobs){
+      let date=j.date||'';
+      if(!date){const linked=entries.filter(e=>e.jobId===j.id).map(entryDate).filter(Boolean).sort();date=linked[0]||''}
+      const info=statPeriodInfo(date,mode);if(!info)continue;
+      const b=ensure(info),amount=jobOwnAmount(j,entries,company);b.amount+=amount;if(jobPaymentType(j)==='cash')b.cashAmount+=amount;else b.invoiceAmount+=amount;
+    }
+    if(mode==='month'){
+      const arr=[];for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1),key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;arr.push(map.get(key)||{key,label:`${monthName(d.getMonth())} '${String(d.getFullYear()).slice(-2)}`,sort:key,minutes:0,amount:0,invoiceAmount:0,cashAmount:0})}return arr;
+    }
+    if(mode==='quarter'){
+      const arr=[];const cq=Math.floor(now.getMonth()/3)+1;for(let i=7;i>=0;i--){let q=cq-i,y=now.getFullYear();while(q<=0){q+=4;y--}while(q>4){q-=4;y++}const key=`${y}-Q${q}`;arr.push(map.get(key)||{key,label:`Q${q} '${String(y).slice(-2)}`,sort:`${y}-${q}`,minutes:0,amount:0,invoiceAmount:0,cashAmount:0})}return arr;
+    }
+    const years=[...map.values()].sort((a,b)=>a.sort.localeCompare(b.sort));if(!years.length)years.push({key:String(now.getFullYear()),label:String(now.getFullYear()),sort:String(now.getFullYear()),minutes:0,amount:0,invoiceAmount:0,cashAmount:0});return years;
   }
   function statsChartHtml(buckets){
-    const max=Math.max(1,...buckets.map(b=>b.minutes)), total=buckets.reduce((s,b)=>s+b.minutes,0), nonzero=buckets.filter(b=>b.minutes>0), avg=nonzero.length?Math.round(total/nonzero.length):0, best=nonzero.slice().sort((a,b)=>b.minutes-a.minutes)[0];
-    return `<div class="kpi-row stats-kpis"><div class="kpi"><strong>${hoursLabel(total)}</strong><span>Totaal</span></div><div class="kpi"><strong>${hoursLabel(avg)}</strong><span>Gem. actieve periode</span></div><div class="kpi"><strong>${best?esc(best.label):'-'}</strong><span>Meeste uren</span></div></div><div class="hours-chart-wrap"><div class="hours-chart">${buckets.map(b=>{const pct=b.minutes?Math.max(4,(b.minutes/max)*100):0;return `<div class="hours-bar-col"><div class="hours-value">${b.minutes?hoursLabel(b.minutes):''}</div><div class="hours-bar-track"><div class="hours-bar" style="height:${pct}%"></div></div><div class="hours-label">${esc(b.label)}</div></div>`}).join('')}</div></div>`;
+    const max=Math.max(1,...buckets.map(b=>b.minutes)), total=buckets.reduce((s,b)=>s+b.minutes,0), totalAmount=buckets.reduce((s,b)=>s+(b.amount||0),0),invoiceAmount=buckets.reduce((s,b)=>s+(b.invoiceAmount||0),0),cashAmount=buckets.reduce((s,b)=>s+(b.cashAmount||0),0);
+    return `<div class="kpi-row stats-kpis stats-kpis-money"><div class="kpi"><strong>${hoursLabel(total)}</strong><span>Totaal uren</span></div><div class="kpi"><strong>${money(totalAmount)}</strong><span>Intern totaal</span></div><div class="kpi"><strong>${money(invoiceAmount)}</strong><span>Factuur</span></div><div class="kpi"><strong>${money(cashAmount)}</strong><span>Contant</span></div></div><div class="hours-chart-wrap"><div class="hours-chart">${buckets.map(b=>{const pct=b.minutes?Math.max(4,(b.minutes/max)*100):0;return `<div class="hours-bar-col stats-money-col"><div class="hours-value">${b.minutes?hoursLabel(b.minutes):''}${b.amount?`<small>${money(b.amount)}</small>`:''}</div><div class="hours-bar-track"><div class="hours-bar" style="height:${pct}%"></div></div><div class="hours-label">${esc(b.label)}</div></div>`}).join('')}</div></div>`;
   }
-  function customerHourBuckets(entries,jobs,clients,year){
-    const jobMap=new Map(jobs.map(j=>[j.id,j])), clientMap=new Map(clients.map(c=>[c.id,c]));
-    const map=new Map();
+  function customerStatBuckets(entries,jobs,clients,company,year){
+    const jobMap=new Map(jobs.map(j=>[j.id,j])), clientMap=new Map(clients.map(c=>[c.id,c])), map=new Map();
+    const bucketForJob=j=>{const c=j?.clientId?clientMap.get(j.clientId):null,name=(c?.name||j?.clientName||'Geen klant / algemeen').trim()||'Geen klant / algemeen',key=j?.clientId||('name:'+name.toLowerCase());let b=map.get(key);if(!b){b={key,label:name,minutes:0,amount:0,invoiceAmount:0,cashAmount:0};map.set(key,b)}return b};
     for(const e of entries){
-      const d=new Date(entryDate(e)+'T12:00:00');
-      if(Number.isNaN(d.getTime())||d.getFullYear()!==year)continue;
-      const j=jobMap.get(e.jobId), c=j?.clientId?clientMap.get(j.clientId):null;
-      const name=(c?.name||j?.clientName||'Geen klant / algemeen').trim()||'Geen klant / algemeen';
-      const key=j?.clientId||('name:'+name.toLowerCase());
-      const b=map.get(key)||{key,label:name,minutes:0};
-      b.minutes+=entryMinutes(e);map.set(key,b);
+      const d=new Date(entryDate(e)+'T12:00:00');if(Number.isNaN(d.getTime())||d.getFullYear()!==year)continue;
+      const j=jobMap.get(e.jobId);if(j)bucketForJob(j).minutes+=entryMinutes(e);else {let b=map.get('general');if(!b){b={key:'general',label:'Geen klant / algemeen',minutes:0,amount:0,invoiceAmount:0,cashAmount:0};map.set('general',b)}b.minutes+=entryMinutes(e)}
     }
-    return [...map.values()].sort((a,b)=>b.minutes-a.minutes||a.label.localeCompare(b.label,'nl'));
+    for(const j of jobs){
+      let date=j.date||'';if(!date){const linked=entries.filter(e=>e.jobId===j.id).map(entryDate).filter(Boolean).sort();date=linked[0]||''}
+      const d=new Date(date+'T12:00:00');if(Number.isNaN(d.getTime())||d.getFullYear()!==year)continue;
+      const b=bucketForJob(j),amount=jobOwnAmount(j,entries,company);b.amount+=amount;if(jobPaymentType(j)==='cash')b.cashAmount+=amount;else b.invoiceAmount+=amount;
+    }
+    return [...map.values()].sort((a,b)=>b.amount-a.amount||b.minutes-a.minutes||a.label.localeCompare(b.label,'nl'));
   }
   function customerStatsHtml(buckets,year){
-    const total=buckets.reduce((s,b)=>s+b.minutes,0),max=Math.max(1,...buckets.map(b=>b.minutes));
-    if(!buckets.length)return `<div class="empty">Geen uren voor klanten geregistreerd in ${year}.</div>`;
-    return `<div class="kpi-row stats-kpis customer-kpis"><div class="kpi"><strong>${hoursLabel(total)}</strong><span>Totaal ${year}</span></div><div class="kpi"><strong>${buckets.length}</strong><span>Klanten</span></div><div class="kpi"><strong>${esc(buckets[0].label)}</strong><span>Meeste uren</span></div></div><div class="customer-hours-list">${buckets.map(b=>`<div class="customer-hours-row"><div class="customer-hours-top"><strong>${esc(b.label)}</strong><span>${hoursLabel(b.minutes)}</span></div><div class="customer-hours-track"><i style="width:${Math.max(3,(b.minutes/max)*100)}%"></i></div></div>`).join('')}</div>`;
+    const totalMinutes=buckets.reduce((s,b)=>s+b.minutes,0),totalAmount=buckets.reduce((s,b)=>s+b.amount,0),invoiceAmount=buckets.reduce((s,b)=>s+b.invoiceAmount,0),cashAmount=buckets.reduce((s,b)=>s+b.cashAmount,0),max=Math.max(1,...buckets.map(b=>b.minutes));
+    if(!buckets.length)return `<div class="empty">Geen uren of klusbedragen voor klanten geregistreerd in ${year}.</div>`;
+    return `<div class="kpi-row stats-kpis stats-kpis-money"><div class="kpi"><strong>${hoursLabel(totalMinutes)}</strong><span>Uren ${year}</span></div><div class="kpi"><strong>${money(totalAmount)}</strong><span>Intern totaal</span></div><div class="kpi"><strong>${money(invoiceAmount)}</strong><span>Factuur</span></div><div class="kpi"><strong>${money(cashAmount)}</strong><span>Contant</span></div></div><div class="customer-hours-list">${buckets.map(b=>`<div class="customer-hours-row"><div class="customer-hours-top"><strong>${esc(b.label)}</strong><span>${hoursLabel(b.minutes)} · ${money(b.amount)}</span></div><div class="customer-hours-track"><i style="width:${b.minutes?Math.max(3,(b.minutes/max)*100):0}%"></i></div><div class="customer-money-split"><span>Factuur ${money(b.invoiceAmount)}</span><span>Contant ${money(b.cashAmount)}</span></div></div>`).join('')}</div>`;
   }
   async function showTimeStats(){
-    const [entries,jobs,clients]=await Promise.all([JKDB.all('timeEntries'),JKDB.all('jobs'),JKDB.all('clients')]);let mode='month';
-    const years=[...new Set(entries.map(e=>new Date(entryDate(e)+'T12:00:00')).filter(d=>!Number.isNaN(d.getTime())).map(d=>d.getFullYear()))].sort((a,b)=>b-a);
+    const [entries,jobs,clients,company]=await Promise.all([JKDB.all('timeEntries'),JKDB.all('jobs'),JKDB.all('clients'),JKDB.getSetting('company')]);let mode='month';
+    const years=[...new Set([...entries.map(e=>entryDate(e)),...jobs.map(j=>j.date)].filter(Boolean).map(v=>new Date(v+'T12:00:00')).filter(d=>!Number.isNaN(d.getTime())).map(d=>d.getFullYear()))].sort((a,b)=>b-a);
     if(!years.includes(new Date().getFullYear()))years.unshift(new Date().getFullYear());
     let customerYear=new Date().getFullYear();
     const draw=()=>{
       const customerMode=mode==='client';
-      const content=customerMode?customerStatsHtml(customerHourBuckets(entries,jobs,clients,customerYear),customerYear):(entries.length?statsChartHtml(periodBuckets(entries,mode)):'<div class="empty">Nog geen uren geregistreerd.</div>');
-      modal(`${modalHead('Urenstatistieken')}<div class="tabs"><button class="tab ${mode==='month'?'active':''}" data-stat-mode="month">Per maand</button><button class="tab ${mode==='quarter'?'active':''}" data-stat-mode="quarter">Per kwartaal</button><button class="tab ${mode==='year'?'active':''}" data-stat-mode="year">Per kalenderjaar</button><button class="tab ${mode==='client'?'active':''}" data-stat-mode="client">Per klant</button></div>${customerMode?`<div class="field stat-year-field"><label>Kalenderjaar</label><select id="customerStatsYear">${years.map(y=>`<option value="${y}" ${y===customerYear?'selected':''}>${y}</option>`).join('')}</select></div>`:''}${content}<p class="muted small stats-note">${customerMode?'Uren per klant zijn gebaseerd op de klant die aan de gekoppelde klus is gekoppeld.':'Gebaseerd op je urenregistraties. Maand toont de laatste 12 maanden, kwartaal de laatste 8 kwartalen en kalenderjaar alle geregistreerde jaren.'}</p>`);
+      const content=customerMode?customerStatsHtml(customerStatBuckets(entries,jobs,clients,company,customerYear),customerYear):statsChartHtml(periodBuckets(entries,jobs,company,mode));
+      modal(`${modalHead('Uren & bedragen')}<div class="tabs"><button class="tab ${mode==='month'?'active':''}" data-stat-mode="month">Per maand</button><button class="tab ${mode==='quarter'?'active':''}" data-stat-mode="quarter">Per kwartaal</button><button class="tab ${mode==='year'?'active':''}" data-stat-mode="year">Per kalenderjaar</button><button class="tab ${mode==='client'?'active':''}" data-stat-mode="client">Per klant</button></div>${customerMode?`<div class="field stat-year-field"><label>Kalenderjaar</label><select id="customerStatsYear">${years.map(y=>`<option value="${y}" ${y===customerYear?'selected':''}>${y}</option>`).join('')}</select></div>`:''}${content}<p class="muted small stats-note">Uren komen uit je urenregistraties. Bedragen zijn alleen je interne klusberekening: uren × uurtarief + extra bedrag. Factuur en contant blijven apart zichtbaar. Deze bedragen worden niet gebruikt voor het Jaaroverzicht Facturen.</p>`);
       $$('[data-stat-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.statMode;draw()}));
       $('#customerStatsYear')?.addEventListener('change',e=>{customerYear=Number(e.target.value);draw()});
     };draw();

@@ -1,4 +1,4 @@
-const CACHE='jkworks-v48-jaaroverzicht-facturen';
+const CACHE='jkworks-v53-meldingen-badges';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
@@ -22,5 +22,16 @@ self.addEventListener('fetch',e=>{
       if(e.request.mode==='navigate')return caches.match('./index.html');
       throw err;
     }
+  })());
+});
+
+
+// v53: als een systeemmelding wordt aangetikt, open of focus de JK Works-app.
+self.addEventListener('notificationclick',event=>{
+  event.notification.close();
+  event.waitUntil((async()=>{
+    const wins=await clients.matchAll({type:'window',includeUncontrolled:true});
+    for(const w of wins){if('focus' in w)return w.focus();}
+    if(clients.openWindow)return clients.openWindow('./');
   })());
 });
