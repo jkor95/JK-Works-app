@@ -1,4 +1,16 @@
-# JK Works Dordrecht App v53
+# JK Works Dordrecht App v54
+
+
+## Nieuw in v54 - meldingen afstrepen
+
+- Elke openstaande actie heeft nu naast openen ook een knop `Niet nodig`.
+- Een weggeklikte actie verdwijnt direct uit het actiecentrum en telt niet meer mee in de rode badge of app-icoonbadge.
+- Bij een weggeklikte urenmelding wordt ook de oude `Klus afgelopen`-herinnering voor die klus als afgehandeld gemarkeerd.
+- Weggeklikte meldingen worden opgeslagen in de app en gaan bij de volgende handmatige synchronisatie mee naar Supabase, zodat ze ook op andere apparaten verborgen blijven.
+- Onder `Meer > Meldingen` staat, zodra er weggeklikte meldingen zijn, een knop om alle verborgen meldingen weer te herstellen.
+- De bestaande categorie-aan/uit-instellingen blijven ongewijzigd.
+
+Geen nieuwe Supabase SQL nodig.
 
 ## Nieuw in v53 - meldingen, acties en badges
 

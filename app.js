@@ -108,6 +108,27 @@ const App = (() => {
 
   const DEFAULT_NOTIFICATION_PREFS={id:'notificationPrefs',badges:true,systemNotifications:false,hours:true,photos:true,quoteCreate:true,quoteSend:true,invoiceCreate:true,invoiceSend:true};
   async function getNotificationPrefs(){return {...DEFAULT_NOTIFICATION_PREFS,...((await JKDB.get('settings','notificationPrefs'))||{})};}
+  async function getDismissedActions(){
+    const row=await JKDB.get('settings','dismissedActions');
+    return row&&row.items&&typeof row.items==='object'?row.items:{};
+  }
+  async function dismissActionItem(item){
+    if(!item?.key)return;
+    const items=await getDismissedActions();
+    items[item.key]={dismissedAt:new Date().toISOString(),type:item.type||'',category:item.category||'',title:item.title||'',detail:item.detail||''};
+    await JKDB.put('settings',{id:'dismissedActions',items});
+    if(item.type==='hours'&&item.jobId){
+      const j=await JKDB.get('jobs',item.jobId);
+      if(j&&!j.completionPromptHandledAt){j.completionPromptHandledAt=new Date().toISOString();await JKDB.put('jobs',j);}
+    }
+    toast('Melding weggeklikt');
+    await refreshActionBadges(false);
+  }
+  async function restoreDismissedActions(){
+    await JKDB.put('settings',{id:'dismissedActions',items:{}});
+    localStorage.removeItem('jkworks-notified-actions');
+    await refreshActionBadges(false);
+  }
   function jobPlannedStart(j){
     if(!j?.date)return null;
     const start=jobStartTime(j)||'08:00',d=localCalendarDateToUtc(j.date,start);
@@ -119,7 +140,7 @@ const App = (() => {
     return !!j?.date && j.date<today();
   }
   async function collectActionItems(){
-    const [prefs,jobs,entries,photos,docs]=await Promise.all([getNotificationPrefs(),JKDB.all('jobs'),JKDB.all('timeEntries'),JKDB.all('jobPhotos'),JKDB.all('documents')]);
+    const [prefs,jobs,entries,photos,docs,dismissed]=await Promise.all([getNotificationPrefs(),JKDB.all('jobs'),JKDB.all('timeEntries'),JKDB.all('jobPhotos'),JKDB.all('documents'),getDismissedActions()]);
     const now=new Date(),todayIso=today(),items=[];
     const docsByJob=new Map();
     for(const d of docs){const jid=d?.meta?.jobId;if(!jid)continue;if(!docsByJob.has(jid))docsByJob.set(jid,[]);docsByJob.get(jid).push(d);}
@@ -146,7 +167,7 @@ const App = (() => {
         if(prefs.invoiceSend)for(const d of invoices.filter(d=>!d.meta?.sent))add({key:`invoiceSend:${d.id}`,type:'invoiceSend',docId:d.id,category:'Factuur',icon:'📤',title:'Factuur versturen',detail:`${d.meta?.number||d.filename||j.clientName||j.title}`});
       }
     }
-    return items;
+    return items.filter(i=>!dismissed[i.key]);
   }
   async function updateAppBadge(count,prefs){
     if(!('setAppBadge' in navigator))return;
@@ -186,8 +207,9 @@ const App = (() => {
   }
   async function showActionCenter(){
     const items=await refreshActionBadges(false)||[];
-    modal(`${modalHead('Acties')}<div class="card"><div class="section-inline"><h3>Actie nodig</h3><span class="pill ${items.length?'warn':'success'}">${items.length}</span></div><p class="muted small">Deze lijst wordt lokaal berekend uit je klussen, uren, foto’s, offertes en facturen. Tik op een actie om er direct naartoe te gaan.</p></div>${items.length?`<div class="action-list">${items.map((i,n)=>`<button class="action-row" type="button" data-action-index="${n}"><span class="action-emoji">${i.icon}</span><span class="action-main"><span class="action-category">${esc(i.category)}</span><strong>${esc(i.title)}</strong><small>${esc(i.detail||'')}</small></span><span>›</span></button>`).join('')}</div>`:'<div class="successbox"><strong>Alles bijgewerkt</strong><br><span class="small">Er zijn nu geen openstaande acties.</span></div>'}<button class="secondary" id="actionSettings" style="width:100%;margin-top:12px">Meldingsinstellingen</button>`);
+    modal(`${modalHead('Acties')}<div class="card"><div class="section-inline"><h3>Actie nodig</h3><span class="pill ${items.length?'warn':'success'}">${items.length}</span></div><p class="muted small">Deze lijst wordt lokaal berekend uit je klussen, uren, foto’s, offertes en facturen. Open een actie of kies <strong>Niet nodig</strong> om hem weg te strepen uit de melding en badge.</p></div>${items.length?`<div class="action-list">${items.map((i,n)=>`<div class="action-row"><button class="action-open" type="button" data-action-index="${n}"><span class="action-emoji">${i.icon}</span><span class="action-main"><span class="action-category">${esc(i.category)}</span><strong>${esc(i.title)}</strong><small>${esc(i.detail||'')}</small></span><span class="action-chevron">›</span></button><button class="action-dismiss" type="button" data-dismiss-index="${n}" title="Deze melding is niet nodig">✓<span>Niet nodig</span></button></div>`).join('')}</div>`:'<div class="successbox"><strong>Alles bijgewerkt</strong><br><span class="small">Er zijn nu geen openstaande acties.</span></div>'}<button class="secondary" id="actionSettings" style="width:100%;margin-top:12px">Meldingsinstellingen</button>`);
     $$('[data-action-index]').forEach(b=>b.addEventListener('click',()=>runActionItem(items[Number(b.dataset.actionIndex)])));
+    $$('[data-dismiss-index]').forEach(b=>b.addEventListener('click',async()=>{const item=items[Number(b.dataset.dismissIndex)];await dismissActionItem(item);showActionCenter();}));
     $('#actionSettings').addEventListener('click',()=>showNotificationSettings());
   }
   async function requestNotificationAccess(){
@@ -198,11 +220,12 @@ const App = (() => {
   }
   function notificationPermissionLabel(){if(!('Notification' in window))return ['Niet ondersteund','blocked'];if(Notification.permission==='granted')return ['Toegestaan','on'];if(Notification.permission==='denied')return ['Geblokkeerd','blocked'];return ['Nog niet toegestaan',''];}
   async function showNotificationSettings(){
-    const prefs=await getNotificationPrefs(),perm=notificationPermissionLabel();
+    const [prefs,dismissed]=await Promise.all([getNotificationPrefs(),getDismissedActions()]),perm=notificationPermissionLabel(),dismissedCount=Object.keys(dismissed).length;
     const row=(name,label,desc)=>`<label class="notification-pref"><span class="pref-copy"><strong>${label}</strong><small>${desc}</small></span><input type="checkbox" name="${name}" ${prefs[name]?'checked':''}></label>`;
-    modal(`${modalHead('Meldingen')}<form id="notificationForm"><div class="card"><div class="section-inline"><h3>iPhone / browser</h3><span class="notification-status ${perm[1]}">${perm[0]}</span></div><p class="muted small">De rode app-badge werkt op ondersteunde geïnstalleerde web-apps. Systeemmeldingen kunnen op iPhone worden toegestaan als JK Works op het beginscherm staat.</p><div class="button-row"><button type="button" class="secondary" id="allowNotifications">Meldingen toestaan</button>${('Notification' in window&&Notification.permission==='granted')?'<button type="button" class="secondary" id="testNotification">Test melding</button>':''}</div>${row('badges','Badge op app-icoon','Toon het aantal openstaande acties op het JK Works-icoon.')}${('Notification' in window&&Notification.permission==='granted')?row('systemNotifications','Systeemmeldingen','Toon een melding wanneer tijdens gebruik van de app een nieuwe actie nodig wordt.'):''}</div><div class="card"><h3>Categorieën</h3>${row('hours','Uren invoeren / controleren','Na de geplande eindtijd van een klus.')}${row('photos','Foto’s maken','Bij verplichte voor-, tijdens- en na-foto’s.')}${row('quoteCreate','Offerte opmaken','Alleen als bij de klus “Offerte nodig” is aangevinkt.')}${row('quoteSend','Offerte versturen','Als een gekoppelde offerte nog niet als Verstuurd staat.')}${row('invoiceCreate','Factuur opmaken','Na een factuurklus als nog geen factuur is gemaakt.')}${row('invoiceSend','Factuur versturen','Als een gekoppelde factuur nog niet als Verstuurd staat.')}</div><button class="primary" style="width:100%">Instellingen opslaan</button></form>`);
+    modal(`${modalHead('Meldingen')}<form id="notificationForm"><div class="card"><div class="section-inline"><h3>iPhone / browser</h3><span class="notification-status ${perm[1]}">${perm[0]}</span></div><p class="muted small">De rode app-badge werkt op ondersteunde geïnstalleerde web-apps. Systeemmeldingen kunnen op iPhone worden toegestaan als JK Works op het beginscherm staat.</p><div class="button-row"><button type="button" class="secondary" id="allowNotifications">Meldingen toestaan</button>${('Notification' in window&&Notification.permission==='granted')?'<button type="button" class="secondary" id="testNotification">Test melding</button>':''}</div>${row('badges','Badge op app-icoon','Toon het aantal openstaande acties op het JK Works-icoon.')}${('Notification' in window&&Notification.permission==='granted')?row('systemNotifications','Systeemmeldingen','Toon een melding wanneer tijdens gebruik van de app een nieuwe actie nodig wordt.'):''}</div><div class="card"><h3>Categorieën</h3>${row('hours','Uren invoeren / controleren','Na de geplande eindtijd van een klus.')}${row('photos','Foto’s maken','Bij verplichte voor-, tijdens- en na-foto’s.')}${row('quoteCreate','Offerte opmaken','Alleen als bij de klus “Offerte nodig” is aangevinkt.')}${row('quoteSend','Offerte versturen','Als een gekoppelde offerte nog niet als Verstuurd staat.')}${row('invoiceCreate','Factuur opmaken','Na een factuurklus als nog geen factuur is gemaakt.')}${row('invoiceSend','Factuur versturen','Als een gekoppelde factuur nog niet als Verstuurd staat.')}</div>${dismissedCount?`<div class="card"><div class="section-inline"><h3>Weggeklikte meldingen</h3><span class="pill">${dismissedCount}</span></div><p class="muted small">Meldingen die je met ‘Niet nodig’ hebt weggeklikt blijven verborgen. Herstel ze hier als je ze opnieuw wilt laten verschijnen.</p><button type="button" class="secondary" id="restoreDismissed" style="width:100%">Alle weggeklikte meldingen herstellen</button></div>`:''}<button class="primary" style="width:100%">Instellingen opslaan</button></form>`);
     $('#allowNotifications').addEventListener('click',async()=>{if(await requestNotificationAccess()){closeModal();showNotificationSettings();}});
     $('#testNotification')?.addEventListener('click',async()=>{try{const reg=await navigator.serviceWorker.ready;await reg.showNotification('JK Works',{body:'Testmelding werkt.',icon:'icons/icon-192.png',badge:'icons/icon-192.png',tag:'jkworks-test'});}catch(e){alert('Testmelding lukte niet: '+(e.message||e));}});
+    $('#restoreDismissed')?.addEventListener('click',async()=>{if(!confirm('Alle weggeklikte meldingen opnieuw zichtbaar maken?'))return;await restoreDismissedActions();closeModal();toast('Weggeklikte meldingen hersteld');showNotificationSettings();});
     $('#notificationForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),next={...prefs};['badges','systemNotifications','hours','photos','quoteCreate','quoteSend','invoiceCreate','invoiceSend'].forEach(k=>{if(k==='systemNotifications'&&(!('Notification' in window)||Notification.permission!=='granted')){next[k]=false;return;}next[k]=f.get(k)==='on';});await JKDB.put('settings',next);closeModal();toast('Meldingsinstellingen opgeslagen');await refreshActionBadges(false);if(state.route==='more')renderMore();});
   }
 
