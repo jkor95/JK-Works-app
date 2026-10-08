@@ -1,4 +1,4 @@
-const CACHE='jkworks-v58-dubbele-statistiekgrafieken';
+const CACHE='jkworks-v59-jkworks-nl';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
