@@ -1,61 +1,132 @@
 <!doctype html>
 <html lang="nl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#1e272d" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="JK Works" />
-  <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css" />
-  <title>JK Works Dordrecht</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#1e272d">
+  <meta name="description" content="JK Works Dordrecht helpt met kleine klussen, montage, afwerking, verbouwingsondersteuning en catering/horeca-ondersteuning in Dordrecht en omgeving.">
+  <link rel="icon" href="/assets/favicon.png">
+  <link rel="stylesheet" href="/site.css">
+  <title>JK Works Dordrecht | Klussen, montage en ondersteuning</title>
 </head>
-<body class="auth-locked">
-  <section id="authGate" class="auth-gate" aria-label="Inloggen">
-    <div class="auth-card">
-      <img src="assets/jk-works-logo.jpg" alt="JK Works Dordrecht" class="auth-logo">
-      <div class="auth-kicker">JK WORKS DORDRECHT</div>
-      <h1>Bedrijfsapp</h1>
-      <p class="auth-intro">Log in met je JK Works-account om de app te openen en je gegevens te synchroniseren.</p>
-      <form id="siteLoginForm" class="auth-form">
-        <div class="field"><label for="siteLoginEmail">E-mail</label><input id="siteLoginEmail" type="email" name="email" required autocomplete="email"></div>
-        <div class="field"><label for="siteLoginPassword">Wachtwoord</label><input id="siteLoginPassword" type="password" name="password" required minlength="6" autocomplete="current-password"></div>
-        <button class="primary auth-submit" type="submit">Inloggen</button>
-        <p id="siteLoginError" class="auth-error" role="alert" hidden></p>
-      </form>
-      <p class="auth-note">Dezelfde inlog gebruik je op je iPhone en MacBook. Je blijft ingelogd totdat je zelf uitlogt.</p>
+<body>
+<div class="site-shell">
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="site-brand" href="/" aria-label="JK Works Dordrecht home">
+        <img src="/assets/jk-works-logo.jpg" alt="JK Works Dordrecht logo">
+        <span class="brand-copy"><strong>JK Works Dordrecht</strong><span>Praktisch. Flexibel. Duidelijk.</span></span>
+      </a>
+      <nav class="site-nav" aria-label="Hoofdnavigatie">
+        <a href="#diensten">Diensten</a>
+        <a href="#werkwijze">Werkwijze</a>
+        <a href="#over">Over JK Works</a>
+        <a href="#contact">Contact</a>
+        <a class="login-link" href="/inloggen/">Inloggen</a>
+      </nav>
+      <button class="menu-btn" type="button" aria-label="Menu openen" aria-expanded="false">☰</button>
     </div>
-  </section>
+  </header>
 
-  <div id="appShell" hidden>
-    <header class="topbar">
-      <div class="brand-title"><img src="assets/jk-works-logo.jpg" alt="JK Works Dordrecht"><div><div class="eyebrow">JK WORKS DORDRECHT</div><h1 id="pageTitle">Dashboard</h1></div></div>
-      <div class="top-actions"><button id="manualSyncBtn" class="sync-btn" type="button" aria-label="Handmatig synchroniseren" title="Handmatig synchroniseren" hidden>☁ <span>Sync</span></button><button id="notificationBtn" class="notice-btn" type="button" aria-label="Acties en meldingen" title="Acties en meldingen" hidden><span class="notice-icon">🔔</span><b id="notificationCount" hidden>0</b></button><button id="topLogoutBtn" class="logout-btn" type="button" aria-label="Uitloggen" title="Uitloggen" hidden>⎋ <span>Uitloggen</span></button><button id="quickAddBtn" class="icon-btn" aria-label="Snel toevoegen">+</button></div>
-    </header>
+  <main>
+    <section class="hero">
+      <div>
+        <div class="eyebrow">JK Works Dordrecht</div>
+        <h1>Een extra paar handen voor <span>klussen die af moeten.</span></h1>
+        <p class="hero-copy">Voor kleine klussen in en om huis, montage, afwerking, verbouwingsondersteuning en extra mankracht in de horeca. Beschikbaar buiten kantooruren in Dordrecht en omgeving.</p>
+        <div class="hero-actions">
+          <a class="btn primary" href="https://wa.me/31622915035?text=Hoi%20Jeremy%2C%20ik%20heb%20een%20vraag%20over%20een%20klus." rel="noopener">Klus bespreken via WhatsApp</a>
+          <a class="btn secondary" href="mailto:jkworksdordrecht@outlook.com?subject=Klusaanvraag%20via%20jkworks.nl">E-mail sturen</a>
+        </div>
+      </div>
+      <aside class="hero-card" aria-label="JK Works in het kort">
+        <img class="hero-logo" src="/assets/jk-works-logo.jpg" alt="JK Works Dordrecht">
+        <h2>Van montage tot afwerking.</h2>
+        <p>Geen onnodig ingewikkeld traject, maar duidelijke afspraken over de klus, planning en uitvoering.</p>
+        <div class="hero-badges"><span>Dordrecht & omgeving</span><span>Avonden</span><span>Weekenden</span><span>Schoolvakanties</span></div>
+      </aside>
+    </section>
 
-    <main id="view" class="view" aria-live="polite"></main>
+    <div class="trust-strip">
+      <div class="trust-inner">
+        <div class="trust-item"><div class="trust-icon">🛠️</div><div><strong>Praktische klussen</strong><span>Montage, afwerking en hulp bij verbouwing.</span></div></div>
+        <div class="trust-item"><div class="trust-icon">🗓️</div><div><strong>Buiten kantooruren</strong><span>Vooral avonden, weekenden en schoolvakanties.</span></div></div>
+        <div class="trust-item"><div class="trust-icon">🤝</div><div><strong>Persoonlijk contact</strong><span>Rechtstreeks contact en heldere afspraken.</span></div></div>
+      </div>
+    </div>
 
-    <nav class="bottom-nav" aria-label="Hoofdnavigatie">
-      <button data-route="dashboard" class="nav-item active"><span>⌂</span><small>Start</small></button>
-      <button data-route="jobs" class="nav-item"><span>▣</span><small>Klussen</small></button>
-      <button data-route="gear" class="nav-item"><span>🧰</span><small>Materiaal</small></button>
-      <button data-route="documents" class="nav-item"><span>▤</span><small>Documenten</small></button>
-      <button data-route="more" class="nav-item"><span>•••</span><small>Meer</small></button>
-    </nav>
-  </div>
+    <section class="section" id="diensten">
+      <div class="section-head">
+        <div><div class="eyebrow">Diensten</div><h2>Waar JK Works bij kan helpen</h2></div>
+        <p>Van een kleine afwerkklus tot extra ondersteuning bij een groter project. De precieze werkzaamheden spreken we vooraf duidelijk af.</p>
+      </div>
+      <div class="service-grid">
+        <article class="service-card"><div class="service-icon">🔩</div><h3>Montage & kleine klussen</h3><p>Monteren, ophangen, aanpassen en andere praktische werkzaamheden in en om de woning.</p></article>
+        <article class="service-card"><div class="service-icon">📐</div><h3>Keuken & interieur</h3><p>Ondersteuning bij montage en afwerking, zoals paswerk, plinten, ombouw en overige interieurwerkzaamheden.</p></article>
+        <article class="service-card"><div class="service-icon">🧴</div><h3>Kit- & afwerkwerk</h3><p>Nette afwerking van onder andere plinten, naden en aansluitingen, passend bij de afgesproken klus.</p></article>
+        <article class="service-card"><div class="service-icon">🔨</div><h3>Verbouwing & sloopondersteuning</h3><p>Stripwerk, voorbereiding, montage en hand- en spandiensten tijdens een verbouwing of renovatie.</p></article>
+        <article class="service-card"><div class="service-icon">🍽️</div><h3>Catering & horeca</h3><p>Flexibele inzet als extra mankracht bij catering, evenementen en horecawerkzaamheden.</p></article>
+        <article class="service-card"><div class="service-icon">➕</div><h3>Andere praktische hulp</h3><p>Een klus die er niet tussen staat? Stuur een bericht met wat er moet gebeuren; dan kijken we of het past.</p></article>
+      </div>
+    </section>
 
-  <div id="toast" class="toast" role="status"></div>
-  <div id="modalRoot"></div>
+    <section class="section" id="werkwijze">
+      <div class="section-head">
+        <div><div class="eyebrow">Werkwijze</div><h2>Van bericht naar afgeronde klus</h2></div>
+        <p>Een eenvoudige aanpak, zodat vooraf duidelijk is wat er nodig is en wat je kunt verwachten.</p>
+      </div>
+      <div class="process">
+        <article class="step"><h3>Stuur je klus door</h3><p>Vertel kort wat er moet gebeuren. Foto's helpen vaak om vooraf een goede inschatting te maken.</p></article>
+        <article class="step"><h3>Afspraak & prijs</h3><p>We spreken werkzaamheden, planning en prijs of tarief af. Waar nodig volgt vooraf een offerte.</p></article>
+        <article class="step"><h3>Uitvoering</h3><p>De klus wordt volgens afspraak uitgevoerd. Bij passende klussen worden voor-, tijdens- en nafoto's vastgelegd.</p></article>
+        <article class="step"><h3>Afronding</h3><p>Na controle ronden we de klus af en volgt, afhankelijk van de afspraak, de factuur of afgesproken betaling.</p></article>
+      </div>
+    </section>
 
-  <input id="hiddenExistingPdfInput" type="file" accept="application/pdf" multiple hidden />
-  <input id="hiddenBackupInput" type="file" accept="application/json,.jkbackup,.jkbackup.json" hidden />
+    <section class="section" id="over">
+      <div class="about-panel">
+        <div class="about-mark"><img src="/assets/jk-works-logo.jpg" alt="JK Works Dordrecht logo"></div>
+        <div class="about-copy">
+          <div class="eyebrow">Over JK Works</div>
+          <h2>Persoonlijke hulp, zonder groot bedrijf eromheen.</h2>
+          <p>Ik ben Jeremy Korstanje en ben JK Works Dordrecht gestart voor praktische klussen en opdrachten waarbij gewoon extra hulp nodig is.</p>
+          <p>JK Works is vooral beschikbaar buiten reguliere kantooruren. Dat maakt het geschikt voor klussen die in de avond, in het weekend of tijdens schoolvakanties uitgevoerd kunnen worden.</p>
+          <div class="availability"><span>Avonden</span><span>Weekenden</span><span>Schoolvakanties</span><span>Dordrecht & omgeving</span></div>
+        </div>
+      </div>
+    </section>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="db.js"></script>
-  <script src="cloud.js"></script>
-  <script src="app.js"></script>
+    <section class="section" id="contact">
+      <div class="contact-panel">
+        <div class="contact-main">
+          <div class="eyebrow">Contact</div>
+          <h2>Een klus in gedachten?</h2>
+          <p>Stuur gerust een korte omschrijving en eventueel een paar foto's. Dan kan ik aangeven of JK Works je ermee kan helpen en wat een logische vervolgstap is.</p>
+          <div class="contact-actions">
+            <a class="btn primary" href="https://wa.me/31622915035?text=Hoi%20Jeremy%2C%20ik%20wil%20graag%20een%20klus%20bespreken." rel="noopener">WhatsApp</a>
+            <a class="btn secondary" href="tel:+31622915035">Bel 06-22915035</a>
+            <a class="btn secondary" href="mailto:jkworksdordrecht@outlook.com?subject=Klusaanvraag%20via%20jkworks.nl">E-mail</a>
+          </div>
+        </div>
+        <aside class="contact-side">
+          <div class="contact-list">
+            <div class="contact-row"><small>Werkgebied</small><strong>Dordrecht en omgeving</strong></div>
+            <div class="contact-row"><small>E-mail</small><strong>jkworksdordrecht@outlook.com</strong></div>
+            <div class="contact-row"><small>Telefoon</small><strong>06-22915035</strong></div>
+            <div class="contact-row"><small>KvK</small><strong>42078161</strong></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-copy"><strong>JK Works Dordrecht</strong><br>Praktische klussen, montage en ondersteuning.<br>KvK 42078161 · BTW-ID NL005477968B66</div>
+      <div class="footer-links"><a href="#diensten">Diensten</a><a href="#contact">Contact</a><a href="/inloggen/">Inloggen bedrijfsapp</a></div>
+    </div>
+  </footer>
+</div>
+<script src="/site.js"></script>
 </body>
 </html>

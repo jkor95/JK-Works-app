@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#1e272d">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="/assets/favicon.png">
+  <link rel="stylesheet" href="/site.css">
+  <title>Inloggen | JK Works Dordrecht</title>
+</head>
+<body>
+  <main class="login-page">
+    <section class="login-card" aria-labelledby="loginTitle">
+      <img class="login-logo" src="/assets/jk-works-logo.jpg" alt="JK Works Dordrecht">
+      <h1 id="loginTitle">Bedrijfsapp</h1>
+      <p class="login-intro">Beveiligde omgeving voor JK Works Dordrecht.</p>
+      <p id="alreadySignedIn" class="signed-note" hidden>Je bent al ingelogd. De bedrijfsapp wordt geopend...</p>
+      <form id="loginForm">
+        <div class="login-field"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="email" required></div>
+        <div class="login-field"><label for="password">Wachtwoord</label><input id="password" name="password" type="password" autocomplete="current-password" minlength="6" required></div>
+        <button class="login-submit" type="submit">Inloggen</button>
+        <p id="loginError" class="login-error" hidden></p>
+      </form>
+      <p class="login-meta">Alleen bestaande JK Works-accounts kunnen inloggen. Nieuwe accounts worden niet via deze pagina aangemaakt.</p>
+      <a class="back-link" href="/">← Terug naar jkworks.nl</a>
+    </section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/inloggen/login.js"></script>
+</body>
+</html>

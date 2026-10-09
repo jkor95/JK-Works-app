@@ -1,77 +1,33 @@
-# JK Works Dordrecht App v58
+# JK Works Dordrecht v61
 
+Deze versie combineert de openbare website en de beveiligde bedrijfsapp op `jkworks.nl`.
 
+## Structuur
 
-## Nieuw in v58 - uren en bedrag direct naast elkaar
-- Statistieken per week, maand, kwartaal en kalenderjaar tonen nu per periode twee staven naast elkaar: **Uren** en **Bedrag**.
-- Boven iedere staaf staat de exacte waarde, bijvoorbeeld `10 u` en `€ 100,00`.
-- De twee staven gebruiken ieder hun eigen schaal, omdat uren en eurobedragen verschillende eenheden zijn.
-- Bij **Per klant** staan nu eveneens twee afzonderlijke balken per klant: uren en intern bedrag.
-- De splitsing Factuur / Contant blijft zichtbaar.
+- `/` - openbare website voor klanten
+- `/inloggen/` - beveiligde inlogpagina
+- `/app/` - bestaande JK Works-bedrijfsapp als PWA
 
+De bedrijfsapp bevat alle functies uit v60, inclusief KOR- en normale btw-offerte/factuurtemplates.
 
-## Nieuw in v57 - statistieken hersteld
+## Publiceren op GitHub Pages
 
-- Bug opgelost waardoor Urenstatistieken niet meer openden.
-- Per week toegevoegd naast maand, kwartaal, kalenderjaar en klant.
-- Uren en interne bedragen (Factuur / Contant / totaal) zijn weer zichtbaar en de tabs zijn aanklikbaar.
-- Geen database- of Supabase-migratie nodig.
+Upload de **inhoud van deze map** naar de root van dezelfde GitHub-repository en commit de wijzigingen. Laat `CNAME` met `jkworks.nl` staan.
 
-## Nieuw in v56 - openstaand pas na afloop van de klus
+Na deployment:
 
-- Klussen in de toekomst worden niet meer als onbetaald/openstaand gemarkeerd.
-- Een klus telt pas mee bij Openstaand nadat de geplande eindtijd is verstreken.
-- Als geen eindtijd is ingevuld, telt een klus vanaf de dag na de klusdatum als afgerond voor het betaaloverzicht.
-- Een klus die handmatig de status `afgerond` krijgt, telt direct als afgerond.
-- Dit geldt voor zowel Factuur als Contant en voor de rode markering van de klusregel.
+1. Controleer `https://jkworks.nl/`.
+2. Controleer `https://jkworks.nl/inloggen/`.
+3. Log in en controleer dat je naar `https://jkworks.nl/app/` gaat.
+4. Verwijder op iPhone het oude beginscherm-icoon dat nog naar de root verwijst.
+5. Open `https://jkworks.nl/app/` in Safari en kies **Zet op beginscherm**. De nieuwe PWA start dan rechtstreeks in `/app/`.
 
-## Nieuw in v55 - openstaande betalingen duidelijk zichtbaar
+## Supabase
 
-- Klussen waarvan het interne bedrag nog niet als ontvangen is gemarkeerd krijgen over de hele rij een zachte rode/roze waarschuwing.
-- De klus toont duidelijk `OPENSTAAND` en `Nog te ontvangen`.
-- Bovenaan Klussen staat naast de bestaande totalen nu een apart blok **Openstaand**.
-- Openstaande bedragen worden afzonderlijk getoond voor **Factuur** en **Contant**, plus het gecombineerde totaal.
-- Alleen klussen met een berekend bedrag groter dan EUR 0 tellen mee als openstaand.
-- Dit blijft een intern betaaloverzicht en verandert niets aan het Jaaroverzicht Facturen.
+Geen nieuwe SQL nodig. De bestaande Supabase-configuratie blijft gebruikt worden.
 
-## Nieuw in v54 - meldingen afstrepen
+## Belangrijk bij volgende versies
 
-- Elke openstaande actie heeft nu naast openen ook een knop `Niet nodig`.
-- Een weggeklikte actie verdwijnt direct uit het actiecentrum en telt niet meer mee in de rode badge of app-icoonbadge.
-- Bij een weggeklikte urenmelding wordt ook de oude `Klus afgelopen`-herinnering voor die klus als afgehandeld gemarkeerd.
-- Weggeklikte meldingen worden opgeslagen in de app en gaan bij de volgende handmatige synchronisatie mee naar Supabase, zodat ze ook op andere apparaten verborgen blijven.
-- Onder `Meer > Meldingen` staat, zodra er weggeklikte meldingen zijn, een knop om alle verborgen meldingen weer te herstellen.
-- De bestaande categorie-aan/uit-instellingen blijven ongewijzigd.
-
-Geen nieuwe Supabase SQL nodig.
-
-## Nieuw in v53 - meldingen, acties en badges
-
-- Bovenin staat een meldingenknop met het aantal openstaande acties.
-- Actiecentrum voor:
-  - uren invoeren / controleren na een klus;
-  - verplichte foto's voor, tijdens en na;
-  - offerte opmaken;
-  - offerte versturen;
-  - factuur opmaken;
-  - factuur versturen.
-- Bij een klus kan nu `Offerte nodig voor deze klus` worden aangevinkt. Alleen dan ontstaat een actie om een offerte op te maken. Een bestaande, nog niet verstuurde offerte kan wel altijd als verstuuractie verschijnen.
-- Factuuracties gelden alleen voor klussen met afhandeling `Factuur`; contante klussen krijgen geen factuurmelding.
-- Onder `Meer > Meldingen` kan elke categorie afzonderlijk aan of uit.
-- Daar kunnen ook het app-icoonbadge en iPhone/browser-systeemmeldingen worden ingesteld.
-- Op ondersteunde geinstalleerde PWA's wordt het aantal openstaande acties via de Badging API op het app-icoon gezet.
-- Systeemmeldingen vragen expliciet toestemming en worden alleen gebruikt als de gebruiker ze inschakelt.
-- De bestaande herinnering na afloop van een klus respecteert nu de categorie `Uren` en verschijnt niet als die categorie is uitgezet.
-- Handmatige synchronisatie blijft ongewijzigd; het controleren van meldingen veroorzaakt geen pagina-refresh en start geen cloud-sync.
-
-## Belangrijk over iPhone
-
-- Het in-app actiecentrum werkt altijd wanneer de app geopend is.
-- Een badge op het iPhone-beginscherm en webmeldingen vereisen dat JK Works als web-app op het beginscherm is geinstalleerd en dat meldingen zijn toegestaan.
-- Deze versie gebruikt geen Web Push-server. Daardoor kan een volledig afgesloten web-app niet zelfstandig op een exact later moment wakker worden. Wanneer de app wordt geopend, hervat of actief is, worden acties opnieuw gecontroleerd en badges bijgewerkt.
-
-## Bestaande functies behouden
-
-Alle functies uit v52 blijven behouden, waaronder handmatige Supabase-sync, klusfoto's, Materiaal-checklists, uren- en bedragstatistieken, documenten, automatische PDF-uitlezing, jaaroverzicht facturen, interne betaaltypen en automatische factuur-/offerteomschrijvingen.
-
-Geen nieuwe Supabase SQL nodig.
+- `CNAME` in de root behouden.
+- De PWA-bestanden en service worker onder `/app/` houden.
+- De openbare website mag geen bedrijfsdata uit Supabase laden.
