@@ -89,3 +89,10 @@ for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 drop policy if exists "jkworks_deletions_delete_own" on public.app_deletions;
 create policy "jkworks_deletions_delete_own" on public.app_deletions
 for delete using (auth.uid() = user_id);
+
+
+-- v63: openbare website-inhoud. Alleen het ene expliciet openbare contentrecord
+-- mag zonder login worden gelezen; schrijven blijft onder de bestaande auth.uid()-regels vallen.
+drop policy if exists "jkworks_public_website_select" on public.app_records;
+create policy "jkworks_public_website_select" on public.app_records
+for select using (store = 'websitePublic' and record_id = 'main');

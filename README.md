@@ -1,4 +1,4 @@
-# JK Works Dordrecht v62
+# JK Works Dordrecht v63
 
 Deze versie combineert de openbare website en de beveiligde bedrijfsapp op `jkworks.nl`.
 
@@ -31,3 +31,10 @@ Geen nieuwe SQL nodig. De bestaande Supabase-configuratie blijft gebruikt worden
 - `CNAME` in de root behouden.
 - De PWA-bestanden en service worker onder `/app/` houden.
 - De openbare website mag geen bedrijfsdata uit Supabase laden.
+
+
+## v63 - Website beheren vanuit de bedrijfsapp
+- Meer > Website beheren bevat de belangrijkste zichtbare teksten van jkworks.nl.
+- Publiceren schrijft direct naar Supabase; dit staat los van de handmatige app-sync.
+- De openbare site leest alleen het expliciet openbare website-contentrecord.
+- Eenmalig vereist: voer SUPABASE_SETUP.sql opnieuw uit (of alleen het v63-blok onderaan) zodat anonieme bezoekers dit ene contentrecord mogen lezen.

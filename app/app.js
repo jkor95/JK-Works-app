@@ -1,4 +1,4 @@
-/* JK Works Dordrecht - persoonlijke PWA v60 */
+/* JK Works Dordrecht - persoonlijke PWA v63 */
 const App = (() => {
   const state = {route:'dashboard',gearTab:'mboxes',jobPaymentFilter:'all',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,pdfJsPromise:null,activeBlobUrl:null,reminderChecking:false,snoozedReminderJobs:new Set(),pendingCloudRefresh:false,pendingAuthRefresh:false,actionItems:[],notificationTimer:null};
   window.__JK_UI_BUSY=false;
@@ -6,6 +6,41 @@ const App = (() => {
   const PDFJS_URL='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
   const PDFJS_WORKER_URL='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
   const PDF_PARSE_VERSION=2;
+  const DEFAULT_WEBSITE_CONTENT={
+    heroTitle1:'Flexibele ondersteuning waar',
+    heroTitle2:'extra handen nodig zijn.',
+    heroCopy:'Vooral inzetbaar als extra mankracht in catering en horeca, bij evenementen en andere ondersteunende werkzaamheden. Daarnaast ook beschikbaar voor kleine montage- en praktische klussen in en om huis. Beschikbaar buiten kantooruren in Dordrecht en omgeving.',
+    servicesTitle:'Ondersteuning staat voorop',
+    servicesIntro:'JK Works is in de eerste plaats beschikbaar als flexibele extra kracht, met name in catering en horeca. Daarnaast kun je ook terecht voor kleine, overzichtelijke montage- en praktische klussen.',
+    service1Title:'Catering & horeca',
+    service1Text:'Flexibele inzet als extra mankracht bij catering, evenementen, feesten en andere horecawerkzaamheden. Denk aan op- en afbouw, uitgifte, bediening, voorbereiding en algemene ondersteuning.',
+    service2Title:'Extra ondersteuning',
+    service2Text:'Een extra paar handen nodig voor een tijdelijke opdracht of druk moment? JK Works kan praktisch ondersteunen waar extra capaciteit nodig is.',
+    service3Title:'Kleine montage & klusjes',
+    service3Text:'Overzichtelijke klussen zoals een schilderij of plank ophangen, iets monteren, afstellen, bevestigen of een kleine reparatie uitvoeren.',
+    service4Title:'Kit- & afwerkwerk',
+    service4Text:'Nette afwerking van onder andere plinten, naden en aansluitingen, passend bij de afgesproken klus.',
+    service5Title:'Montage, verbouwing & sloop',
+    service5Text:'Ondersteuning bij montage, voorbereiding, stripwerk en hand- en spandiensten tijdens een verbouwing of renovatie.',
+    service6Title:'Andere praktische hulp',
+    service6Text:'Staat je opdracht er niet tussen? Stuur een bericht. Kleine praktische klussen zijn welkom; volledig schilderwerk behoort in principe niet tot de diensten.',
+    workflowTitle:'Van aanvraag naar duidelijke afspraak',
+    workflowIntro:'Een eenvoudige aanpak, zodat vooraf duidelijk is wat er nodig is en wat je kunt verwachten.',
+    step1Title:'Stuur je aanvraag door',
+    step1Text:'Vertel kort waar je ondersteuning bij nodig hebt. Bij een kleine klus helpen foto\'s vaak om vooraf een goede inschatting te maken.',
+    step2Title:'Afspraak & prijs',
+    step2Text:'We spreken werkzaamheden, planning en prijs of tarief af. Waar nodig volgt vooraf een offerte.',
+    step3Title:'Uitvoering',
+    step3Text:'De opdracht wordt volgens afspraak uitgevoerd. Bij passende montage- of kluswerkzaamheden kunnen voor-, tijdens- en nafoto\'s worden vastgelegd.',
+    step4Title:'Afronding',
+    step4Text:'Na controle ronden we de klus af en volgt, afhankelijk van de afspraak, de factuur of afgesproken betaling.',
+    aboutTitle:'Persoonlijke hulp, zonder groot bedrijf eromheen.',
+    aboutP1:'Ik ben Jeremy Korstanje en ben JK Works Dordrecht gestart voor opdrachten waarbij flexibel extra hulp nodig is. De nadruk ligt op ondersteuning en inzet als extra mankracht, met daarnaast ruimte voor kleine praktische klussen en montage.',
+    aboutP2:'JK Works is vooral beschikbaar buiten reguliere kantooruren. Dat maakt het geschikt voor klussen die in de avond, in het weekend of tijdens schoolvakanties uitgevoerd kunnen worden.',
+    contactTitle:'Extra ondersteuning nodig?',
+    contactText:'Stuur gerust een korte omschrijving van de opdracht, gewenste datum/tijden en wat voor ondersteuning je zoekt. Gaat het om een kleine klus, voeg dan eventueel een paar foto\'s toe. Dan kan ik snel aangeven of JK Works beschikbaar is.',
+    footerText:'Flexibele ondersteuning, horeca en kleine praktische klussen.'
+  };
   const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
   const esc=(v='')=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const money=v=>new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(Number(v||0));
@@ -1151,8 +1186,8 @@ const App = (() => {
 
   async function renderMore(){
     title('Meer');const [clients,entries,company,backup,cloudStatus]=await Promise.all([JKDB.all('clients'),JKDB.all('timeEntries'),JKDB.get('settings','company'),JKDB.get('settings','backup'),JKDB.get('settings','cloudStatus')]);const cs=JKCloud.status();
-    $('#view').innerHTML=`<div class="list"><div class="list-item clickable" id="cloudMenu"><div class="main"><div class="title">☁️ Synchronisatie</div><div class="sub">${cs.signedIn?(cs.email+' · '+(cloudStatus?.lastSync?'laatst '+fmtDateTime(cloudStatus.lastSync):'nog niet gesynchroniseerd')):'Niet ingelogd'}</div></div><span>›</span></div><div class="list-item clickable" id="notificationMenu"><div class="main"><div class="title">🔔 Meldingen</div><div class="sub">Acties, badges en meldingen per categorie</div></div><span>›</span></div><div class="list-item clickable" id="timeMenu"><div class="main"><div class="title">🕒 Urenregistratie</div><div class="sub">${entries.length} registraties · handmatig van-tot</div></div><span>›</span></div><div class="list-item clickable" id="timeStatsMenu"><div class="main"><div class="title">📊 Urenstatistieken</div><div class="sub">Grafieken per maand, kwartaal en kalenderjaar</div></div><span>›</span></div><div class="list-item clickable" id="clientMenu"><div class="main"><div class="title">👥 Klanten</div><div class="sub">${clients.length} klanten</div></div><span>›</span></div><div class="list-item clickable" id="companyMenu"><div class="main"><div class="title">🏢 Bedrijfsgegevens</div><div class="sub">${esc(company?.companyName||'JK Works Dordrecht')}</div></div><span>›</span></div><div class="list-item clickable" id="backupMenu"><div class="main"><div class="title">☁️ Back-up & herstel</div><div class="sub">${backup?.lastBackup?'Laatst '+fmtDateTime(backup.lastBackup):'Nog geen back-up'}</div></div><span>›</span></div></div>`;
-    $('#cloudMenu').addEventListener('click',showCloud);$('#notificationMenu').addEventListener('click',showNotificationSettings);$('#timeMenu').addEventListener('click',showTimeEntries);$('#timeStatsMenu').addEventListener('click',showTimeStats);$('#clientMenu').addEventListener('click',showClients);$('#companyMenu').addEventListener('click',showCompany);$('#backupMenu').addEventListener('click',showBackup);
+    $('#view').innerHTML=`<div class="list"><div class="list-item clickable" id="cloudMenu"><div class="main"><div class="title">☁️ Synchronisatie</div><div class="sub">${cs.signedIn?(cs.email+' · '+(cloudStatus?.lastSync?'laatst '+fmtDateTime(cloudStatus.lastSync):'nog niet gesynchroniseerd')):'Niet ingelogd'}</div></div><span>›</span></div><div class="list-item clickable" id="notificationMenu"><div class="main"><div class="title">🔔 Meldingen</div><div class="sub">Acties, badges en meldingen per categorie</div></div><span>›</span></div><div class="list-item clickable" id="timeMenu"><div class="main"><div class="title">🕒 Urenregistratie</div><div class="sub">${entries.length} registraties · handmatig van-tot</div></div><span>›</span></div><div class="list-item clickable" id="timeStatsMenu"><div class="main"><div class="title">📊 Urenstatistieken</div><div class="sub">Grafieken per maand, kwartaal en kalenderjaar</div></div><span>›</span></div><div class="list-item clickable" id="clientMenu"><div class="main"><div class="title">👥 Klanten</div><div class="sub">${clients.length} klanten</div></div><span>›</span></div><div class="list-item clickable" id="companyMenu"><div class="main"><div class="title">🏢 Bedrijfsgegevens</div><div class="sub">${esc(company?.companyName||'JK Works Dordrecht')}</div></div><span>›</span></div><div class="list-item clickable" id="websiteMenu"><div class="main"><div class="title">🌐 Website beheren</div><div class="sub">Teksten van jkworks.nl aanpassen en direct publiceren</div></div><span>›</span></div><div class="list-item clickable" id="backupMenu"><div class="main"><div class="title">☁️ Back-up & herstel</div><div class="sub">${backup?.lastBackup?'Laatst '+fmtDateTime(backup.lastBackup):'Nog geen back-up'}</div></div><span>›</span></div></div>`;
+    $('#cloudMenu').addEventListener('click',showCloud);$('#notificationMenu').addEventListener('click',showNotificationSettings);$('#timeMenu').addEventListener('click',showTimeEntries);$('#timeStatsMenu').addEventListener('click',showTimeStats);$('#clientMenu').addEventListener('click',showClients);$('#companyMenu').addEventListener('click',showCompany);$('#websiteMenu').addEventListener('click',showWebsiteEditor);$('#backupMenu').addEventListener('click',showBackup);
   }
 
   function showCloud(){
@@ -1296,6 +1331,37 @@ const App = (() => {
       e.preventDefault();const f=new FormData(e.target);
       Object.assign(c,{companyName:f.get('companyName'),owner:f.get('owner'),kor:f.get('kor')==='on',korSince:f.get('korSince'),defaultRate:f.get('defaultRate'),notes:f.get('notes')});
       await JKDB.put('settings',c);closeModal();toast('Bedrijfsgegevens opgeslagen');
+    });
+  }
+
+  async function showWebsiteEditor(){
+    let remote={};
+    try{remote=(await JKCloud.getWebsiteContent())||{};}catch(e){console.warn('Website-inhoud ophalen mislukt',e);}
+    const c={...DEFAULT_WEBSITE_CONTENT,...remote};
+    const field=(name,label,rows=2)=>`<div class="field"><label>${esc(label)}</label><textarea name="${name}" rows="${rows}">${esc(c[name]||'')}</textarea></div>`;
+    const short=(name,label)=>`<div class="field"><label>${esc(label)}</label><input name="${name}" value="${esc(c[name]||'')}"></div>`;
+    modal(`${modalHead('Website beheren')}
+      <div class="card"><h3>Openbare website</h3><p class="muted small">Pas hier de teksten van <strong>jkworks.nl</strong> aan. Met <strong>Website publiceren</strong> worden de wijzigingen direct openbaar; dit staat los van de handmatige app-sync.</p><button type="button" class="secondary" id="openPublicSite" style="width:100%">🌐 Bekijk huidige website</button></div>
+      <form id="websiteForm">
+        <div class="card"><h3>Intro</h3>${short('heroTitle1','Hoofdtitel - eerste deel')}${short('heroTitle2','Hoofdtitel - benadrukt deel')}${field('heroCopy','Introductietekst',4)}</div>
+        <div class="card"><h3>Diensten</h3>${short('servicesTitle','Titel diensten')}${field('servicesIntro','Inleiding diensten',3)}${short('service1Title','Dienst 1 - titel')}${field('service1Text','Dienst 1 - tekst',3)}${short('service2Title','Dienst 2 - titel')}${field('service2Text','Dienst 2 - tekst',3)}${short('service3Title','Dienst 3 - titel')}${field('service3Text','Dienst 3 - tekst',3)}${short('service4Title','Dienst 4 - titel')}${field('service4Text','Dienst 4 - tekst',3)}${short('service5Title','Dienst 5 - titel')}${field('service5Text','Dienst 5 - tekst',3)}${short('service6Title','Dienst 6 - titel')}${field('service6Text','Dienst 6 - tekst',3)}</div>
+        <div class="card"><h3>Werkwijze</h3>${short('workflowTitle','Titel')}${field('workflowIntro','Inleiding',2)}${short('step1Title','Stap 1 - titel')}${field('step1Text','Stap 1 - tekst',2)}${short('step2Title','Stap 2 - titel')}${field('step2Text','Stap 2 - tekst',2)}${short('step3Title','Stap 3 - titel')}${field('step3Text','Stap 3 - tekst',2)}${short('step4Title','Stap 4 - titel')}${field('step4Text','Stap 4 - tekst',2)}</div>
+        <div class="card"><h3>Over JK Works</h3>${short('aboutTitle','Titel')}${field('aboutP1','Tekst 1',4)}${field('aboutP2','Tekst 2',3)}</div>
+        <div class="card"><h3>Contact</h3>${short('contactTitle','Titel')}${field('contactText','Contacttekst',4)}${short('footerText','Korte footeromschrijving')}</div>
+        <div class="button-row"><button class="primary" type="submit">Website publiceren</button><button class="secondary" type="button" id="resetWebsiteText">Standaardteksten terugzetten</button></div>
+      </form>`);
+    $('#openPublicSite').addEventListener('click',()=>window.open('/','_blank','noopener,noreferrer'));
+    $('#resetWebsiteText').addEventListener('click',()=>{if(!confirm('Alle tekstvelden terugzetten naar de standaardteksten van v62?'))return;const form=$('#websiteForm');for(const [k,v] of Object.entries(DEFAULT_WEBSITE_CONTENT)){const el=form.elements.namedItem(k);if(el)el.value=v;}toast('Standaardteksten ingevuld - druk op Website publiceren om ze openbaar te maken');});
+    $('#websiteForm').addEventListener('submit',async e=>{
+      e.preventDefault();
+      const btn=e.submitter; if(btn){btn.disabled=true;btn.textContent='Publiceren...';}
+      try{
+        const f=new FormData(e.target),next={};
+        for(const k of Object.keys(DEFAULT_WEBSITE_CONTENT))next[k]=String(f.get(k)||'').trim();
+        await JKCloud.saveWebsiteContent(next);
+        toast('Website gepubliceerd');
+        if(btn){btn.textContent='Gepubliceerd ✓';setTimeout(()=>{btn.disabled=false;btn.textContent='Website publiceren';},1200);}
+      }catch(err){if(btn){btn.disabled=false;btn.textContent='Website publiceren';}alert('Publiceren mislukt: '+(err.message||err));}
     });
   }
 

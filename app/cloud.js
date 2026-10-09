@@ -255,7 +255,21 @@ const JKCloud = (() => {
     await syncNow();
     return {removed,stores:allowed};
   }
+  async function getWebsiteContent(){
+    if(!isSignedIn()) throw new Error('Niet ingelogd.');
+    const {data,error}=await client.from('app_records').select('data,updated_at').eq('user_id',user().id).eq('store','websitePublic').eq('record_id','main').maybeSingle();
+    if(error) throw error;
+    return data?.data||null;
+  }
+  async function saveWebsiteContent(content){
+    if(!isSignedIn()) throw new Error('Niet ingelogd.');
+    if(!navigator.onLine) throw new Error('Geen internetverbinding.');
+    const row={user_id:user().id,store:'websitePublic',record_id:'main',data:content,updated_at:new Date().toISOString()};
+    const {error}=await client.from('app_records').upsert(row,{onConflict:'user_id,store,record_id'});
+    if(error) throw error;
+    return true;
+  }
   async function pendingCount(){ return (await JKDB.all('syncQueue')).filter(q=>!LOCAL_ONLY_STORES.has(q.store)).length; }
   function status(){ return {available:available(),signedIn:isSignedIn(),email:user()?.email||'',syncing}; }
-  return {init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,queuePut,queueDelete,pruneCloudToLocal,pendingCount};
+  return {init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,queuePut,queueDelete,pruneCloudToLocal,pendingCount,getWebsiteContent,saveWebsiteContent};
 })();
