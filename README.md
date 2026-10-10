@@ -1,3 +1,10 @@
+JK Works Dordrecht v64
+
+- Vier offerte/factuursjablonen vervangen door de nieuwe versies met IBAN t.n.v. J. Korstanje.
+- KOR aan: KOR-template.
+- KOR uit: normale btw-template.
+- Website, login, app en websitebeheer uit v63 behouden.
+
 # JK Works Dordrecht v63
 
 Deze versie combineert de openbare website en de beveiligde bedrijfsapp op `jkworks.nl`.
