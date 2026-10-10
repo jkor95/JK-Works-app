@@ -1,7 +1,7 @@
 const JKDB = (() => {
   const DB_NAME = 'jkworks-dordrecht';
-  const DB_VERSION = 5;
-  const stores = ['mboxes','tools','checklists','clients','jobs','jobPhotos','timeEntries','pdfTemplates','documents','settings'];
+  const DB_VERSION = 6;
+  const stores = ['mboxes','tools','checklists','clients','jobs','jobPhotos','timeEntries','pdfTemplates','documents','expenses','settings'];
   const internalStores = ['syncQueue','deleteMarkers'];
   const localOnlyStores = new Set();
   let dbPromise;

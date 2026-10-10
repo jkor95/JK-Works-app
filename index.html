@@ -58,6 +58,7 @@
         <a href="#diensten">Diensten</a>
         <a href="#werkwijze">Werkwijze</a>
         <a href="#over">Over JK Works</a>
+        <a href="#aanvragen">Opdracht aanvragen</a>
         <a href="#contact">Contact</a>
         <a class="login-link" href="/inloggen/">Inloggen</a>
       </nav>
@@ -131,6 +132,32 @@
           <div class="availability"><span>Avonden</span><span>Weekenden</span><span>Schoolvakanties</span><span>Dordrecht & omgeving</span></div>
         </div>
       </div>
+    </section>
+
+    <section class="section" id="aanvragen">
+      <div class="section-head">
+        <div><div class="eyebrow">Opdracht aanvragen</div><h2>Stuur direct een aanvraag naar JK Works</h2></div>
+        <p>Vul de belangrijkste gegevens in. De aanvraag komt rechtstreeks in de beveiligde JK Works-app terecht. Je ontvangt daarna persoonlijk reactie over beschikbaarheid en afspraken.</p>
+      </div>
+      <form id="publicRequestForm" class="request-panel">
+        <div class="request-grid">
+          <label><span>Naam *</span><input name="name" required maxlength="100" autocomplete="name"></label>
+          <label><span>Bedrijf</span><input name="company" maxlength="120" autocomplete="organization"></label>
+          <label><span>Telefoon</span><input name="phone" maxlength="40" autocomplete="tel"></label>
+          <label><span>E-mail</span><input name="email" type="email" maxlength="160" autocomplete="email"></label>
+          <label><span>Soort opdracht *</span><select name="request_type" required><option value="">Kies...</option><option>Horeca / catering</option><option>Evenementondersteuning</option><option>Extra mankracht</option><option>Kleine montage / klus</option><option>Kit- / afwerkwerk</option><option>Verbouwing / sloopondersteuning</option><option>Anders</option></select></label>
+          <label><span>Gewenste datum</span><input name="requested_date" type="date"></label>
+          <label><span>Starttijd</span><input name="start_time" type="time"></label>
+          <label><span>Eindtijd</span><input name="end_time" type="time"></label>
+          <label class="request-wide"><span>Locatie / plaats</span><input name="location" maxlength="180" autocomplete="street-address"></label>
+          <label class="request-wide"><span>Omschrijving *</span><textarea name="description" required minlength="10" maxlength="2000" rows="5" placeholder="Wat moet er gebeuren en waar kan ik bij ondersteunen?"></textarea></label>
+          <label class="request-wide"><span>Foto's (optioneel, max. 3)</span><input name="photos" type="file" accept="image/*" multiple><small>Handig bij een kleine montage- of klusaanvraag. Foto's worden automatisch verkleind voordat ze worden verstuurd.</small></label>
+          <label><span>Voorkeur contact</span><select name="preferred_contact"><option>WhatsApp / telefoon</option><option>E-mail</option><option>Geen voorkeur</option></select></label>
+          <label class="request-hp" aria-hidden="true"><span>Website</span><input name="website" tabindex="-1" autocomplete="off"></label>
+        </div>
+        <div class="request-note">Foto's worden compact opgeslagen (maximaal ongeveer 200 KB per foto) zodat het cloudverbruik beperkt blijft. Je kunt maximaal 3 foto's meesturen.</div>
+        <div class="request-submit-row"><button class="btn primary" type="submit">Aanvraag versturen</button><span id="requestStatus" class="request-status" role="status"></span></div>
+      </form>
     </section>
 
     <section class="section" id="contact">

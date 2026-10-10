@@ -269,7 +269,35 @@ const JKCloud = (() => {
     if(error) throw error;
     return true;
   }
+  async function getWebsiteRequests(){
+    if(!isSignedIn()) throw new Error('Niet ingelogd.');
+    const {data,error}=await client.from('public_requests').select('*').order('created_at',{ascending:false});
+    if(error) throw error;
+    return data||[];
+  }
+  async function updateWebsiteRequest(id,patch){
+    if(!isSignedIn()) throw new Error('Niet ingelogd.');
+    const {data,error}=await client.from('public_requests').update({...patch,updated_at:new Date().toISOString()}).eq('id',id).select().maybeSingle();
+    if(error) throw error;
+    return data;
+  }
+  async function downloadRequestPhoto(path){
+    if(!isSignedIn()) throw new Error('Niet ingelogd.');
+    const {data,error}=await client.storage.from('jkworks-request-files').download(path);
+    if(error) throw error;
+    return data;
+  }
+  async function deleteWebsiteRequest(id){
+    if(!isSignedIn()) throw new Error('Niet ingelogd.');
+    const {data:row,error:readError}=await client.from('public_requests').select('photo_paths').eq('id',id).maybeSingle();
+    if(readError) throw readError;
+    const paths=Array.isArray(row?.photo_paths)?row.photo_paths:[];
+    if(paths.length){const {error:storageError}=await client.storage.from('jkworks-request-files').remove(paths);if(storageError)console.warn('Aanvraagfoto’s verwijderen mislukt',storageError);}
+    const {error}=await client.from('public_requests').delete().eq('id',id);
+    if(error) throw error;
+    return true;
+  }
   async function pendingCount(){ return (await JKDB.all('syncQueue')).filter(q=>!LOCAL_ONLY_STORES.has(q.store)).length; }
   function status(){ return {available:available(),signedIn:isSignedIn(),email:user()?.email||'',syncing}; }
-  return {init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,queuePut,queueDelete,pruneCloudToLocal,pendingCount,getWebsiteContent,saveWebsiteContent};
+  return {init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,queuePut,queueDelete,pruneCloudToLocal,pendingCount,getWebsiteContent,saveWebsiteContent,getWebsiteRequests,updateWebsiteRequest,downloadRequestPhoto,deleteWebsiteRequest};
 })();
