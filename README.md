@@ -18,3 +18,11 @@ Publiceren: vervang de bestaande GitHub Pages-bestanden door de inhoud van deze 
 
 
 Update v69: de WhatsApp- en e-mailknoppen bovenaan de openbare website zijn verwijderd; contactmogelijkheden onderaan blijven behouden.
+
+## Versie 70 - website opgeschoond
+- Informatiebalk met horeca, kantooruren en persoonlijk contact verwijderd.
+- Herhalingen in introductie, badges en footer beperkt.
+- Inloggen alleen als subtiele link Beheer onderaan.
+- Geen vast aantal foto's meer in het aanvraagformulier. Foto's worden nog steeds gecomprimeerd.
+- **Belangrijk:** voer na het uploaden eenmalig `SUPABASE_V70_FOTOS.sql` uit in de Supabase SQL Editor, anders blijft de bestaande databasebeveiliging maximaal drie foto's toestaan.
+- De bedrijfsapp zelf is ongewijzigd. Uploads zijn afhankelijk van de opslaglimieten van Supabase; grote aantallen foto's kunnen tijd kosten.

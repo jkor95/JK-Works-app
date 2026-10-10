@@ -133,7 +133,6 @@ with check (
   and char_length(trim(name)) between 2 and 100
   and char_length(trim(request_type)) between 2 and 100
   and char_length(trim(description)) between 10 and 2000
-  and cardinality(photo_paths) <= 3
   and (nullif(trim(coalesce(phone,'')),'') is not null or nullif(trim(coalesce(email,'')),'') is not null)
 );
 
@@ -153,7 +152,7 @@ create policy "jkworks_requests_authenticated_delete"
 on public.public_requests for delete to authenticated
 using ((select auth.uid()) = owner_id);
 
--- Kleine, private opslag voor maximaal drie gecomprimeerde aanvraagfoto's.
+-- Private opslag voor gecomprimeerde aanvraagfoto's.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('jkworks-request-files','jkworks-request-files',false,307200,array['image/jpeg'])
 on conflict (id) do update
@@ -166,7 +165,7 @@ with check (
   bucket_id = 'jkworks-request-files'
   and (storage.foldername(name))[1] = 'requests'
   and (storage.foldername(name))[2] ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-  and storage.filename(name) ~ '^foto-[1-3]\.jpg$'
+  and storage.filename(name) ~ '^foto-[1-9][0-9]*\.jpg$'
 );
 
 drop policy if exists "jkworks_request_files_owner_select" on storage.objects;

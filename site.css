@@ -52,3 +52,6 @@ button,input,textarea,select{font:inherit}
 .request-note{margin-top:14px;padding:12px 14px;border-radius:12px;background:#f5f1ea;color:#5b5148;font-size:.92rem;line-height:1.45}
 .request-submit-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px}.request-status{font-weight:700}.request-status.ok{color:#26734d}.request-status.err{color:#a53030}
 @media(max-width:700px){.request-grid{grid-template-columns:1fr}.request-wide{grid-column:auto}.request-panel{padding:18px}}
+
+/* v70: discrete toegang tot de bedrijfsapp in de footer */
+.footer-admin{opacity:.48;font-size:10px;font-weight:400;text-decoration:none}.footer-admin:hover,.footer-admin:focus-visible{opacity:1;text-decoration:underline}

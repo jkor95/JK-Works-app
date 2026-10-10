@@ -48,7 +48,6 @@
     }
     const requestId=crypto.randomUUID();
     const files=[...form.querySelector('input[name="photos"]')?.files||[]];
-    if(files.length>3){status.textContent='Kies maximaal 3 foto\'s.';status.className='request-status err';return;}
     const photoPaths=files.map((_,i)=>`requests/${requestId}/foto-${i+1}.jpg`);
     const payload={
       id:requestId,
