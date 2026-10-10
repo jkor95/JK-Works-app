@@ -1,47 +1,21 @@
-JK Works Dordrecht v64
+JK Works Dordrecht v65
 
-- Vier offerte/factuursjablonen vervangen door de nieuwe versies met IBAN t.n.v. J. Korstanje.
-- KOR aan: KOR-template.
-- KOR uit: normale btw-template.
-- Website, login, app en websitebeheer uit v63 behouden.
+Nieuw in deze versie:
+- SEO voor de openbare website: canonical URL, verbeterde titel/meta-description, Open Graph, LocalBusiness structured data, robots.txt en sitemap.xml.
+- /app/ en /inloggen/ zijn expliciet noindex zodat alleen de klantenwebsite bedoeld is voor Google.
+- Factuur- en offerteomschrijvingen worden niet meer afgekapt. Een lange omschrijving wordt netjes over maximaal twee regels in dezelfde rij gezet.
+- Tijdvakken zoals 10:00 - 16:00 blijven als geheel op één regel staan.
+- Eénregelige omschrijvingen blijven op 12 pt; tweeregelige omschrijvingen worden passend verkleind zodat beide regels binnen dezelfde rij blijven.
+- De omschrijving is in het invoerscherm nu een tweeregelig tekstvak.
+- Alle vier de templates uit v64 (KOR en normaal/btw voor offerte en factuur) blijven behouden.
+- Websitebeheer, beveiligde bedrijfsapp en jkworks.nl blijven behouden.
 
-# JK Works Dordrecht v63
+Publiceren:
+1. Upload de volledige inhoud van deze map naar de root van de GitHub-repository en commit.
+2. Wacht op GitHub Pages deployment.
+3. Controleer https://jkworks.nl/ en https://jkworks.nl/sitemap.xml.
+4. Voeg daarna in Google Search Console https://jkworks.nl/ toe en dien sitemap.xml in.
 
-Deze versie combineert de openbare website en de beveiligde bedrijfsapp op `jkworks.nl`.
-
-## Structuur
-
-- `/` - openbare website voor klanten
-- `/inloggen/` - beveiligde inlogpagina
-- `/app/` - bestaande JK Works-bedrijfsapp als PWA
-
-De bedrijfsapp bevat alle functies uit v60, inclusief KOR- en normale btw-offerte/factuurtemplates.
-
-## Publiceren op GitHub Pages
-
-Upload de **inhoud van deze map** naar de root van dezelfde GitHub-repository en commit de wijzigingen. Laat `CNAME` met `jkworks.nl` staan.
-
-Na deployment:
-
-1. Controleer `https://jkworks.nl/`.
-2. Controleer `https://jkworks.nl/inloggen/`.
-3. Log in en controleer dat je naar `https://jkworks.nl/app/` gaat.
-4. Verwijder op iPhone het oude beginscherm-icoon dat nog naar de root verwijst.
-5. Open `https://jkworks.nl/app/` in Safari en kies **Zet op beginscherm**. De nieuwe PWA start dan rechtstreeks in `/app/`.
-
-## Supabase
-
-Geen nieuwe SQL nodig. De bestaande Supabase-configuratie blijft gebruikt worden.
-
-## Belangrijk bij volgende versies
-
-- `CNAME` in de root behouden.
-- De PWA-bestanden en service worker onder `/app/` houden.
-- De openbare website mag geen bedrijfsdata uit Supabase laden.
-
-
-## v63 - Website beheren vanuit de bedrijfsapp
-- Meer > Website beheren bevat de belangrijkste zichtbare teksten van jkworks.nl.
-- Publiceren schrijft direct naar Supabase; dit staat los van de handmatige app-sync.
-- De openbare site leest alleen het expliciet openbare website-contentrecord.
-- Eenmalig vereist: voer SUPABASE_SETUP.sql opnieuw uit (of alleen het v63-blok onderaan) zodat anonieme bezoekers dit ene contentrecord mogen lezen.
+Supabase:
+- Geen nieuwe SQL nodig ten opzichte van v64.
+- Als de v63 websitebeheer-policy nog niet is uitgevoerd, voer SUPABASE_SETUP.sql wel eenmalig uit.

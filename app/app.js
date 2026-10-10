@@ -1,4 +1,4 @@
-/* JK Works Dordrecht - persoonlijke PWA v64 */
+/* JK Works Dordrecht - persoonlijke PWA v65 */
 const App = (() => {
   const state = {route:'dashboard',gearTab:'mboxes',jobPaymentFilter:'all',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,pdfJsPromise:null,activeBlobUrl:null,reminderChecking:false,snoozedReminderJobs:new Set(),pendingCloudRefresh:false,pendingAuthRefresh:false,actionItems:[],notificationTimer:null};
   window.__JK_UI_BUSY=false;
@@ -1082,7 +1082,7 @@ const App = (() => {
     }
     modal(`${modalHead('Nieuwe '+kind.toLowerCase())}<form id="businessDocForm"><div class="card form-section"><h3>Document</h3><div class="field"><label>Kies klus</label><select id="jobPick" required><option value="">Selecteer een klus</option>${jobs.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(j=>`<option value="${j.id}" ${prefill.jobId===j.id?'selected':''}>${esc(j.title)}${j.clientName?' · '+esc(j.clientName):''}${j.date?' · '+nlDate(j.date):''}</option>`).join('')}</select><small class="muted">De gekozen klus wordt gebruikt voor klantgegevens, datum werkzaamheden en de koppeling met uren. De app maakt op basis van de gekozen klus automatisch een passende omschrijving op regel 1. Je kunt deze omschrijving altijd zelf aanpassen.</small><button type="button" class="secondary" id="calendarBusinessJob" style="margin-top:8px">📅 Zet gekozen klus in agenda</button></div><div class="form-grid"><div class="field"><label>${kind}nummer</label><input name="number" required value="${esc(number)}"></div><div class="field"><label>${isInvoice?'Factuurdatum':'Datum'}</label><input type="date" name="docDate" required value="${esc(docDate)}"></div><div class="field"><label>${isInvoice?'Datum werkzaamheden':'Werkzaamheden op'}</label>${isInvoice?`<input name="workDate" placeholder="bijv. 04-10-2026" value="${esc(initialWorkDate)}">`:`<input type="date" name="workDate" value="${esc(initialWorkDate)}">`}</div><div class="field"><label>${isInvoice?'Vervaldatum':'Geldig t/m'}</label><input type="date" name="deadline" required value="${esc(deadline)}" ${isInvoice?'':`max="${esc(deadline)}"`}>${isInvoice?'<small class="muted">Standaard 14 dagen na de factuurdatum. Je kunt de vervaldatum handmatig aanpassen.</small>':'<small class="muted">Automatisch maximaal 4 weken na offertedatum, of uiterlijk de dag vóór de werkzaamheden.</small>'}</div></div><label class="checkline" style="margin-top:12px"><input type="checkbox" id="docKor" ${defaultKor?'checked':''}><span><strong>KOR toepassen op dit document</strong><br><small class="muted">Aan = KOR-sjabloon zonder btw. Uit = normaal sjabloon met 21% btw.</small></span></label></div>
       <div class="card form-section"><h3>Klant</h3><div class="field"><label>Kies bestaande klant</label><select id="clientPick"><option value="">Handmatig invullen</option>${clients.map(c=>`<option value="${c.id}" ${prefill.clientId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>Naam/bedrijf</label><input name="clientName" value="${esc(pClient.name||'')}"></div><div class="field"><label>T.a.v.</label><input name="attention" value="${esc(pClient.attention||'')}"></div><div class="field"><label>Adres</label><input name="address" value="${esc(pClient.address||pClient.street||'')}"></div><div class="field"><label>Postcode/Plaats</label><input name="postalCity" value="${esc(pClient.postalCity||[pClient.postal,pClient.city].filter(Boolean).join(' '))}"></div><div class="form-grid"><div class="field"><label>Telefoon</label><input name="phone" value="${esc(pClient.phone||'')}"></div><div class="field"><label>E-mail</label><input type="email" name="email" value="${esc(pClient.email||'')}"></div></div><p class="muted small">Kies je een bestaande klant, dan worden alle klantgegevens automatisch overgenomen.</p></div>
-      <div class="card form-section"><div class="section-inline"><h3>Werkzaamheden / materiaal</h3><span class="muted small">max. 4 regels in huidig sjabloon</span></div><div class="line-head"><span>Aantal</span><span>Omschrijving</span><span>Prijs p/st</span><span>Totaal</span></div>${lines.map((l,i)=>`<div class="invoice-line" data-line="${i}"><input inputmode="decimal" name="qty${i}" placeholder="1" value="${esc(l.qty||'')}"><input name="desc${i}" placeholder="${i===0?'Passende werkzaamheden':'Omschrijving'}" value="${esc(l.description||'')}"><input inputmode="decimal" name="price${i}" placeholder="0,00" value="${esc(l.price||'')}"><output id="lineTotal${i}">€ 0,00</output></div>`).join('')}<div id="vatTotals"><div class="doc-total" id="subtotalRow"><span>Subtotaal excl. btw</span><strong id="subtotalTotal">€ 0,00</strong></div><div class="doc-total tax-row" id="vatRow"><span>Btw 21%</span><strong id="vatTotal">€ 0,00</strong></div><div class="doc-total"><span id="grandTotalLabel">Totaal incl. btw</span><strong id="grandTotal">€ 0,00</strong></div></div></div>
+      <div class="card form-section"><div class="section-inline"><h3>Werkzaamheden / materiaal</h3><span class="muted small">max. 4 regels in huidig sjabloon</span></div><div class="line-head"><span>Aantal</span><span>Omschrijving</span><span>Prijs p/st</span><span>Totaal</span></div>${lines.map((l,i)=>`<div class="invoice-line" data-line="${i}"><input inputmode="decimal" name="qty${i}" placeholder="1" value="${esc(l.qty||'')}"><textarea rows="2" name="desc${i}" placeholder="${i===0?'Passende werkzaamheden':'Omschrijving'}">${esc(l.description||'')}</textarea><input inputmode="decimal" name="price${i}" placeholder="0,00" value="${esc(l.price||'')}"><output id="lineTotal${i}">€ 0,00</output></div>`).join('')}<div id="vatTotals"><div class="doc-total" id="subtotalRow"><span>Subtotaal excl. btw</span><strong id="subtotalTotal">€ 0,00</strong></div><div class="doc-total tax-row" id="vatRow"><span>Btw 21%</span><strong id="vatTotal">€ 0,00</strong></div><div class="doc-total"><span id="grandTotalLabel">Totaal incl. btw</span><strong id="grandTotal">€ 0,00</strong></div></div></div>
       ${entries.length?`<div class="card form-section"><div class="section-inline"><h3>Uren uit urenregistratie</h3><span class="muted small">optioneel</span></div><p class="muted small">Selecteer registraties van de gekozen klus. De app telt ze op en zet ze op regel 1 met een passende omschrijving voor de gekozen klus; uren en uurtarief blijven apart zichtbaar.</p><div class="hours-select">${entries.sort((a,b)=>entryDate(b).localeCompare(entryDate(a))).slice(0,30).map(e=>`<label class="packing-row"><input type="checkbox" data-hour-entry="${e.id}"><span><strong>${nlDate(entryDate(e))}</strong> · ${esc(e.jobTitle||'Algemeen')} · ${durationHM(entryMinutes(e))} u</span></label>`).join('')}</div><div class="form-grid" style="margin-top:10px"><div class="field"><label>Uurtarief voor geselecteerde uren</label><input id="hourRate" inputmode="decimal" value="${esc(company?.defaultRate||'')}"></div><div class="field action-field"><button type="button" class="secondary" id="hoursToLine">Voeg geselecteerde uren toe</button></div></div></div>`:''}
       <div class="button-row"><button class="primary">Maak PDF</button><button type="button" class="secondary" data-close>Annuleren</button></div></form>`);
 
@@ -1112,17 +1112,47 @@ const App = (() => {
   function setPdfText(form,name,value){try{const f=form.getTextField(name);f.setText(String(value??''));f.setFontSize(12);return true}catch(e){console.warn('PDF field',name,e.message);return false}}
   function setPdfTextAny(form,names,value){for(const name of names){try{const f=form.getTextField(name);f.setText(String(value??''));f.setFontSize(12);return true}catch(e){}}console.warn('PDF fields ontbreken',names);return false}
   function drawRightText(page,font,text,xRight,y,size=12){const safe=String(text??'');page.drawText(safe,{x:xRight-font.widthOfTextAtSize(safe,size),y,size,font});}
-  function fitPdfText(font,text,size,maxWidth){let out=String(text??'');if(font.widthOfTextAtSize(out,size)<=maxWidth)return out;const suffix='...';while(out&&font.widthOfTextAtSize(out+suffix,size)>maxWidth)out=out.slice(0,-1);return out.trimEnd()+suffix}
+  function descriptionTokens(text){
+    const protectedParts=[];
+    const safe=String(text??'').replace(/\b\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2}\b/g,m=>{const key=`__TIME_${protectedParts.length}__`;protectedParts.push(m.replace(/\s*[-–]\s*/,' - '));return key;});
+    return safe.trim().split(/\s+/).filter(Boolean).map(t=>{const m=t.match(/^__TIME_(\d+)__$/);return m?protectedParts[Number(m[1])]:t;});
+  }
+  function descriptionLayout(font,text,maxWidth){
+    const clean=String(text??'').replace(/\s+/g,' ').trim();
+    if(!clean)return {lines:[],size:12,lineHeight:0};
+    if(font.widthOfTextAtSize(clean,12)<=maxWidth)return {lines:[clean],size:12,lineHeight:0};
+    const tokens=descriptionTokens(clean);
+    if(tokens.length<2){const unit=font.widthOfTextAtSize(clean,1)||1;const size=Math.max(6.5,Math.min(9.5,maxWidth/unit));return {lines:[clean],size,lineHeight:0};}
+    let best=null;
+    for(let i=1;i<tokens.length;i++){
+      const a=tokens.slice(0,i).join(' '),b=tokens.slice(i).join(' ');
+      const unit=Math.max(font.widthOfTextAtSize(a,1),font.widthOfTextAtSize(b,1),1);
+      const size=Math.min(9.5,maxWidth/unit);
+      const balance=Math.abs(font.widthOfTextAtSize(a,size)-font.widthOfTextAtSize(b,size));
+      if(!best||size>best.size+0.01||(Math.abs(size-best.size)<0.01&&balance<best.balance))best={lines:[a,b],size,balance};
+    }
+    best.size=Math.max(6.5,best.size);best.lineHeight=Math.min(10.2,best.size*1.05);return best;
+  }
+  function drawDescriptionCell(page,font,text,x,yCenter,maxWidth){
+    const layout=descriptionLayout(font,text,maxWidth);if(!layout.lines.length)return;
+    if(layout.lines.length===1){page.drawText(layout.lines[0],{x,y:yCenter,size:layout.size,font});return;}
+    const h=layout.lineHeight||layout.size;
+    page.drawText(layout.lines[0],{x,y:yCenter+(h/2),size:layout.size,font});
+    page.drawText(layout.lines[1],{x,y:yCenter-(h/2),size:layout.size,font});
+  }
+  function drawBusinessDescriptions(page,font,lines,{x,maxWidth,rows=[397,365,332,299]}){
+    for(let i=0;i<4;i++){const desc=String(lines[i]?.description||'').trim();if(desc)drawDescriptionCell(page,font,desc,x,rows[i],maxWidth);}
+  }
   function drawNormalInvoiceLines(page,font,lines){
     const rows=[397,365,332,299];
     for(let i=0;i<4;i++){
       const l=lines[i]||{},q=String(l.qty||''),desc=String(l.description||''),p=num(l.price),used=!!(q||desc||l.price),t=num(l.qty)*p;if(!used)continue;
       page.drawText(q,{x:48,y:rows[i],size:12,font});
-      page.drawText(fitPdfText(font,desc,12,218),{x:100,y:rows[i],size:12,font});
       drawRightText(page,font,moneyNumber(p),396,rows[i],12);
       drawRightText(page,font,moneyNumber(t),487,rows[i],12);
       drawRightText(page,font,'21%',544,rows[i],12);
     }
+    drawBusinessDescriptions(page,font,lines,{x:100,maxWidth:218,rows});
   }
   async function generateBusinessPdf(data){
     await ensurePdfLib();
@@ -1141,7 +1171,7 @@ const App = (() => {
     for(let i=0;i<4;i++){
       const l=data.lines[i]||{},q=num(l.qty),p=num(l.price),t=q*p;subtotal+=t;
       if(korApplied||!isInvoice){
-        setPdfText(form,`Aantal ${i+1}`,l.qty||'');setPdfText(form,`Omschrijving ${i+1}`,l.description||'');setPdfText(form,`Prijs ${i+1}`,l.price?moneyNumber(p):'');setPdfText(form,`Totaal ${i+1}`,(l.qty||l.description||l.price)?moneyNumber(t):'');
+        setPdfText(form,`Aantal ${i+1}`,l.qty||'');setPdfText(form,`Omschrijving ${i+1}`,'');setPdfText(form,`Prijs ${i+1}`,l.price?moneyNumber(p):'');setPdfText(form,`Totaal ${i+1}`,(l.qty||l.description||l.price)?moneyNumber(t):'');
         if(!korApplied)setPdfText(form,`BTW ${i+1}`,(l.qty||l.description||l.price)?'21%':'');
       }
     }
@@ -1149,7 +1179,10 @@ const App = (() => {
     if(korApplied){setPdfText(form,'Totaal te betalen EUR',moneyNumber(total));}
     else{setPdfText(form,'Subtotaal excl btw EUR',moneyNumber(subtotal));setPdfText(form,'Btw bedrag EUR',moneyNumber(vat));setPdfTextAny(form,isInvoice?['Totaal te betalen EUR']:['Totaal incl btw EUR','Totaal te betalen EUR'],moneyNumber(total));}
     try{form.updateFieldAppearances(helvetica);form.flatten();}catch(e){console.warn('Flatten',e)}
-    if(!korApplied&&isInvoice)drawNormalInvoiceLines(pdf.getPages()[0],helvetica,data.lines);
+    const page=pdf.getPages()[0];
+    if(!korApplied&&isInvoice)drawNormalInvoiceLines(page,helvetica,data.lines);
+    else if(korApplied)drawBusinessDescriptions(page,helvetica,data.lines,{x:107,maxWidth:244});
+    else drawBusinessDescriptions(page,helvetica,data.lines,{x:102,maxWidth:216});
     const bytes=await pdf.save(),blob=new Blob([bytes],{type:'application/pdf'}),filename=`${data.number}.pdf`,folder=isInvoice?'factuur':'offerte',doc={id:JKDB.id('doc'),filename,kind:data.kind,folder,blob,createdAt:new Date().toISOString(),meta:{...data,subtotalExVat:subtotal,vatAmount:vat,total,korApplied,korDetected:korApplied,lines:data.lines,sent:false,paid:false,confirmed:false}};await JKDB.put('documents',doc);return doc;
   }
   function moneyNumber(v){return Number(v||0).toFixed(2).replace('.',',')}

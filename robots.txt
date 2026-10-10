@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /app/
+Disallow: /inloggen/
+
+Sitemap: https://jkworks.nl/sitemap.xml
