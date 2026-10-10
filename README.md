@@ -22,3 +22,6 @@ Supabase:
 
 
 v66: PDF-omschrijvingen gebruiken nu maximaal 12 pt op twee regels, vullen de rijhoogte beter en blijven verticaal gecentreerd. Tijdvakken zoals 10:00 - 16:00 blijven ongesplitst. Toegepast op alle vier offerte-/factuurtemplates (KOR en btw).
+
+
+Update v67: omschrijvingen in PDF-tabel iets lager en visueel beter verticaal gecentreerd geplaatst.

@@ -1145,16 +1145,17 @@ const App = (() => {
   }
   function drawDescriptionCell(page,font,text,x,yCenter,maxWidth){
     const layout=descriptionLayout(font,text,maxWidth);if(!layout.lines.length)return;
+    // PDF-tekst lijkt optisch snel te hoog te staan in deze tabelcellen.
+    // Daarom verschuiven we de baselines iets verder omlaag voor een rustiger,
+    // visueel beter gecentreerd resultaat binnen de rij.
+    const verticalOffset=layout.size*0.48;
     if(layout.lines.length===1){
-      // De baseline iets laten zakken zodat één regel optisch midden in de tabelrij staat.
-      page.drawText(layout.lines[0],{x,y:yCenter-(layout.size*0.16),size:layout.size,font});
+      page.drawText(layout.lines[0],{x,y:yCenter-verticalOffset,size:layout.size,font});
       return;
     }
     const h=layout.lineHeight||layout.size;
-    // Twee regels als één tekstblok verticaal centreren in dezelfde tabelrij.
-    const baselineAdjust=layout.size*0.16;
-    page.drawText(layout.lines[0],{x,y:yCenter+(h/2)-baselineAdjust,size:layout.size,font});
-    page.drawText(layout.lines[1],{x,y:yCenter-(h/2)-baselineAdjust,size:layout.size,font});
+    page.drawText(layout.lines[0],{x,y:yCenter+(h/2)-verticalOffset,size:layout.size,font});
+    page.drawText(layout.lines[1],{x,y:yCenter-(h/2)-verticalOffset,size:layout.size,font});
   }
   function drawBusinessDescriptions(page,font,lines,{x,maxWidth,rows=[397,365,332,299]}){
     for(let i=0;i<4;i++){const desc=String(lines[i]?.description||'').trim();if(desc)drawDescriptionCell(page,font,desc,x,rows[i],maxWidth);}
