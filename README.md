@@ -15,3 +15,6 @@ Nieuw in v68:
 De benodigde Supabase-uitbreiding voor v68 is al toegepast op het huidige JK Works-project. De bijgewerkte `SUPABASE_SETUP.sql` zit alleen als naslag/herstelbestand in deze release.
 
 Publiceren: vervang de bestaande GitHub Pages-bestanden door de inhoud van deze map en commit.
+
+
+Update v69: de WhatsApp- en e-mailknoppen bovenaan de openbare website zijn verwijderd; contactmogelijkheden onderaan blijven behouden.
