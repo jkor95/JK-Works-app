@@ -1,4 +1,4 @@
-/* JK Works Dordrecht - persoonlijke PWA v65 */
+/* JK Works Dordrecht - persoonlijke PWA v66 */
 const App = (() => {
   const state = {route:'dashboard',gearTab:'mboxes',jobPaymentFilter:'all',docFolder:null,importFolderTarget:'diversen',pdfLibPromise:null,pdfJsPromise:null,activeBlobUrl:null,reminderChecking:false,snoozedReminderJobs:new Set(),pendingCloudRefresh:false,pendingAuthRefresh:false,actionItems:[],notificationTimer:null};
   window.__JK_UI_BUSY=false;
@@ -1120,25 +1120,41 @@ const App = (() => {
   function descriptionLayout(font,text,maxWidth){
     const clean=String(text??'').replace(/\s+/g,' ').trim();
     if(!clean)return {lines:[],size:12,lineHeight:0};
+    // Een korte omschrijving blijft op 12 pt. Bij een langere omschrijving zoeken we
+    // de beste verdeling over twee regels en houden we 12 pt aan zodra beide regels passen.
     if(font.widthOfTextAtSize(clean,12)<=maxWidth)return {lines:[clean],size:12,lineHeight:0};
     const tokens=descriptionTokens(clean);
-    if(tokens.length<2){const unit=font.widthOfTextAtSize(clean,1)||1;const size=Math.max(6.5,Math.min(9.5,maxWidth/unit));return {lines:[clean],size,lineHeight:0};}
+    if(tokens.length<2){
+      const unit=font.widthOfTextAtSize(clean,1)||1;
+      const size=Math.max(8,Math.min(12,maxWidth/unit));
+      return {lines:[clean],size,lineHeight:0};
+    }
     let best=null;
     for(let i=1;i<tokens.length;i++){
       const a=tokens.slice(0,i).join(' '),b=tokens.slice(i).join(' ');
       const unit=Math.max(font.widthOfTextAtSize(a,1),font.widthOfTextAtSize(b,1),1);
-      const size=Math.min(9.5,maxWidth/unit);
+      const size=Math.min(12,maxWidth/unit);
       const balance=Math.abs(font.widthOfTextAtSize(a,size)-font.widthOfTextAtSize(b,size));
+      // Eerst zoveel mogelijk lettergrootte, daarna de meest evenwichtige regelverdeling.
       if(!best||size>best.size+0.01||(Math.abs(size-best.size)<0.01&&balance<best.balance))best={lines:[a,b],size,balance};
     }
-    best.size=Math.max(6.5,best.size);best.lineHeight=Math.min(10.2,best.size*1.05);return best;
+    best.size=Math.max(8,best.size);
+    // Bij 12 pt gebruiken twee regels vrijwel de volledige rijhoogte zonder de lijnen te raken.
+    best.lineHeight=Math.min(13.2,Math.max(10,best.size*1.1));
+    return best;
   }
   function drawDescriptionCell(page,font,text,x,yCenter,maxWidth){
     const layout=descriptionLayout(font,text,maxWidth);if(!layout.lines.length)return;
-    if(layout.lines.length===1){page.drawText(layout.lines[0],{x,y:yCenter,size:layout.size,font});return;}
+    if(layout.lines.length===1){
+      // De baseline iets laten zakken zodat één regel optisch midden in de tabelrij staat.
+      page.drawText(layout.lines[0],{x,y:yCenter-(layout.size*0.16),size:layout.size,font});
+      return;
+    }
     const h=layout.lineHeight||layout.size;
-    page.drawText(layout.lines[0],{x,y:yCenter+(h/2),size:layout.size,font});
-    page.drawText(layout.lines[1],{x,y:yCenter-(h/2),size:layout.size,font});
+    // Twee regels als één tekstblok verticaal centreren in dezelfde tabelrij.
+    const baselineAdjust=layout.size*0.16;
+    page.drawText(layout.lines[0],{x,y:yCenter+(h/2)-baselineAdjust,size:layout.size,font});
+    page.drawText(layout.lines[1],{x,y:yCenter-(h/2)-baselineAdjust,size:layout.size,font});
   }
   function drawBusinessDescriptions(page,font,lines,{x,maxWidth,rows=[397,365,332,299]}){
     for(let i=0;i<4;i++){const desc=String(lines[i]?.description||'').trim();if(desc)drawDescriptionCell(page,font,desc,x,rows[i],maxWidth);}

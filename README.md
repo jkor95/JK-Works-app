@@ -1,4 +1,4 @@
-JK Works Dordrecht v65
+JK Works Dordrecht v66
 
 Nieuw in deze versie:
 - SEO voor de openbare website: canonical URL, verbeterde titel/meta-description, Open Graph, LocalBusiness structured data, robots.txt en sitemap.xml.
@@ -19,3 +19,6 @@ Publiceren:
 Supabase:
 - Geen nieuwe SQL nodig ten opzichte van v64.
 - Als de v63 websitebeheer-policy nog niet is uitgevoerd, voer SUPABASE_SETUP.sql wel eenmalig uit.
+
+
+v66: PDF-omschrijvingen gebruiken nu maximaal 12 pt op twee regels, vullen de rijhoogte beter en blijven verticaal gecentreerd. Tijdvakken zoals 10:00 - 16:00 blijven ongesplitst. Toegepast op alle vier offerte-/factuurtemplates (KOR en btw).
