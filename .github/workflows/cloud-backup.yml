@@ -1,0 +1,97 @@
+name: JK Works cloudback-up (voorbereid)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/cloud_backup.py'
+      - 'scripts/test_cloud_backup.py'
+      - '.github/workflows/cloud-backup.yml'
+  workflow_dispatch:
+    inputs:
+      authorization:
+        description: 'TEST_ONLY voert uitsluitend fictieve lokale tests uit'
+        type: choice
+        options: [TEST_ONLY, BACKUP_APPROVED]
+        default: TEST_ONLY
+        required: true
+  # PAS NA GOEDKEURING in een afzonderlijke PR activeren:
+  # schedule:
+  #   - cron: '15 2 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jkworks-cloud-backup-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fixture-test:
+    name: Back-up en herstel met fictieve gegevens
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Installeer test- en back-uptools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y rclone
+          python -m pip install 'psycopg[binary]==3.2.13'
+      - name: Test versleutelde back-up en herstel uitsluitend met fixtures
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python scripts/test_cloud_backup.py
+
+  backup:
+    name: Goedgekeurde productieback-up
+    needs: fixture-test
+    # Twee afzonderlijke sloten; productiejob draait nooit voor een pull request.
+    if: >-
+      github.ref == 'refs/heads/main' && vars.JK_BACKUPS_ENABLED == 'true' &&
+      (github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.authorization == 'BACKUP_APPROVED'))
+    environment: jkworks-backups
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Installeer back-uptools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y rclone
+          python -m pip install 'psycopg[binary]==3.2.13'
+      - name: Maak en verifieer versleutelde externe back-up
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          JK_BACKUPS_ENABLED: ${{ vars.JK_BACKUPS_ENABLED }}
+          SUPABASE_PROJECT_REF: ercqiavruotoclhvfzud
+          PGHOST: ${{ secrets.JK_DB_HOST }}
+          PGUSER: ${{ secrets.JK_DB_USER }}
+          PGPASSWORD: ${{ secrets.JK_DB_PASSWORD }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGSSLMODE: verify-full
+          SUPABASE_DB_CA: ${{ secrets.JK_DB_CA }}
+          SUPABASE_STORAGE_READ_KEY: ${{ secrets.JK_STORAGE_READ_KEY }}
+          R2_ENDPOINT: ${{ vars.JK_R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.JK_R2_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.JK_R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.JK_R2_SECRET_ACCESS_KEY }}
+          BACKUP_CRYPT_PASSWORD: ${{ secrets.JK_BACKUP_PASSWORD }}
+          BACKUP_CRYPT_SALT: ${{ secrets.JK_BACKUP_SALT }}
+        run: python scripts/cloud_backup.py
+      - name: Toon uitsluitend de status, nooit back-upinhoud
+        if: always()
+        run: |
+          echo 'Back-upjobstatus: ${{ job.status }}. Controleer de Actions-run; herstel uitsluitend snapshots met COMPLETE.' >> "$GITHUB_STEP_SUMMARY"
