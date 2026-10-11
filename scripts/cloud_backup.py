@@ -73,7 +73,7 @@ def configure(env, fixture=False, download_only=False):
     return env
 
 
-def pg_tool(tool, args, env, output=None):
+def pg_tool(tool, args, env, output=None, archive=None):
     command = ['docker', 'run', '--rm', '--network', 'host']
     for name in ['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE', 'PGSSLMODE', 'PGSSLROOTCERT']:
         if name in env:
@@ -81,6 +81,8 @@ def pg_tool(tool, args, env, output=None):
     if env.get('PGSSLROOTCERT'):
         cert = env['PGSSLROOTCERT']
         command += ['-v', f'{cert}:{cert}:ro']
+    if archive is not None:
+        command += ['-v', f'{archive}:/backup.dump:ro']
     command += [env['JK_PG_IMAGE'], tool] + args
     return run(command, env, output=output)
 
@@ -162,6 +164,11 @@ def backup(env, fixture=False):
             snapshot = conn.execute('select pg_export_snapshot()').fetchone()[0]
             with (payload / 'database.dump').open('wb') as out:
                 pg_tool('pg_dump', ['--format=custom', '--snapshot=' + snapshot], env, out)
+            toc = pg_tool('pg_restore', ['--list', '/backup.dump'], env, archive=payload / 'database.dump')
+            for table in REQUIRED_TABLES:
+                schema, name = table.split('.')
+                if f'TABLE DATA {schema} {name} ' not in toc:
+                    raise RuntimeError('Dump is missing required application/auth/storage table data')
             with (payload / 'roles.sql').open('wb') as out:
                 pg_tool('pg_dumpall', ['--roles-only', '--no-role-passwords'], env, out)
             old_objects = {o['file']: o for o in old['objects']} if old else {}
@@ -203,7 +210,7 @@ def backup(env, fixture=False):
                 raise RuntimeError('Storage changed during backup; retry during a quiet period')
         run_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + uuid.uuid4().hex[:12]
         image_digest = run(['docker', 'image', 'inspect', env['JK_PG_IMAGE'], '--format', '{{index .RepoDigests 0}}'], env).strip()
-        manifest = {'format':1, 'snapshot':run_id, 'postgres_major':major, 'pg_tool_image':image_digest, 'table_counts':counts,
+        manifest = {'format':1, 'snapshot':run_id, 'postgres_major':major, 'pg_tool_image':image_digest, 'code_commit':env.get('GITHUB_SHA', 'local-fixture'), 'source_project':env.get('SUPABASE_PROJECT_REF', 'local-fixture'), 'table_counts':counts,
                     'buckets':buckets, 'objects':objects, 'files':{}}
         for file in payload.rglob('*'):
             if file.is_file():
