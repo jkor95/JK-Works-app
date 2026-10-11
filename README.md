@@ -14,7 +14,7 @@ Nieuw in v68:
 
 De benodigde Supabase-uitbreiding voor v68 is al toegepast op het huidige JK Works-project. De bijgewerkte `SUPABASE_SETUP.sql` zit alleen als naslag/herstelbestand in deze release.
 
-Publiceren: vervang de bestaande GitHub Pages-bestanden door de inhoud van deze map en commit.
+Updates en herstel verlopen voortaan via Codex-branches en beoordeelde pull requests. Zie [versiebeheer en herstel](docs/VERSIEBEHEER.md) en [wijzigingsgeschiedenis](CHANGELOG.md). Upload geen losse bestanden naar `main`.
 
 
 Update v69: de WhatsApp- en e-mailknoppen bovenaan de openbare website zijn verwijderd; contactmogelijkheden onderaan blijven behouden.
@@ -24,5 +24,5 @@ Update v69: de WhatsApp- en e-mailknoppen bovenaan de openbare website zijn verw
 - Herhalingen in introductie, badges en footer beperkt.
 - Inloggen alleen als subtiele link Beheer onderaan.
 - Geen vast aantal foto's meer in het aanvraagformulier. Foto's worden nog steeds gecomprimeerd.
-- **Belangrijk:** voer na het uploaden eenmalig `SUPABASE_V70_FOTOS.sql` uit in de Supabase SQL Editor, anders blijft de bestaande databasebeveiliging maximaal drie foto's toestaan.
+- **Historische notitie v70:** deze release verwees naar `SUPABASE_V70_FOTOS.sql`. Voer bij website-updates geen SQL uit; databasewijzigingen vereisen een afzonderlijke opdracht. Het bestand zit niet in deze checkout.
 - De bedrijfsapp zelf is ongewijzigd. Uploads zijn afhankelijk van de opslaglimieten van Supabase; grote aantallen foto's kunnen tijd kosten.
