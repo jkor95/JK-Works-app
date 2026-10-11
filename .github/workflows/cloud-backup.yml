@@ -1,0 +1,178 @@
+name: JK Works cloudback-up (voorbereid)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/cloud_backup.py'
+      - 'scripts/test_cloud_backup.py'
+      - 'scripts/backup_watchdog.py'
+      - '.github/workflows/cloud-backup.yml'
+  workflow_dispatch:
+    inputs:
+      authorization:
+        description: 'TEST_ONLY: fictieve tests; BACKUP_APPROVED: één expliciet goedgekeurde back-up'
+        type: choice
+        options: [TEST_ONLY, BACKUP_APPROVED]
+        default: TEST_ONLY
+        required: true
+  # PAS NA GOEDKEURING in een afzonderlijke PR activeren:
+  # schedule:
+  #   - cron: '15 2 * * *'  # dagelijkse back-up
+  #   - cron: '45 * * * *'  # elk uur: laatste succes maximaal 48 uur oud
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jkworks-cloud-backup-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fixture-test:
+    name: Back-up en herstel met fictieve gegevens
+    if: github.event_name != 'schedule' || github.event.schedule == '15 2 * * *'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Installeer test- en back-uptools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y curl gnupg rclone
+          curl --fail --silent --show-error --location --proto =https --proto-redir =https https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /tmp/jk-pgdg.asc
+          test "$(gpg --batch --show-keys --with-colons /tmp/jk-pgdg.asc 2>/dev/null | awk -F: '$1 == "fpr" {print $10; exit}')" = B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+          sudo install -m 0644 /tmp/jk-pgdg.asc /usr/share/keyrings/jk-pgdg.asc
+          echo 'deb [signed-by=/usr/share/keyrings/jk-pgdg.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main' | sudo tee /etc/apt/sources.list.d/jk-pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client-15 postgresql-client-16 postgresql-client-17 postgresql-client-18
+          sudo apt-get install -y postgresql-17
+          python -m pip install 'psycopg[binary]==3.2.13'
+      - name: Test versleutelde back-up en herstel uitsluitend met fixtures
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python scripts/test_cloud_backup.py
+
+  backup:
+    name: Goedgekeurde productieback-up
+    needs: fixture-test
+    # Handmatig alleen na expliciete keuze; planning blijft uit en heeft een apart slot.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.authorization == 'BACKUP_APPROVED') ||
+      (github.event_name == 'schedule' && vars.JK_BACKUPS_ENABLED == 'true' && github.event.schedule == '15 2 * * *'))
+    environment: jkworks-backups
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Controleer uitsluitend aanwezigheid van instellingen
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          JK_BACKUP_AUTHORIZED: 'true'
+          SUPABASE_PROJECT_REF: ercqiavruotoclhvfzud
+          PGHOST: ${{ secrets.JK_DB_HOST }}
+          PGUSER: ${{ secrets.JK_DB_USER }}
+          PGPASSWORD: ${{ secrets.JK_DB_PASSWORD }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGSSLMODE: verify-full
+          SUPABASE_DB_CA: ${{ secrets.JK_DB_CA }}
+          SUPABASE_STORAGE_READ_KEY: ${{ secrets.JK_STORAGE_READ_KEY }}
+          R2_ENDPOINT: ${{ vars.JK_R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.JK_R2_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.JK_R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.JK_R2_SECRET_ACCESS_KEY }}
+          BACKUP_CRYPT_PASSWORD: ${{ secrets.JK_BACKUP_PASSWORD }}
+          BACKUP_CRYPT_SALT: ${{ secrets.JK_BACKUP_SALT }}
+        run: |
+          python - <<'PY'
+          import os, sys
+          bindings = {'JK_DB_HOST':'PGHOST','JK_DB_USER':'PGUSER','JK_DB_PASSWORD':'PGPASSWORD',
+            'JK_DB_CA':'SUPABASE_DB_CA','JK_STORAGE_READ_KEY':'SUPABASE_STORAGE_READ_KEY',
+            'JK_R2_ACCESS_KEY_ID':'R2_ACCESS_KEY_ID','JK_R2_SECRET_ACCESS_KEY':'R2_SECRET_ACCESS_KEY',
+            'JK_BACKUP_PASSWORD':'BACKUP_CRYPT_PASSWORD','JK_BACKUP_SALT':'BACKUP_CRYPT_SALT',
+            'JK_R2_ENDPOINT':'R2_ENDPOINT','JK_R2_BUCKET':'R2_BUCKET'}
+          missing = [name for name, binding in bindings.items() if not os.environ.get(binding, '').strip()]
+          print('Ontbrekende instellingen: ' + ', '.join(missing) if missing else 'Alle elf instellingen aanwezig (waarden verborgen).')
+          sys.exit(bool(missing))
+          PY
+      - name: Installeer back-uptools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y curl gnupg rclone
+          curl --fail --silent --show-error --location --proto =https --proto-redir =https https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /tmp/jk-pgdg.asc
+          test "$(gpg --batch --show-keys --with-colons /tmp/jk-pgdg.asc 2>/dev/null | awk -F: '$1 == "fpr" {print $10; exit}')" = B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+          sudo install -m 0644 /tmp/jk-pgdg.asc /usr/share/keyrings/jk-pgdg.asc
+          echo 'deb [signed-by=/usr/share/keyrings/jk-pgdg.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main' | sudo tee /etc/apt/sources.list.d/jk-pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client-15 postgresql-client-16 postgresql-client-17 postgresql-client-18
+          python -m pip install 'psycopg[binary]==3.2.13'
+      - name: Maak en verifieer versleutelde externe back-up
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          JK_BACKUP_AUTHORIZED: 'true'
+          SUPABASE_PROJECT_REF: ercqiavruotoclhvfzud
+          PGHOST: ${{ secrets.JK_DB_HOST }}
+          PGUSER: ${{ secrets.JK_DB_USER }}
+          PGPASSWORD: ${{ secrets.JK_DB_PASSWORD }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGSSLMODE: verify-full
+          SUPABASE_DB_CA: ${{ secrets.JK_DB_CA }}
+          SUPABASE_STORAGE_READ_KEY: ${{ secrets.JK_STORAGE_READ_KEY }}
+          R2_ENDPOINT: ${{ vars.JK_R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.JK_R2_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.JK_R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.JK_R2_SECRET_ACCESS_KEY }}
+          BACKUP_CRYPT_PASSWORD: ${{ secrets.JK_BACKUP_PASSWORD }}
+          BACKUP_CRYPT_SALT: ${{ secrets.JK_BACKUP_SALT }}
+        run: |
+          if [[ '${{ github.event_name }}' == schedule ]]; then
+            python scripts/cloud_backup.py --retention
+          else
+            python scripts/cloud_backup.py
+          fi
+      - name: Toon uitsluitend de status, nooit back-upinhoud
+        if: always()
+        run: |
+          echo 'Back-upjobstatus: ${{ job.status }}. Controleer de Actions-run; herstel uitsluitend snapshots met COMPLETE.' >> "$GITHUB_STEP_SUMMARY"
+
+  alert:
+    name: Controleer back-upstatus en waarschuw eigenaar
+    needs: [fixture-test, backup]
+    if: >-
+      always() && github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'schedule' && vars.JK_BACKUPS_ENABLED == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.authorization == 'BACKUP_APPROVED'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Waarschuw via toegewezen GitHub-issue bij fout of ouderdom
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JK_BACKUP_AUTHORIZED: 'true'
+          JK_BACKUP_RESULT: ${{ needs.backup.result }}
+          JK_FIXTURE_RESULT: ${{ needs.fixture-test.result }}
+        run: python scripts/backup_watchdog.py
