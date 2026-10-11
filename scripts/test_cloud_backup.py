@@ -2,6 +2,7 @@
 import contextlib
 import http.server
 import json
+import secrets
 import os
 from pathlib import Path
 import subprocess
@@ -169,7 +170,7 @@ class LocalSafetyTest(unittest.TestCase):
             local.NoRedirect().redirect_request(None)
 
     def test_production_environment_is_not_forwarded(self):
-        with patch.dict(os.environ, {'PGHOST':'production.invalid', 'PGPASSWORD':'FAKE',
+        with patch.dict(os.environ, {'PGHOST':'production.invalid', 'PGPASSWORD':secrets.token_hex(16),
                                     'SUPABASE_ACCESS_TOKEN':'FAKE', 'HTTP_PROXY':'FAKE',
                                     'RCLONE_CONFIG_CLOUD_SECRET_ACCESS_KEY':'FAKE'}):
             clean = local.clean_environment(Path('/tmp/fictitious-only'))
@@ -193,7 +194,7 @@ class LocalSafetyTest(unittest.TestCase):
             instance = local.LocalTest(Path(directory))
             instance.db_container = 'supabase_db_' + local.PROJECT
             fake = {'PGHOST':'production.invalid', 'PGPORT':'56322', 'PGUSER':'postgres',
-                    'PGPASSWORD':'fiction-only', 'PGDATABASE':'postgres', 'PGSSLMODE':'disable',
+                    'PGPASSWORD':secrets.token_hex(16), 'PGDATABASE':'postgres', 'PGSSLMODE':'disable',
                     'JK_PG_IMAGE':'postgres:17'}
             with patch.object(local.cloud, 'run', return_value='') as run:
                 instance.pg_tool('pg_dump', [], fake)
