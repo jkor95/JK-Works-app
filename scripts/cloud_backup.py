@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 import uuid
@@ -64,7 +64,7 @@ def configure(env, fixture=False, download_only=False):
         raise RuntimeError('Fixtures must use a loopback HTTP server')
     password = env['BACKUP_CRYPT_PASSWORD']
     salt = env['BACKUP_CRYPT_SALT']
-    if len(password) < 32 or len(salt) < 32 or '\n' in password + salt:
+    if len(password) < 32 or len(salt) < 32 or any(char in password + salt for char in '\r\n'):
         raise RuntimeError('Encryption password and salt must each be at least 32 characters')
     env.update(RCLONE_CONFIG_VAULT_TYPE='crypt', RCLONE_CONFIG_VAULT_FILENAME_ENCRYPTION='standard',
                RCLONE_CONFIG_VAULT_DIRECTORY_NAME_ENCRYPTION='true', RCLONE_CONFIG='/dev/null')
@@ -169,6 +169,13 @@ def backup(env, fixture=False):
                 schema, name = table.split('.')
                 if f'TABLE DATA {schema} {name} ' not in toc:
                     raise RuntimeError('Dump is missing required application/auth/storage table data')
+            # Check every non-empty ordinary table, including tables outside the known app schemas.
+            ordinary = conn.execute("""select n.nspname,c.relname from pg_class c
+                join pg_namespace n on n.oid=c.relnamespace where c.relkind='r'
+                and n.nspname not like 'pg\\_%' escape '\\' and n.nspname <> 'information_schema'""").fetchall()
+            for schema, name in ordinary:
+                if counts.get(schema + '.' + name, 0) and f'TABLE DATA {schema} {name} ' not in toc:
+                    raise RuntimeError('A non-empty table is missing from the dump; backup completeness not verified')
             with (payload / 'roles.sql').open('wb') as out:
                 pg_tool('pg_dumpall', ['--roles-only', '--no-role-passwords'], env, out)
             old_objects = {o['file']: o for o in old['objects']} if old else {}
@@ -230,6 +237,34 @@ def backup(env, fixture=False):
         return run_id, manifest, env
 
 
+def retain_snapshots(env, now=None):
+    """Delete only verified snapshots older than 35 days; always retain the newest two."""
+    now = now or datetime.now(timezone.utc)
+    verified = []
+    for name in run(['rclone', 'lsf', 'vault:', '--dirs-only'], env).splitlines():
+        name = name.rstrip('/')
+        if not re.fullmatch(r'\d{8}T\d{6}Z-[a-f0-9]{12}', name):
+            continue
+        try:
+            marker = run(['rclone', 'cat', f'vault:{name}/COMPLETE'], env).strip()
+        except RuntimeError:
+            continue  # Incomplete uploads are never deleted automatically.
+        raw = run(['rclone', 'cat', f'vault:{name}/manifest.json'], env)
+        manifest = json.loads(raw)
+        if (hashlib.sha256(raw.encode()).hexdigest() != marker or manifest['snapshot'] != name
+                or manifest['source_project'] != env.get('SUPABASE_PROJECT_REF', 'local-fixture')):
+            raise RuntimeError('Retention refused an unverified or unexpected snapshot')
+        verified.append(name)
+    candidates = sorted(verified)[:-2]
+    deleted = 0
+    for name in candidates:
+        created = datetime.strptime(name[:16], '%Y%m%dT%H%M%SZ').replace(tzinfo=timezone.utc)
+        if created < now - timedelta(days=35, hours=1):
+            run(['rclone', 'purge', f'vault:{name}'], env)
+            deleted += 1
+    print(f'Retention verified: 35 days; expired snapshots removed={deleted}')
+
+
 def download_verified(run_id, directory, env):
     if not re.fullmatch(r'\d{8}T\d{6}Z-[a-f0-9]{12}', run_id):
         raise RuntimeError('Invalid snapshot name')
@@ -257,7 +292,8 @@ if __name__ == '__main__':
             download_verified(args.download, args.output, configure(os.environ, download_only=True))
             print('Download decrypted and verified; no database or Storage restore executed.')
         else:
-            backup(os.environ)
+            _, _, configured = backup(os.environ)
+            retain_snapshots(configured)
     except Exception as exc:
         # Intentionally no exception message/traceback: drivers can include secret values.
         print(f'BACKUP FAILED ({type(exc).__name__}); no verified completion claimed.')

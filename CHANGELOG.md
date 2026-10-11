@@ -1,6 +1,8 @@
 # Wijzigingsgeschiedenis
 
 ## v71.4.2 — voorstel, nog niet gepubliceerd
+- Eén Mac-startscript voor Docker Desktop, gescheiden fictieve Supabase-herstelproef, verborgen R2-download en verwijderoptie; Mac-acceptatieproef nog nodig.
+- Voorbereide dagelijkse back-up/uurlijkse bewaking (beide uit), 35-dagenopruiming en aan de eigenaar toegewezen GitHub-waarschuwingen bij fouten of geen succes binnen 48 uur.
 - Uitgeschakelde GitHub Actions-productieback-up met versleutelde externe R2-opslag, inventaris en integriteitscontrole.
 - Lokale fixturetests voor database/Auth/RLS en Storage-export/herstel; geen productiecredentials of productieback-up.
 - Voorstel met kosten, 35 dagen retentie, secretinstellingen, foutmeldingen en veilig testherstel; zie [cloudback-ups](docs/CLOUDBACKUPS.md).

@@ -13,6 +13,10 @@ import uuid
 
 import psycopg
 import cloud_backup as backup
+import local_supabase_test as local
+import backup_watchdog as monitor
+from datetime import datetime, timezone, timedelta
+from unittest.mock import patch
 
 
 class BackupTest(unittest.TestCase):
@@ -143,11 +147,141 @@ class BackupTest(unittest.TestCase):
                         conn.execute('delete from storage.buckets where id=%s',('jkworks-website-assets',))
                     with self.assertRaises(RuntimeError):
                         backup.backup(env,fixture=True)
+                    backup.retain_snapshots(configured, datetime.now(timezone.utc) + timedelta(days=36))
+                    remaining = backup.run(['rclone','lsf','vault:','--dirs-only'], configured).splitlines()
+                    self.assertEqual(len(remaining),2, 'Keep the newest two verified snapshots even after 35 days')
                     print('PASS: full fixture DB/auth/RLS restore, all buckets/files, encryption, reuse, corruption and missing-bucket guards')
             finally:
                 server.shutdown(); server.server_close()
         finally:
             subprocess.run(['docker','rm','-f',name],stdout=subprocess.DEVNULL,check=True)
+
+
+class LocalSafetyTest(unittest.TestCase):
+    def test_rejects_remote_api_and_redirects(self):
+        local.require_local_url(local.API + '/auth/v1/health')
+        for url in ['https://ercqiavruotoclhvfzud.supabase.co',
+                    'http://127.0.0.1:54321', 'https://127.0.0.1:56321',
+                    'http://secret@127.0.0.1:56321', 'http://127.0.0.1.evil.invalid:56321']:
+            with self.assertRaises(RuntimeError):
+                local.require_local_url(url)
+        with self.assertRaises(RuntimeError):
+            local.NoRedirect().redirect_request(None)
+
+    def test_production_environment_is_not_forwarded(self):
+        with patch.dict(os.environ, {'PGHOST':'production.invalid', 'PGPASSWORD':'FAKE',
+                                    'SUPABASE_ACCESS_TOKEN':'FAKE', 'HTTP_PROXY':'FAKE',
+                                    'RCLONE_CONFIG_CLOUD_SECRET_ACCESS_KEY':'FAKE'}):
+            clean = local.clean_environment(Path('/tmp/fictitious-only'))
+        self.assertEqual(clean['DOCKER_CONTEXT'], local.CONTEXT)
+        self.assertNotIn('PGHOST', clean)
+        self.assertNotIn('PGPASSWORD', clean)
+        self.assertNotIn('SUPABASE_ACCESS_TOKEN', clean)
+        self.assertNotIn('HTTP_PROXY', clean)
+        self.assertNotIn('RCLONE_CONFIG_CLOUD_SECRET_ACCESS_KEY', clean)
+
+    def test_refuses_a_network_with_external_access(self):
+        with tempfile.TemporaryDirectory() as directory:
+            instance = local.LocalTest(Path(directory))
+            with patch.object(instance, 'run', return_value=json.dumps([
+                    {'Internal':False, 'Labels':{'jkworks.restore':local.PROJECT}}])):
+                with self.assertRaises(RuntimeError):
+                    instance.verify_network()
+
+    def test_mac_pg_tools_use_only_the_internal_network(self):
+        with tempfile.TemporaryDirectory() as directory:
+            instance = local.LocalTest(Path(directory))
+            instance.db_container = 'supabase_db_' + local.PROJECT
+            fake = {'PGHOST':'production.invalid', 'PGPORT':'56322', 'PGUSER':'postgres',
+                    'PGPASSWORD':'fiction-only', 'PGDATABASE':'postgres', 'PGSSLMODE':'disable',
+                    'JK_PG_IMAGE':'postgres:17'}
+            with patch.object(local.cloud, 'run', return_value='') as run:
+                instance.pg_tool('pg_dump', [], fake)
+                command, env = run.call_args.args
+                self.assertIn(local.NETWORK, command)
+                self.assertNotIn('host', command)
+                self.assertEqual(env['PGHOST'], instance.db_container)
+                self.assertEqual(env['PGPORT'], '5432')
+
+    def test_refuses_ports_exposed_to_the_lan(self):
+        with tempfile.TemporaryDirectory() as directory:
+            instance = local.LocalTest(Path(directory))
+            net = {'Internal':True, 'Labels':{'jkworks.restore':local.PROJECT},
+                   'Options':{'com.docker.network.bridge.host_binding_ipv4':'127.0.0.1'}}
+            container = {'NetworkSettings':{'Ports':{'5432/tcp':[{'HostIp':'0.0.0.0'}]},
+                                           'Networks':{local.NETWORK:{}}}}
+            with patch.object(instance, 'run', side_effect=[json.dumps([net]),
+                       'supabase_db_'+local.PROJECT, json.dumps([container])]):
+                with self.assertRaises(RuntimeError):
+                    instance.verify_network()
+
+    def test_download_does_not_connect_to_database_or_start_containers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            instance = local.LocalTest(Path(directory))
+            with patch('builtins.input', side_effect=['https://fake.r2.cloudflarestorage.com',
+                       'fake-bucket', '20261011T000000Z-aaaaaaaaaaaa']), \
+                 patch.object(local.getpass, 'getpass', return_value='fixture-only-'+'x'*40), \
+                 patch.object(local.cloud, 'configure', return_value={}) as configure, \
+                 patch.object(local.cloud, 'download_verified', return_value={
+                       'source_project':'ercqiavruotoclhvfzud'}) as download, \
+                 patch.object(instance, 'connect') as connect, \
+                 patch.object(instance, 'run') as run:
+                instance.download()
+                self.assertTrue(configure.call_args.kwargs['download_only'])
+                download.assert_called_once()
+                connect.assert_not_called()
+                run.assert_not_called()
+
+
+class BackupMonitoringTest(unittest.TestCase):
+    def test_skipped_fixture_workflow_is_not_a_successful_production_backup(self):
+        now = datetime(2026, 10, 11, tzinfo=timezone.utc)
+        runs = {'workflow_runs':[{'id':1, 'created_at':now.isoformat(), 'html_url':'https://github.com/fake/run'}]}
+        with patch.object(monitor, 'api', side_effect=[runs, {'jobs':[
+                {'name':monitor.BACKUP_JOB, 'conclusion':'skipped', 'completed_at':now.isoformat()}]}]):
+            self.assertIsNone(monitor.latest_verified_job(now))
+        with patch.object(monitor, 'api', side_effect=[runs, {'jobs':[
+                {'name':monitor.BACKUP_JOB, 'conclusion':'success', 'completed_at':now.isoformat()}]}]):
+            self.assertIsNotNone(monitor.latest_verified_job(now))
+
+    def test_stale_backup_and_failed_attempt_warn_without_live_notification(self):
+        fake_env = {'GITHUB_REPOSITORY':monitor.REPOSITORY, 'JK_BACKUPS_ENABLED':'true',
+                    'GITHUB_RUN_ID':'123', 'JK_BACKUP_RESULT':'success', 'JK_FIXTURE_RESULT':'success'}
+        with patch.dict(os.environ, fake_env), patch.object(monitor, 'latest_verified_job', return_value=None), \
+             patch.object(monitor, 'sync_alert') as alert:
+            monitor.check()
+            self.assertIn('48 uur', alert.call_args.args[0])
+        fake_env['JK_BACKUP_RESULT'] = 'failure'
+        with patch.dict(os.environ, fake_env), patch.object(monitor, 'latest_verified_job', return_value={
+                'url':'https://github.com/fake/run','completed_at':'2026-10-11T00:00:00Z'}), \
+             patch.object(monitor, 'sync_alert') as alert:
+            monitor.check()
+            self.assertIn('mislukt', alert.call_args.args[0])
+        fake_env['JK_BACKUPS_ENABLED'] = 'false'
+        with patch.dict(os.environ, fake_env), patch.object(monitor, 'api') as api:
+            with self.assertRaises(RuntimeError):
+                monitor.check()
+            api.assert_not_called()
+
+    def test_warning_is_assigned_and_not_closed_by_an_older_success(self):
+        issue = {'number':2, 'title':monitor.TITLE, 'body':'<!-- jkworks-backup-monitor -->',
+                 'created_at':'2026-10-11T01:00:00Z'}
+        with patch.object(monitor, 'api', return_value=[issue]) as api:
+            monitor.sync_alert(None, 'https://github.com/fake/run', {
+                'completed_at':'2026-10-11T00:00:00Z'})
+            self.assertEqual(api.call_count,1)
+        with patch.object(monitor, 'api', side_effect=[[], {}]) as api:
+            monitor.sync_alert('Fictieve mislukking', 'https://github.com/fake/run')
+            payload = api.call_args.args[2]
+            self.assertEqual(payload['assignees'], ['jkor95'])
+            self.assertIn('jkworks-backup-monitor', payload['body'])
+
+    def test_retention_never_purges_an_unverified_manifest(self):
+        name = '20260101T000000Z-aaaaaaaaaaaa'
+        with patch.object(backup, 'run', side_effect=[name+'/', 'bad-hash', '{}']) as run:
+            with self.assertRaises(RuntimeError):
+                backup.retain_snapshots({})
+            self.assertFalse(any('purge' in call.args[0] for call in run.call_args_list))
 
 
 if __name__ == '__main__':

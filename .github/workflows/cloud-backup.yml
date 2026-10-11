@@ -6,6 +6,9 @@ on:
     paths:
       - 'scripts/cloud_backup.py'
       - 'scripts/test_cloud_backup.py'
+      - 'scripts/local_supabase_test.py'
+      - 'scripts/backup_watchdog.py'
+      - 'scripts/start-local-supabase.sh'
       - '.github/workflows/cloud-backup.yml'
   workflow_dispatch:
     inputs:
@@ -17,7 +20,8 @@ on:
         required: true
   # PAS NA GOEDKEURING in een afzonderlijke PR activeren:
   # schedule:
-  #   - cron: '15 2 * * *'
+  #   - cron: '15 2 * * *'  # dagelijkse back-up
+  #   - cron: '45 * * * *'  # elk uur: laatste succes maximaal 48 uur oud
 
 permissions:
   contents: read
@@ -29,6 +33,7 @@ concurrency:
 jobs:
   fixture-test:
     name: Back-up en herstel met fictieve gegevens
+    if: github.event_name != 'schedule' || github.event.schedule == '15 2 * * *'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -46,7 +51,9 @@ jobs:
       - name: Test versleutelde back-up en herstel uitsluitend met fixtures
         env:
           PYTHONDONTWRITEBYTECODE: '1'
-        run: python scripts/test_cloud_backup.py
+        run: |
+          bash -n scripts/start-local-supabase.sh
+          python scripts/test_cloud_backup.py
 
   backup:
     name: Goedgekeurde productieback-up
@@ -54,7 +61,7 @@ jobs:
     # Twee afzonderlijke sloten; productiejob draait nooit voor een pull request.
     if: >-
       github.ref == 'refs/heads/main' && vars.JK_BACKUPS_ENABLED == 'true' &&
-      (github.event_name == 'schedule' ||
+      ((github.event_name == 'schedule' && github.event.schedule == '15 2 * * *') ||
       (github.event_name == 'workflow_dispatch' && inputs.authorization == 'BACKUP_APPROVED'))
     environment: jkworks-backups
     runs-on: ubuntu-24.04
@@ -95,3 +102,31 @@ jobs:
         if: always()
         run: |
           echo 'Back-upjobstatus: ${{ job.status }}. Controleer de Actions-run; herstel uitsluitend snapshots met COMPLETE.' >> "$GITHUB_STEP_SUMMARY"
+
+  alert:
+    name: Controleer back-upstatus en waarschuw eigenaar
+    needs: [fixture-test, backup]
+    if: >-
+      always() && github.ref == 'refs/heads/main' && vars.JK_BACKUPS_ENABLED == 'true' &&
+      (github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.authorization == 'BACKUP_APPROVED'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Waarschuw via toegewezen GitHub-issue bij fout of ouderdom
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JK_BACKUPS_ENABLED: ${{ vars.JK_BACKUPS_ENABLED }}
+          JK_BACKUP_RESULT: ${{ needs.backup.result }}
+          JK_FIXTURE_RESULT: ${{ needs.fixture-test.result }}
+        run: python scripts/backup_watchdog.py
