@@ -6,7 +6,7 @@
 - Supabase wordt uitsluitend uitgelezen; database-export met read-only verbindingen en geverifieerde TLS, Storage uitsluitend GET zonder redirects. Versleutelde R2-upload met volledige ontsleutelde download, checksums en als laatste COMPLETE.
 - Negen secret- en twee variabelenbindings gecontroleerd; aanwezigheid wordt in de goedgekeurde workflow zonder waarden gecontroleerd. Metadata momenteel ontoegankelijk (HTTP 403).
 - Fictieve PostgreSQL-/Storage-/encryptietests bewijzen geen volledige Supabase-herstelbaarheid. Volledige hersteltest niet geslaagd; herstelbaarheid niet gegarandeerd.
-- GitGuardian blijft eerdere fictieve testwaarden in commit ac3f4d4 melden; afhandeling vereist GitGuardian-beheerrechten. Scanner en Git-geschiedenis behouden.
+- Eigenaar heeft de negen GitGuardian-testmeldingen genegeerd en `JK_BACKUPS_ENABLED=false` bevestigd; documentatie bijgewerkt om een nieuwe beveiligingscontrole te starten. Scanner en Git-geschiedenis behouden.
 - Website, main, versietags en Supabase-productie ongewijzigd; voorbereiding en herstelprocedure in docs/CLOUDBACKUPS.md.
 
 ## v71.4.1 — gepubliceerd op 11 oktober 2026
