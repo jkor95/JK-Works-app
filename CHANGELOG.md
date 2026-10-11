@@ -1,8 +1,17 @@
 # Wijzigingsgeschiedenis
 
-## v71.4.2 — voorstel, nog niet gepubliceerd
+## v71.5.0 — voorstel, nog niet gepubliceerd
+- Bestaande handmatige back-up uitgebreid: lokale appgegevens en uitsluitend leesbare cloudrecords/bestanden in één gedateerde download; voortgang, aantallen, bestandsgrootte en 30-dagenwaarschuwing.
+- V3 met ingebedde bestanden, SHA-256-controles en optionele AES-256-GCM-wachtwoordversleuteling; volledig aanwezige V1/V2 blijven inleesbaar. Bij cloudstoring uitsluitend expliciet gekozen lokale kopie zonder volledigheidsclaim.
+- Herstel valideert vooraf, vraagt tweemaal toestemming inclusief bewaren veiligheidskopie, vervangt gegevens atomair en beschermt de lokale herstelkopie tegen sync. Geen browserherstel naar Supabase; aanvullende websitegegevens blijven bijlagen.
+- Fictieve browsertests voor export/herstel, PDF’s/foto’s, beschadiging, onvolledigheid, encryptie, oude V2, rollback, paginering, offline gedrag en synchronisatie; geïntegreerd in bestaande GitHub Actions-regressietest.
+- Openbare website, login, domein, Supabase-schema’s/productiegegevens en herstelpunten behouden. R2-code/Secrets/uploads ongemoeid; dagelijkse planning blijft uit en eigenaarstand `JK_BACKUPS_ENABLED=false` niet gewijzigd (API 403).
+- Herstelpunt vóór wijzigingen: v71.4.2 op `87ff2f0a5daca11934173b330442ae16fe81c03f`, bevestigd als succesvolle Pages-build. Geen merge/publicatie of productieback-up uitgevoerd voor deze update.
+- Beperkingen en gebruik: docs/HANDMATIGE-BACKUP.md. Geen volledige Supabase/Auth-herstelgarantie; iOS-deelkaart/iCloud en de persoonlijke V2-back-up niet op echte apparaten/gegevens getest.
+
+## v71.4.2 — gepubliceerd op 11 oktober 2026
 - Lokale Docker Desktop-herstelproef vervallen na twee mislukte Mac-starts; Mac-testbestanden verwijderd. Back-up en fictieve GitHub-tests gebruiken native PostgreSQL-tools.
-- Eén handmatige productieback-up voorbereid, uitsluitend na expliciete goedkeuring; dagelijkse planning en uurlijkse bewaking blijven uit. Geen productieback-up uitgevoerd.
+- Eén handmatige productieback-up voorbereid; dagelijkse planning en uurlijkse bewaking bleven uit. De later goedgekeurde eerste poging op 11 oktober mislukte (Actions-run 38162402924); geen geslaagde productieback-up bevestigd.
 - Supabase wordt uitsluitend uitgelezen; database-export met read-only verbindingen en geverifieerde TLS, Storage uitsluitend GET zonder redirects. Versleutelde R2-upload met volledige ontsleutelde download, checksums en als laatste COMPLETE.
 - Negen secret- en twee variabelenbindings gecontroleerd; aanwezigheid wordt in de goedgekeurde workflow zonder waarden gecontroleerd. Metadata momenteel ontoegankelijk (HTTP 403).
 - Fictieve PostgreSQL-/Storage-/encryptietests bewijzen geen volledige Supabase-herstelbaarheid. Volledige hersteltest niet geslaagd; herstelbaarheid niet gegarandeerd.

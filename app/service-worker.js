@@ -1,6 +1,6 @@
-const CACHE='jkworks-v71-4-app-scope';
+const CACHE='jkworks-v71-5-0-app-scope';
 const LOCAL=[
-  './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./website-editor.js','./manifest.webmanifest',
+  './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./backup.js','./website-editor.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
   './templates/factuur-kor.pdf','./templates/offerte-kor.pdf','./templates/factuur-normaal.pdf','./templates/offerte-normaal.pdf',
   './icons/icon-192.png','./icons/icon-512.png','./icons/icon-maskable-512.png','./icons/apple-touch-icon.png'

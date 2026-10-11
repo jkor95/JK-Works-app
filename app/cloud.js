@@ -3,7 +3,68 @@ const JKCloud = (() => {
   const SUPABASE_KEY = 'sb_publishable_z4kkYgzjr-bYDEcSZlVciw_cP8MfOuX';
   const BUCKET = 'jkworks-files';
   const LOCAL_ONLY_STORES = new Set();
-  let client = null, session = null, syncing = false;
+  let client = null, session = null, syncing = false, backupBusy = false;
+  const BACKUP_BUCKETS=['jkworks-files','jkworks-request-files','jkworks-website-assets'];
+  async function restoreProtected(){return !!(await JKDB.get('settings','backupRestoreGuard'))?.active;}
+  async function withBackupRead(action){
+    if(syncing||backupBusy)throw new Error('Wacht tot de huidige synchronisatie of back-up klaar is.');
+    backupBusy=true;
+    try{
+      if(navigator.locks)return await navigator.locks.request('jkworks-data-operation',{ifAvailable:true},lock=>{
+        if(!lock)throw new Error('Een andere app-tab is bezig. Sluit die eerst.');return action();
+      });
+      return await action();
+    }finally{backupBusy=false;}
+  }
+  async function readBackupSnapshot(){
+    if(!isSignedIn()||!navigator.onLine)throw new Error('Cloud kon niet volledig worden gecontroleerd.');
+    const owner=user().id;
+    async function rows(table,columns,own=false){
+      const all=[];
+      let expectedCount=null;
+      for(let offset=0;offset<100000;){
+        let q=client.from(table).select(columns,{count:'exact'});
+        if(own)q=q.eq('user_id',owner).order('store').order('record_id');else q=q.order('id');
+        const {data,error,count}=await q.range(offset,offset+499);
+        if(error||!Array.isArray(data)||!Number.isSafeInteger(count)||count<0||count>100000)throw new Error('Cloudgegevens konden niet volledig worden gelezen.');
+        if(expectedCount!==null&&count!==expectedCount)throw new Error('Cloudgegevens gewijzigd tijdens de back-up.');
+        expectedCount=count;all.push(...data);offset+=data.length;
+        if(all.length===count)return all;
+        if(!data.length||all.length>count)throw new Error('Cloudgegevens zijn onvolledig gelezen.');
+      }
+      throw new Error('Te veel gegevens voor een browserback-up.');
+    }
+    const records=await rows('app_records','store,record_id,data,updated_at',true);
+    const deletions=await rows('app_deletions','store,record_id,deleted_at',true);
+    const requests=await rows('public_requests','*');
+    const files=[];
+    for(const bucket of BACKUP_BUCKETS){
+      const folders=[''];let visited=0;
+      while(folders.length){
+        if(++visited>10000)throw new Error('Te veel bestanden voor een browserback-up.');
+        const prefix=folders.shift();
+        for(let offset=0;offset<100000;offset+=500){
+          const {data,error}=await client.storage.from(bucket).list(prefix,{limit:500,offset,sortBy:{column:'name',order:'asc'}});
+          if(error||!Array.isArray(data))throw new Error('Cloudbestanden konden niet volledig worden gecontroleerd.');
+          for(const item of data){
+            if(!item.name||item.name.includes('/')||['.','..'].includes(item.name))throw new Error('Ongeldige bestandslijst.');
+            const path=prefix?prefix+'/'+item.name:item.name;
+            if(item.id)files.push({bucket,path,metadata:item.metadata||{},updatedAt:item.updated_at||null});else folders.push(path);
+          }
+          if(data.length<500)break;
+          if(offset===99500)throw new Error('Te veel bestanden voor een browserback-up.');
+        }
+      }
+    }
+    if(user()?.id!==owner)throw new Error('Sessie gewijzigd tijdens back-up.');
+    return {owner,records,deletions,requests,files};
+  }
+  async function downloadBackupFile(bucket,path){
+    if(!isSignedIn()||!BACKUP_BUCKETS.includes(bucket)||typeof path!=='string'||!path||path.split('/').some(x=>!x||x==='.'||x==='..'))throw new Error('Ongeldige bestandsverwijzing.');
+    const {data,error}=await client.storage.from(bucket).download(path);
+    if(error||!(data instanceof Blob))throw new Error('Een cloudbestand kon niet worden gelezen. Back-up niet compleet.');
+    return data;
+  }
 
   function available(){ return !!window.supabase?.createClient; }
   async function init(){
@@ -28,13 +89,13 @@ const JKCloud = (() => {
   async function signIn(email,password){
     if(!client) throw new Error('Cloudmodule is niet geladen. Controleer internet.');
     const {data,error}=await client.auth.signInWithPassword({email,password});
-    if(error) throw error; session=data.session; await syncNow(); return data;
+    if(error) throw error; session=data.session; if(!await restoreProtected())await syncNow(); return data;
   }
   async function signUp(email,password){
     if(!client) throw new Error('Cloudmodule is niet geladen. Controleer internet.');
     const {data,error}=await client.auth.signUp({email,password});
     if(error) throw error; session=data.session||null;
-    if(session) await syncNow();
+    if(session&&!await restoreProtected()) await syncNow();
     return data;
   }
   async function signOut(){ if(client) await client.auth.signOut(); session=null; }
@@ -56,7 +117,7 @@ const JKCloud = (() => {
   }
   async function queuePut(store,obj){
     if(LOCAL_ONLY_STORES.has(store)) return;
-    if(!JKDB.stores.includes(store) || store==='settings' && obj.id==='cloudStatus') return;
+    if(!JKDB.stores.includes(store) || store==='settings' && ['cloudStatus','backup','backupRestoreGuard'].includes(obj.id)) return;
     if(await hasLocalDelete(store,obj.id)) return;
     // v33: elke wijziging blijft lokaal staan tot de gebruiker handmatig synchroniseert.
     // Houd per record alleen de nieuwste PUT in de wachtrij.
@@ -155,6 +216,15 @@ const JKCloud = (() => {
     }
   }
   async function syncNow(){
+    if(navigator.locks)return navigator.locks.request('jkworks-data-operation',{ifAvailable:true},lock=>{
+      if(!lock)throw new Error('Een andere app-tab maakt een back-up of synchroniseert.');return syncUnlocked();
+    });
+    return syncUnlocked();
+  }
+  async function syncUnlocked(){
+    if(backupBusy)throw new Error('Wacht tot de back-upcontrole klaar is.');
+    if(await restoreProtected())throw new Error('Herstelkopie beschermd: synchronisatie is geblokkeerd op dit apparaat. Open Back-up en herstellen.');
+    if(backupBusy)throw new Error('Wacht tot de back-upcontrole klaar is.');
     if(syncing || !isSignedIn() || !navigator.onLine) return;
     syncing=true; document.dispatchEvent(new CustomEvent('jkcloud-sync',{detail:{state:'syncing'}}));
     let localChanged=false;
@@ -192,6 +262,7 @@ const JKCloud = (() => {
       // Een verwijdering wint altijd, op ieder apparaat.
       for(const key of deletedKeys){
         const sep=key.indexOf('|'), store=key.slice(0,sep), id=key.slice(sep+1);
+        if(store==='settings'&&['backup','backupRestoreGuard'].includes(id))continue;
         if(JKDB.stores.includes(store)){
           if(await JKDB.get(store,id)){ await JKDB.removeLocal(store,id); localChanged=true; }
           // Cloud-delete ook lokaal onthouden wanneer deze op een ander apparaat
@@ -208,6 +279,7 @@ const JKCloud = (() => {
         if(LOCAL_ONLY_STORES.has(store)) continue;
         const local=await JKDB.all(store);
         for(const obj of local){
+          if(store==='settings'&&['backup','backupRestoreGuard'].includes(obj.id))continue;
           const key=`${store}|${obj.id}`;
           if(deletedKeys.has(key)){ await JKDB.removeLocal(store,obj.id); localChanged=true; continue; }
           const rr=remote.get(key);
@@ -223,6 +295,7 @@ const JKCloud = (() => {
         }
       }
       for(const rr of remote.values()){
+        if(rr.store==='settings'&&['backup','backupRestoreGuard'].includes(rr.record_id))continue;
         if(!JKDB.stores.includes(rr.store)) continue;
         const key=`${rr.store}|${rr.record_id}`;
         if(deletedKeys.has(key)) continue;
@@ -236,6 +309,7 @@ const JKCloud = (() => {
   }
 
   async function pruneCloudToLocal(stores=['documents','timeEntries','jobs']){
+    if(backupBusy||await restoreProtected())throw new Error('Cloudopschoning geblokkeerd tijdens back-up of beschermd herstel.');
     if(!isSignedIn()) throw new Error('Niet ingelogd.');
     if(!navigator.onLine) throw new Error('Geen internetverbinding.');
     const allowed=stores.filter(s=>JKDB.stores.includes(s) && !LOCAL_ONLY_STORES.has(s));
@@ -299,5 +373,5 @@ const JKCloud = (() => {
   }
   async function pendingCount(){ return (await JKDB.all('syncQueue')).filter(q=>!LOCAL_ONLY_STORES.has(q.store)).length; }
   function status(){ return {available:available(),signedIn:isSignedIn(),email:user()?.email||'',syncing}; }
-  return {getAccessToken:async()=>{const {data}=await client.auth.getSession();return data?.session?.access_token||null;},init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,queuePut,queueDelete,pruneCloudToLocal,pendingCount,getWebsiteContent,saveWebsiteContent,getWebsiteRequests,updateWebsiteRequest,downloadRequestPhoto,deleteWebsiteRequest};
+  return {readBackupSnapshot,downloadBackupFile,withBackupRead,restoreProtected,getAccessToken:async()=>{const {data}=await client.auth.getSession();return data?.session?.access_token||null;},init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,queuePut,queueDelete,pruneCloudToLocal,pendingCount,getWebsiteContent,saveWebsiteContent,getWebsiteRequests,updateWebsiteRequest,downloadRequestPhoto,deleteWebsiteRequest};
 })();
