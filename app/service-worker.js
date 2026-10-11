@@ -1,4 +1,4 @@
-const CACHE='jkworks-v71-2-app-scope';
+const CACHE='jkworks-v71-4-app-scope';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./website-editor.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
