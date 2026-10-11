@@ -1,6 +1,7 @@
 # Wijzigingsgeschiedenis
 
 ## v71.4.2 — voorstel, nog niet gepubliceerd
+- Mac-startdiagnose toont uitsluitend vaste veilige categorieën en de mislukte stap; opruimfouten maskeren de startfout niet meer. Tests controleren dat fouttekst en sleutels niet in diagnose/logs komen; de volledige Mac-start blijft nog te bevestigen.
 - Eén Mac-startscript voor Docker Desktop, gescheiden fictieve Supabase-herstelproef, verborgen R2-download en verwijderoptie; Mac-acceptatieproef nog nodig.
 - Voorbereide dagelijkse back-up/uurlijkse bewaking (beide uit), 35-dagenopruiming en aan de eigenaar toegewezen GitHub-waarschuwingen bij fouten of geen succes binnen 48 uur.
 - Uitgeschakelde GitHub Actions-productieback-up met versleutelde externe R2-opslag, inventaris en integriteitscontrole.

@@ -159,6 +159,40 @@ class BackupTest(unittest.TestCase):
 
 
 class LocalSafetyTest(unittest.TestCase):
+    def test_diagnostics_never_echo_output_or_exception_secrets(self):
+        cases = [('no matching manifest for linux/arm64', 'architecture'),
+                 ('no space left on device', 'disk'), ('OOMKilled', 'memory'),
+                 ('port is already allocated', 'ports'), ('Mounts denied', 'mount'),
+                 ('failed to pull image: x509: certificate error', 'registry'),
+                 ('container is unhealthy', 'health'), ('unknown flag', 'config'),
+                 ('unrecognized error', 'command')]
+        sensitive = secrets.token_hex(32)
+        with tempfile.TemporaryDirectory() as directory:
+            instance = local.LocalTest(Path(directory))
+            instance.stage = 'start'
+            for output, expected in cases:
+                with self.subTest(expected=expected), patch.object(local.subprocess, 'run',
+                        return_value=subprocess.CompletedProcess([], 1,
+                            stdout=sensitive.encode(), stderr=(output + sensitive).encode())):
+                    with self.assertRaises(local.SafeFailure) as caught:
+                        instance.run(['fixture-only'], 'supabase-start')
+                    self.assertEqual(caught.exception.code, expected)
+                    diagnostic = local.safe_diagnosis(caught.exception, instance.stage)
+                    self.assertNotIn(sensitive, diagnostic)
+                    self.assertNotIn(sensitive, (Path(directory)/'logs/supabase-start.log').read_text())
+            self.assertNotIn(sensitive, local.safe_diagnosis(RuntimeError(sensitive), sensitive))
+
+    def test_cleanup_failure_preserves_original_start_diagnosis(self):
+        with tempfile.TemporaryDirectory() as directory:
+            instance = local.LocalTest(Path(directory))
+            original = local.SafeFailure('registry')
+            with patch.object(instance, 'run', side_effect=[local.CONTEXT, '', '']), \
+                 patch.object(instance, 'supabase', side_effect=[original, local.SafeFailure('command')]):
+                with self.assertRaises(local.SafeFailure) as caught:
+                    instance.start()
+                self.assertIs(caught.exception, original)
+                self.assertEqual(instance.stage, 'start')
+
     def test_rejects_remote_api_and_redirects(self):
         local.require_local_url(local.API + '/auth/v1/health')
         for url in ['https://ercqiavruotoclhvfzud.supabase.co',

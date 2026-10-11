@@ -23,6 +23,67 @@ API = 'http://127.0.0.1:56321'
 EMAIL = 'restore-fixture@example.invalid'
 TABLES = {'app_records', 'app_deletions', 'public_requests'}
 
+# Only these fixed texts may reach the terminal or diagnostic file. Never echo
+# exception strings, command arguments, container environments or raw CLI output.
+DIAGNOSES = {
+    'disk': 'Docker heeft onvoldoende vrije schijfruimte.',
+    'memory': 'Docker meldt onvoldoende geheugen of een geheugengerelateerde stop.',
+    'architecture': 'Een Docker-image past niet bij de processorarchitectuur.',
+    'ports': 'Een benodigde lokale poort is al in gebruik.',
+    'mount': 'Docker Desktop weigert toegang tot een lokale map.',
+    'registry': 'Een benodigd image kan niet worden gedownload (register, DNS, TLS of netwerk).',
+    'health': 'Een lokale Supabase-service wordt niet gezond binnen de wachttijd.',
+    'config': 'Supabase CLI weigert de lokale configuratie of een startoptie.',
+    'command': 'Het lokale hulpmiddel stopte; de uitvoer past niet bij een bekende veilige diagnose.',
+    'isolation': 'De omgeving voldoet niet aan het verplichte offline netwerk en de binding aan 127.0.0.1; de proef is geblokkeerd.',
+    'target': 'Een lokaal adres, Docker-context of projectkoppeling wijkt af van de toegestane testomgeving; de proef is geblokkeerd.',
+    'containers': 'De verwachte lokale Supabase-containers ontbreken na de start.',
+    'unknown': 'De oorzaak is nog onbekend; ruwe fouttekst is om veiligheidsredenen verborgen.',
+}
+STAGES = {
+    'setup': 'lokale voorbereiding', 'context': 'Docker Desktop-context',
+    'network': 'aanmaken/controleren van het offline netwerk',
+    'start': 'starten van PostgreSQL, Auth en Storage',
+    'isolation': 'controleren van netwerkisolatie en poortbindingen',
+    'status': 'controleren van lokale API- en databaseadressen',
+    'tools': 'downloaden van PostgreSQL-exporttools',
+    'fixture': 'fictieve Auth-, RLS- en Storage-proef',
+    'backup': 'versleutelde fictieve back-up en integriteitscontrole',
+    'restore': 'herstel van uitsluitend fictieve gegevens',
+    'download': 'download en verificatie zonder databaseverbinding',
+    'stop': 'stoppen van uitsluitend de lokale testomgeving',
+    'remove': 'verwijderen van uitsluitend de lokale testomgeving',
+}
+
+
+class SafeFailure(RuntimeError):
+    def __init__(self, code):
+        self.code = code if code in DIAGNOSES else 'unknown'
+        super().__init__(self.code)
+
+
+def classify_failure(output):
+    text = output.decode('utf-8', errors='replace').lower()
+    patterns = (
+        ('disk', ('no space left on device', 'disk quota exceeded')),
+        ('memory', ('out of memory', 'oomkilled', 'cannot allocate memory')),
+        ('architecture', ('exec format error', 'no matching manifest', 'unsupported architecture')),
+        ('ports', ('port is already allocated', 'address already in use', 'ports are not available')),
+        ('mount', ('mounts denied', 'mount denied', 'is not shared from the host')),
+        ('registry', ('failed to pull', 'pull access denied', 'failed to resolve reference',
+                      'error pulling', 'unable to download', 'no such host', 'getaddrinfo',
+                      'tls handshake timeout', 'x509:', 'connection refused', 'i/o timeout')),
+        ('health', ('unhealthy', 'health check', 'healthcheck', 'not ready', 'timed out')),
+        ('config', ('unknown flag', 'unknown command', 'invalid config', 'failed to parse',
+                    'failed to load config', 'cannot unmarshal')),
+    )
+    return next((code for code, words in patterns if any(word in text for word in words)), 'command')
+
+
+def safe_diagnosis(exc, stage):
+    code = exc.code if isinstance(exc, SafeFailure) else 'unknown'
+    return 'Stap: ' + STAGES.get(stage, STAGES['setup']) + '.\nDiagnose: ' + DIAGNOSES[code]
+
 
 def clean_environment(root):
     # Do not inherit PG*, SUPABASE*, RCLONE*, proxy settings or production secrets.
@@ -41,7 +102,7 @@ def require_local_url(url):
     parsed = urlparse(url)
     if (parsed.scheme != 'http' or parsed.hostname != '127.0.0.1'
             or parsed.port != 56321 or parsed.username or parsed.password):
-        raise RuntimeError('Only the fixed local API is permitted')
+        raise SafeFailure('target')
 
 
 def api(path, key, body=None, token=None, method=None, content_type='application/json'):
@@ -59,15 +120,19 @@ class LocalTest:
         self.root = root.resolve()
         self.env = clean_environment(self.root)
         self.cli = str(self.root/'tools/supabase')
+        self.stage = 'setup'
         for name in ('tmp', 'logs', 'snapshots', 'fixtures'):
             (self.root/name).mkdir(exist_ok=True)
 
     def run(self, args, label, env=None):
         result = subprocess.run(args, env=env or self.env, capture_output=True)
         if result.returncode:
-            # A private local diagnostic file is never uploaded or echoed.
-            (self.root/'logs'/f'{label}.log').write_bytes(result.stdout + result.stderr)
-            raise RuntimeError(label + ' failed; private local diagnostics retained')
+            code = classify_failure(result.stdout + result.stderr)
+            # Replace this operation's old raw log with safe metadata only.
+            (self.root/'logs'/f'{label}.log').write_text(json.dumps({
+                'stage': self.stage if self.stage in STAGES else 'setup',
+                'diagnosis': code, 'exit_code': result.returncode}) + '\n')
+            raise SafeFailure(code)
         return result.stdout.decode()
 
     def supabase(self, command, *args):
@@ -78,27 +143,29 @@ class LocalTest:
         network = json.loads(self.run(['docker', 'network', 'inspect', NETWORK], 'network'))[0]
         if (not network['Internal'] or network.get('Labels', {}).get('jkworks.restore') != PROJECT
                 or network.get('Options', {}).get('com.docker.network.bridge.host_binding_ipv4') != '127.0.0.1'):
-            raise RuntimeError('An owned internal Docker network is required')
+            raise SafeFailure('isolation')
         containers = self.run(['docker', 'ps', '-a', '--format', '{{.Names}}'], 'containers').splitlines()
         own = [name for name in containers if name.endswith('_' + PROJECT)]
         if not own:
-            raise RuntimeError('No local Supabase containers found')
+            raise SafeFailure('containers')
         for name in own:
             item = json.loads(self.run(['docker', 'inspect', name], 'inspect'))[0]
             for bindings in item['NetworkSettings']['Ports'].values():
                 if bindings and any(binding['HostIp'] != '127.0.0.1' for binding in bindings):
-                    raise RuntimeError('A service port is exposed beyond loopback')
+                    raise SafeFailure('isolation')
             if set(item['NetworkSettings']['Networks']) != {NETWORK}:
-                raise RuntimeError('Local service has an unexpected external network')
+                raise SafeFailure('isolation')
         self.db_container = 'supabase_db_' + PROJECT
         if self.db_container not in own:
-            raise RuntimeError('Local PostgreSQL container missing')
+            raise SafeFailure('containers')
 
     def start(self):
+        self.stage = 'context'
         if (self.root/'project/supabase/.temp/project-ref').exists():
-            raise RuntimeError('A linked cloud project is forbidden')
+            raise SafeFailure('target')
         if self.run(['docker', 'context', 'show'], 'context').strip() != CONTEXT:
-            raise RuntimeError('Wrong Docker context')
+            raise SafeFailure('target')
+        self.stage = 'network'
         if not self.run(['docker', 'network', 'ls', '--filter', 'name=^' + NETWORK + '$',
                          '--format', '{{.Name}}'], 'network-list').strip():
             self.run(['docker', 'network', 'create', '--internal', '--opt',
@@ -108,22 +175,30 @@ class LocalTest:
             net = json.loads(self.run(['docker', 'network', 'inspect', NETWORK], 'network'))[0]
             if (not net['Internal'] or net.get('Labels', {}).get('jkworks.restore') != PROJECT
                     or net.get('Options', {}).get('com.docker.network.bridge.host_binding_ipv4') != '127.0.0.1'):
-                raise RuntimeError('Refusing to reuse an untrusted network')
+                raise SafeFailure('isolation')
         try:
             # Image downloads occur on the VM; running services only use the offline network.
             print('Start PostgreSQL, Auth en Storage; eerste image-download kan enkele minuten duren.', flush=True)
+            self.stage = 'start'
             self.supabase('start', '--exclude', 'realtime,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor')
+            self.stage = 'isolation'
             self.verify_network()
+            self.stage = 'status'
             status = json.loads(self.supabase('status', '--output', 'json'))
             require_local_url(status['API_URL'])
             db = urlparse(status['DB_URL'])
             if db.hostname not in ('127.0.0.1', 'localhost') or db.port != 56322 or db.path != '/postgres':
-                raise RuntimeError('Unexpected local database target')
+                raise SafeFailure('target')
             self.status, self.password = status, db.password
             # Native PostgreSQL tools used by the existing backup format, with no production credentials.
+            self.stage = 'tools'
             self.run(['docker', 'pull', 'postgres:17'], 'postgres-tools')
         except Exception:
-            self.supabase('stop')
+            # Cleanup must not replace the original diagnosis; never remove volumes.
+            try:
+                self.supabase('stop')
+            except Exception:
+                print('Ook het stoppen is niet bevestigd; er zijn geen volumes verwijderd.', flush=True)
             raise
 
     def connect(self):
@@ -147,6 +222,7 @@ class LocalTest:
         return cloud.run(command + [env['JK_PG_IMAGE'], tool] + args, env, output=output)
 
     def fixture(self):
+        self.stage = 'fixture'
         marker = self.root/'fixture.json'
         if marker.exists():
             saved = json.loads(marker.read_text())
@@ -227,6 +303,7 @@ class LocalTest:
                    BACKUP_CRYPT_PASSWORD=secrets.token_hex(32), BACKUP_CRYPT_SALT=secrets.token_hex(32),
                    RCLONE_CONFIG_VAULT_REMOTE=str(self.root/'fixtures/encrypted'))
         (self.root/'fixtures/encrypted').mkdir(exist_ok=True)
+        self.stage = 'backup'
         previous_runner = cloud.pg_tool
         cloud.pg_tool = self.pg_tool
         try:
@@ -235,6 +312,7 @@ class LocalTest:
             cloud.pg_tool = previous_runner
         target = self.root/'tmp'/('fixture-verified-' + snapshot)
         cloud.download_verified(snapshot, target, configured)
+        self.stage = 'restore'
         # Restore only these fictional rows, not unmanaged full schemas/roles over a running stack.
         api('/storage/v1/object/jkworks-files', key, {'prefixes': ['fixture.txt']}, method='DELETE')
         api('/auth/v1/admin/users/' + uid, key, method='DELETE')
@@ -257,6 +335,7 @@ class LocalTest:
         print('Dit is geen volledig herstel van alle managed schema’s of een productieback-up.')
 
     def download(self):
+        self.stage = 'download'
         print('Alleen downloaden en verifiëren uit R2; geen databaseverbinding of herstel.')
         env = dict(self.env)
         env['R2_ENDPOINT'] = input('R2-endpoint: ').strip()
@@ -275,6 +354,7 @@ class LocalTest:
 
 if __name__ == '__main__':
     os.umask(0o077)
+    local = None
     try:
         if sys.platform != 'darwin':
             raise RuntimeError('This entry point is Mac-only')
@@ -286,12 +366,14 @@ if __name__ == '__main__':
         if mode == 'download':
             local.download()
         elif mode == 'stop':
+            local.stage = 'stop'
             local.supabase('stop')
             print('Alleen de JK Works-testomgeving gestopt; lokale gegevens behouden.')
         elif mode == 'remove':
+            local.stage = 'remove'
             # Never remove a different project's volumes, engine or downloaded real snapshots.
             if local.run(['docker', 'context', 'show'], 'context').strip() != CONTEXT:
-                raise RuntimeError('Wrong Docker context')
+                raise SafeFailure('target')
             local.supabase('stop', '--no-backup')
             remaining = local.run(['docker', 'network', 'inspect', NETWORK], 'network-remove-check')
             net = json.loads(remaining)[0]
@@ -311,6 +393,7 @@ if __name__ == '__main__':
         else:
             raise RuntimeError('Unknown mode')
     except Exception as exc:
-        print(f'Lokale test gestopt ({type(exc).__name__}). Geen ruwe foutmelding of sleutels getoond.')
+        print('Lokale test gestopt. Geen ruwe foutmelding of sleutels getoond.')
+        print(safe_diagnosis(exc, local.stage if local else 'setup'))
         print('De proef is niet als geslaagd bevestigd. Deel geen lokale logbestanden: die kunnen gevoelige gegevens bevatten.')
         raise SystemExit(1)
