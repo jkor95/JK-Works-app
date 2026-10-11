@@ -10,5 +10,5 @@
 ## v71.4.0 — uitgangsversie (nummer genormaliseerd uit broncode v71.4)
 - Vastgelegde `main`: `40e5f3cee281a17c528ea2e70f7eee9358f63d08`.
 - Herstelpunt: `recovery-2026-10-11-main` (geannoteerde Git-tag).
-- Deze tag bewaart de repository vóór de inrichting van versiebeheer. De overeenkomst met de actuele live Pages-deployment is nog niet bevestigd: API en live domein waren tijdens de inrichting door netwerkbeleid geblokkeerd.
+- Deze tag bewaart de repository vóór de inrichting van versiebeheer. Op 11 oktober 2026 is via de GitHub API bevestigd dat de oorspronkelijke `main` en de laatste succesvolle Pages-build naar dezelfde commit wijzen. Pages publiceert vanuit `main`, map `/`, op `jkworks.nl` met afgedwongen HTTPS.
 - Geen back-up van Supabase of lokale browsergegevens.

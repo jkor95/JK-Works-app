@@ -1,9 +1,9 @@
 # Updates publiceren en herstellen
 
 ## Huidige situatie en eerste herstelpunt
-De site is statisch en heeft geen buildstap. `CNAME` bevat `jkworks.nl`. De repository had bij inrichting geen Actions-workflow. Dat bewijst niet welke Pages-bron actief is. Controleer **GitHub → repository → Settings → Pages** op publicatiemethode, bronbranch/map en custom domain. Laat de bestaande instelling en DNS intact.
+Gecontroleerd op 11 oktober 2026: GitHub Pages gebruikt **Deploy from a branch** (`build_type: legacy`), bronbranch `main`, map `/`. Het custom domain is `jkworks.nl`, HTTPS is afgedwongen en de laatste build heeft status `built`. De site is statisch en heeft geen buildstap. De nieuwe regressieworkflow publiceert niets. Laat de bestaande Pages-instellingen en DNS intact. Controleer bij toekomstige updates opnieuw **GitHub → repository → Settings → Pages**.
 
-Het eerste herstelpunt is de geannoteerde tag `recovery-2026-10-11-main` op commit `40e5f3cee281a17c528ea2e70f7eee9358f63d08`. Deze is vóór wijzigingen in GitHub opgeslagen. Hij bewaart de huidige `main`; de live deployment moet nog worden gecontroleerd. De API en het live domein waren door het cloudnetwerk geblokkeerd. Noem dit pas een bevestigde werkende live versie nadat onderstaande controle slaagt.
+Het eerste herstelpunt is de geannoteerde tag `recovery-2026-10-11-main` op commit `40e5f3cee281a17c528ea2e70f7eee9358f63d08`. Deze is vóór wijzigingen in GitHub opgeslagen. De GitHub API bevestigt dat zowel de oorspronkelijke `main` als de laatste succesvolle Pages-build exact deze commit gebruiken. De build dateert van 11 oktober 2026, 11:16:30 uur (Europe/Amsterdam). Het herstelpunt komt dus overeen met de oorspronkelijke gepubliceerde GitHub-versie. De API en het live domein waren tijdens de eerste inrichting geblokkeerd; die beperking is nu opgeheven. Dit controleert de bronversie, niet alle ingelogde bedrijfsfuncties.
 
 Leescontroles voor Codex:
 ```sh
