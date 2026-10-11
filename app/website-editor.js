@@ -2,7 +2,14 @@
 const IDS=['hero','diensten','werkwijze','over','aanvragen','contact'];const LABELS={hero:'Intro',diensten:'Diensten',werkwijze:'Werkwijze',over:'Over JK Works',aanvragen:'Opdracht aanvragen',contact:'Contact'};
 const $=(s,root=document)=>root.querySelector(s);const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const url='https://ercqiavruotoclhvfzud.supabase.co';const key='sb_publishable_z4kkYgzjr-bYDEcSZlVciw_cP8MfOuX';
-async function open(){if(!window.JKCloud?.isSignedIn()){alert('Log eerst in bij Synchronisatie.');return;}const client=window.supabase.createClient(url,key,{auth:{persistSession:true,storageKey:'jkworks-editor-v71'}});
+async function open(){
+  // Gebruik dezelfde Supabase-sessie als de bestaande app; maak geen tweede auth-client.
+  const cloud=window.JKCloud;
+  if(!cloud){alert('De synchronisatiemodule is nog niet geladen. Vernieuw de pagina en probeer opnieuw.');return;}
+  let token=null;
+  try{token=await cloud.getAccessToken();}catch(e){console.warn('Website-editor: sessiecontrole mislukt',e);}
+  if(!token){alert('De Supabase-sessie is niet actief. Open Meer > Synchronisatie en meld je daar opnieuw aan.');return;}
+
 // Reuse the app's existing authenticated cloud methods, and its existing session for storage via JKCloud.
 let content={};try{content=await JKCloud.getWebsiteContent()||{};}catch(e){alert('Websitegegevens laden mislukt: '+e.message);return;}
 const original=JSON.parse(JSON.stringify(content));let sections=[...(content.sectionOrder||IDS)];sections=[...new Set([...sections.filter(x=>IDS.includes(x)),...IDS])];content.siteImages=content.siteImages||{};content.sectionImages=content.sectionImages||{};content.sectionVisibility=content.sectionVisibility||{};
