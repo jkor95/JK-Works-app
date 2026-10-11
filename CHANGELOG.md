@@ -1,6 +1,12 @@
 # Wijzigingsgeschiedenis
 
-## v71.5.0 — voorstel, nog niet gepubliceerd
+## v71.5.1 — werkwijze voor zelfstandige publicatie
+- Doorlopende eigenaarstoestemming vastgelegd in AGENTS.md: iedere gewone update via PR, relevante tests en GitGuardian; bij groen zelfstandig samenvoegen en de exacte Pages-publicatie/live website controleren.
+- Afzonderlijke toestemming blijft verplicht bij databaseaanpassingen, beveiligingsinstellingen, gebruikersrechten, betaalgegevens en herstelacties. Latere instructies om niet te publiceren hebben voorrang; geen omzeiling van GitHub-regels/rechten.
+- Versiebeheerhandleiding bijgewerkt; app-/websitebestanden, Supabase, Cloudflare en bestaande herstelpunten ongewijzigd.
+- Herstelpunt vóór deze documentatiewijziging: v71.5.0 op `22fd1b0ea810cce1aaab8e19ad303d06811417a2`, bevestigd als succesvolle Pages-build van PR #4. Regressies worden via de bestaande browser-/fixturetest en GitGuardian gecontroleerd.
+
+## v71.5.0 — gepubliceerd op 11 oktober 2026
 - Bestaande handmatige back-up uitgebreid: lokale appgegevens en uitsluitend leesbare cloudrecords/bestanden in één gedateerde download; voortgang, aantallen, bestandsgrootte en 30-dagenwaarschuwing.
 - V3 met ingebedde bestanden, SHA-256-controles en optionele AES-256-GCM-wachtwoordversleuteling; volledig aanwezige V1/V2 blijven inleesbaar. Bij cloudstoring uitsluitend expliciet gekozen lokale kopie zonder volledigheidsclaim.
 - Herstel valideert vooraf, vraagt tweemaal toestemming inclusief bewaren veiligheidskopie, vervangt gegevens atomair en beschermt de lokale herstelkopie tegen sync. Geen browserherstel naar Supabase; aanvullende websitegegevens blijven bijlagen.
