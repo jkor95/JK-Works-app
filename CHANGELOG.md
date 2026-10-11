@@ -1,13 +1,13 @@
 # Wijzigingsgeschiedenis
 
 ## v71.4.2 — voorstel, nog niet gepubliceerd
-- Mac-startdiagnose toont uitsluitend vaste veilige categorieën en de mislukte stap; opruimfouten maskeren de startfout niet meer. Tests controleren dat fouttekst en sleutels niet in diagnose/logs komen; de volledige Mac-start blijft nog te bevestigen.
-- Eén Mac-startscript voor Docker Desktop, gescheiden fictieve Supabase-herstelproef, verborgen R2-download en verwijderoptie; Mac-acceptatieproef nog nodig.
-- Voorbereide dagelijkse back-up/uurlijkse bewaking (beide uit), 35-dagenopruiming en aan de eigenaar toegewezen GitHub-waarschuwingen bij fouten of geen succes binnen 48 uur.
-- Uitgeschakelde GitHub Actions-productieback-up met versleutelde externe R2-opslag, inventaris en integriteitscontrole.
-- Lokale fixturetests voor database/Auth/RLS en Storage-export/herstel; geen productiecredentials of productieback-up.
-- Voorstel met kosten, 35 dagen retentie, secretinstellingen, foutmeldingen en veilig testherstel; zie [cloudback-ups](docs/CLOUDBACKUPS.md).
-- Dagelijkse cron en productietoegang blijven uit; activatie en eerste echte back-up vereisen afzonderlijke goedkeuring.
+- Lokale Docker Desktop-herstelproef vervallen na twee mislukte Mac-starts; Mac-testbestanden verwijderd. Back-up en fictieve GitHub-tests gebruiken native PostgreSQL-tools.
+- Eén handmatige productieback-up voorbereid, uitsluitend na expliciete goedkeuring; dagelijkse planning en uurlijkse bewaking blijven uit. Geen productieback-up uitgevoerd.
+- Supabase wordt uitsluitend uitgelezen; database-export met read-only verbindingen en geverifieerde TLS, Storage uitsluitend GET zonder redirects. Versleutelde R2-upload met volledige ontsleutelde download, checksums en als laatste COMPLETE.
+- Negen secret- en twee variabelenbindings gecontroleerd; aanwezigheid wordt in de goedgekeurde workflow zonder waarden gecontroleerd. Metadata momenteel ontoegankelijk (HTTP 403).
+- Fictieve PostgreSQL-/Storage-/encryptietests bewijzen geen volledige Supabase-herstelbaarheid. Volledige hersteltest niet geslaagd; herstelbaarheid niet gegarandeerd.
+- GitGuardian blijft eerdere fictieve testwaarden in commit ac3f4d4 melden; afhandeling vereist GitGuardian-beheerrechten. Scanner en Git-geschiedenis behouden.
+- Website, main, versietags en Supabase-productie ongewijzigd; voorbereiding en herstelprocedure in docs/CLOUDBACKUPS.md.
 
 ## v71.4.1 — gepubliceerd op 11 oktober 2026
 - Vaste Codex-instructies voor branches, beoordeling, regressietests en versietags.

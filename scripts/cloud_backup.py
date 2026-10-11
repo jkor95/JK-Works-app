@@ -8,11 +8,34 @@ import subprocess
 import tempfile
 from datetime import datetime, timezone, timedelta
 from urllib.parse import quote, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request, build_opener, HTTPRedirectHandler
 import uuid
 
 import psycopg
 from psycopg import sql
+
+SECRET_BINDINGS = {
+    'JK_DB_HOST':'PGHOST', 'JK_DB_USER':'PGUSER', 'JK_DB_PASSWORD':'PGPASSWORD',
+    'JK_DB_CA':'SUPABASE_DB_CA', 'JK_STORAGE_READ_KEY':'SUPABASE_STORAGE_READ_KEY',
+    'JK_R2_ACCESS_KEY_ID':'R2_ACCESS_KEY_ID', 'JK_R2_SECRET_ACCESS_KEY':'R2_SECRET_ACCESS_KEY',
+    'JK_BACKUP_PASSWORD':'BACKUP_CRYPT_PASSWORD', 'JK_BACKUP_SALT':'BACKUP_CRYPT_SALT',
+}
+VARIABLE_BINDINGS = {'JK_R2_ENDPOINT':'R2_ENDPOINT', 'JK_R2_BUCKET':'R2_BUCKET'}
+
+
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        raise RuntimeError('Storage redirects are forbidden')
+
+
+def preflight(env):
+    bindings = SECRET_BINDINGS | VARIABLE_BINDINGS
+    missing = [name for name, binding in bindings.items() if not env.get(binding, '').strip()]
+    if missing:
+        print('Missing settings (names only): ' + ', '.join(missing))
+        raise RuntimeError('Required settings missing')
+    print('Required settings present (names only): ' + ', '.join(bindings))
+
 
 REQUIRED_TABLES = {'public.app_records', 'public.app_deletions', 'public.public_requests',
                    'auth.users', 'storage.buckets', 'storage.objects'}
@@ -20,6 +43,12 @@ REQUIRED_BUCKETS = {'jkworks-files', 'jkworks-request-files', 'jkworks-website-a
 
 
 def run(args, env, output=None, input_text=None):
+    if Path(args[0]).name == 'rclone':
+        # The upload/download process has no need for database or Supabase credentials.
+        allowed = {'PATH', 'HOME', 'TMPDIR', 'SSL_CERT_FILE', 'SSL_CERT_DIR',
+                   'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'no_proxy'}
+        env = {name: value for name, value in env.items()
+               if name in allowed or name.startswith('RCLONE_CONFIG_')}
     result = subprocess.run(args, env=env, input=input_text, stdout=output or subprocess.PIPE,
                             stderr=subprocess.PIPE, text=output is None)
     if result.returncode:
@@ -39,7 +68,9 @@ def digest(path):
 def configure(env, fixture=False, download_only=False):
     env = dict(env)
     if not fixture:
-        if not download_only and env.get('JK_BACKUPS_ENABLED') != 'true':
+        if download_only:
+            env['SUPABASE_PROJECT_REF'] = 'ercqiavruotoclhvfzud'
+        if not download_only and env.get('JK_BACKUP_AUTHORIZED') != 'true':
             raise RuntimeError('Production backup is disabled')
         if not download_only:
             ref = env['SUPABASE_PROJECT_REF']
@@ -50,8 +81,12 @@ def configure(env, fixture=False, download_only=False):
             if env.get('PGPORT') != '5432' or env.get('PGSSLMODE') != 'verify-full':
                 raise RuntimeError('Session/direct connection on 5432 with verified TLS is required')
             env['SUPABASE_URL'] = f'https://{ref}.supabase.co'
+        if not download_only:
+            preflight(env)
         endpoint = urlparse(env['R2_ENDPOINT'])
-        if endpoint.scheme != 'https' or not endpoint.hostname.endswith('.r2.cloudflarestorage.com'):
+        if (endpoint.scheme != 'https' or not (endpoint.hostname or '').endswith('.r2.cloudflarestorage.com')
+                or endpoint.username or endpoint.password or endpoint.port not in (None, 443)
+                or endpoint.path not in ('', '/') or endpoint.query or endpoint.fragment):
             raise RuntimeError('Expected HTTPS Cloudflare R2 endpoint')
         if not re.fullmatch(r'[a-z0-9][a-z0-9-]{1,61}[a-z0-9]', env['R2_BUCKET']):
             raise RuntimeError('Invalid private backup bucket name')
@@ -64,7 +99,7 @@ def configure(env, fixture=False, download_only=False):
         raise RuntimeError('Fixtures must use a loopback HTTP server')
     password = env['BACKUP_CRYPT_PASSWORD']
     salt = env['BACKUP_CRYPT_SALT']
-    if len(password) < 32 or len(salt) < 32 or any(char in password + salt for char in '\r\n'):
+    if password == salt or len(password) < 32 or len(salt) < 32 or any(char in password + salt for char in '\r\n'):
         raise RuntimeError('Encryption password and salt must each be at least 32 characters')
     env.update(RCLONE_CONFIG_VAULT_TYPE='crypt', RCLONE_CONFIG_VAULT_FILENAME_ENCRYPTION='standard',
                RCLONE_CONFIG_VAULT_DIRECTORY_NAME_ENCRYPTION='true', RCLONE_CONFIG='/dev/null')
@@ -74,17 +109,22 @@ def configure(env, fixture=False, download_only=False):
 
 
 def pg_tool(tool, args, env, output=None, archive=None):
-    command = ['docker', 'run', '--rm', '--network', 'host']
-    for name in ['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE', 'PGSSLMODE', 'PGSSLROOTCERT']:
-        if name in env:
-            command += ['-e', name]
-    if env.get('PGSSLROOTCERT'):
-        cert = env['PGSSLROOTCERT']
-        command += ['-v', f'{cert}:{cert}:ro']
+    if tool not in {'pg_dump', 'pg_dumpall', 'pg_restore'}:
+        raise RuntimeError('Unexpected PostgreSQL tool')
+    major = int(env['JK_PG_MAJOR'])
+    if major not in (15, 16, 17, 18):
+        raise RuntimeError('Unsupported PostgreSQL client version')
+    directory = Path(env.get('JK_PG_BIN', f'/usr/lib/postgresql/{major}/bin'))
+    executable = directory / tool
+    if not executable.is_file():
+        raise RuntimeError('Matching native PostgreSQL client is not installed')
+    # pg_dump/pg_dumpall are read-only; also force read-only defaults on their connections.
+    clean = {name: env[name] for name in ('PATH', 'HOME', 'LD_LIBRARY_PATH', 'PGHOST', 'PGPORT',
+             'PGUSER', 'PGPASSWORD', 'PGDATABASE', 'PGSSLMODE', 'PGSSLROOTCERT') if name in env}
+    clean['PGOPTIONS'] = '-c default_transaction_read_only=on'
     if archive is not None:
-        command += ['-v', f'{archive}:/backup.dump:ro']
-    command += [env['JK_PG_IMAGE'], tool] + args
-    return run(command, env, output=output)
+        args = [str(archive) if value == '/backup.dump' else value for value in args]
+    return run([str(executable)] + args, clean, output=output)
 
 
 def inventory(conn):
@@ -159,7 +199,9 @@ def backup(env, fixture=False):
             major = conn.info.server_version // 10000
             if major not in (15, 16, 17, 18):
                 raise RuntimeError('Unsupported PostgreSQL major version')
-            env['JK_PG_IMAGE'] = f'postgres:{major}'
+            env['JK_PG_MAJOR'] = str(major)
+            if not fixture:
+                env.pop('JK_PG_BIN', None)
             counts, buckets, objects = inventory(conn)
             snapshot = conn.execute('select pg_export_snapshot()').fetchone()[0]
             with (payload / 'database.dump').open('wb') as out:
@@ -197,7 +239,7 @@ def backup(env, fixture=False):
                     if key.startswith('eyJ'):
                         headers['Authorization'] = 'Bearer ' + key
                     url = env['SUPABASE_URL'] + '/storage/v1/object/authenticated/' + quote(obj['bucket_id'], safe='') + '/' + quote(obj['name'], safe='/')
-                    with urlopen(Request(url, headers=headers), timeout=120) as response, target.open('wb') as out:
+                    with build_opener(NoRedirect()).open(Request(url, headers=headers, method='GET'), timeout=120) as response, target.open('wb') as out:
                         for block in iter(lambda: response.read(1024 * 1024), b''):
                             out.write(block)
                 obj['bytes'], obj['sha256'] = target.stat().st_size, digest(target)
@@ -216,8 +258,8 @@ def backup(env, fixture=False):
             if buckets != after_buckets or clean != after_objects:
                 raise RuntimeError('Storage changed during backup; retry during a quiet period')
         run_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + uuid.uuid4().hex[:12]
-        image_digest = run(['docker', 'image', 'inspect', env['JK_PG_IMAGE'], '--format', '{{index .RepoDigests 0}}'], env).strip()
-        manifest = {'format':1, 'snapshot':run_id, 'postgres_major':major, 'pg_tool_image':image_digest, 'code_commit':env.get('GITHUB_SHA', 'local-fixture'), 'source_project':env.get('SUPABASE_PROJECT_REF', 'local-fixture'), 'table_counts':counts,
+        tool_version = pg_tool('pg_dump', ['--version'], env).strip()
+        manifest = {'format':1, 'snapshot':run_id, 'postgres_major':major, 'pg_tool_version':tool_version, 'code_commit':env.get('GITHUB_SHA', 'local-fixture'), 'source_project':env.get('SUPABASE_PROJECT_REF', 'local-fixture'), 'table_counts':counts,
                     'buckets':buckets, 'objects':objects, 'files':{}}
         for file in payload.rglob('*'):
             if file.is_file():
@@ -228,6 +270,14 @@ def backup(env, fixture=False):
         run(['rclone', 'copy', str(payload), remote], env)
         # Verify uploaded ciphertext against plaintext, not just remote object existence.
         run(['rclone', 'check', str(payload), remote, '--download'], env)
+        # Independently decrypt/download the complete payload and validate every SHA-256
+        # before publishing COMPLETE. No GitHub artifact or retained plaintext copy.
+        checked = stage / 'checked-download'
+        checked.mkdir()
+        run(['rclone', 'copy', remote, str(checked)], env)
+        if digest(checked / 'manifest.json') != digest(payload / 'manifest.json'):
+            raise RuntimeError('Downloaded manifest checksum mismatch')
+        verify_directory(checked, manifest)
         marker = stage / 'COMPLETE'
         marker.write_text(digest(payload / 'manifest.json'))
         run(['rclone', 'copyto', str(marker), remote + '/COMPLETE'], env)
@@ -274,6 +324,9 @@ def download_verified(run_id, directory, env):
     if digest(directory / 'manifest.json') != (directory / 'COMPLETE').read_text().strip():
         raise RuntimeError('Snapshot is incomplete or manifest is corrupt')
     manifest = json.loads((directory / 'manifest.json').read_text())
+    if (manifest.get('snapshot') != run_id or manifest.get('source_project') !=
+            env.get('SUPABASE_PROJECT_REF', 'local-fixture')):
+        raise RuntimeError('Unexpected snapshot or source project')
     verify_directory(directory, manifest)
     return manifest
 
@@ -281,11 +334,15 @@ def download_verified(run_id, directory, env):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument('--preflight', action='store_true', help='Check setting presence only; no network requests')
+    parser.add_argument('--retention', action='store_true', help='Only for separately approved daily operation')
     parser.add_argument('--download', help='Decrypt and verify this snapshot; never restore a database')
     parser.add_argument('--output', help='New private local directory for verified decrypted files')
     args = parser.parse_args()
     try:
-        if args.download:
+        if args.preflight:
+            preflight(os.environ)
+        elif args.download:
             if not args.output:
                 raise RuntimeError('A new output directory is required')
             os.umask(0o077)
@@ -293,7 +350,8 @@ if __name__ == '__main__':
             print('Download decrypted and verified; no database or Storage restore executed.')
         else:
             _, _, configured = backup(os.environ)
-            retain_snapshots(configured)
+            if args.retention:
+                retain_snapshots(configured)
     except Exception as exc:
         # Intentionally no exception message/traceback: drivers can include secret values.
         print(f'BACKUP FAILED ({type(exc).__name__}); no verified completion claimed.')

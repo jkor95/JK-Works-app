@@ -61,7 +61,7 @@ def sync_alert(reason, run_url, recent=None):
 
 
 def check(now=None):
-    if os.environ.get('GITHUB_REPOSITORY') != REPOSITORY or os.environ.get('JK_BACKUPS_ENABLED') != 'true':
+    if os.environ.get('GITHUB_REPOSITORY') != REPOSITORY or os.environ.get('JK_BACKUP_AUTHORIZED') != 'true':
         raise RuntimeError('Alert workflow is disabled or targets another repository')
     now = now or datetime.now(timezone.utc)
     failed = any(os.environ.get(name) in {'failure', 'cancelled'}

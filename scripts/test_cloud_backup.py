@@ -1,6 +1,7 @@
-"""Disposable PostgreSQL + HTTP Storage + encrypted local-vault integration test."""
+"""Native disposable PostgreSQL + fictitious Storage + encrypted local-vault tests."""
 import contextlib
 import http.server
+import hashlib
 import json
 import secrets
 import os
@@ -10,11 +11,10 @@ import tempfile
 import threading
 import time
 import unittest
-import uuid
+import socket
 
 import psycopg
 import cloud_backup as backup
-import local_supabase_test as local
 import backup_watchdog as monitor
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch
@@ -24,11 +24,20 @@ class BackupTest(unittest.TestCase):
     def test_encrypted_backup_restore_and_failure_guards(self):
         with self.assertRaises(RuntimeError):
             backup.configure({}, fixture=False)
-        name = 'jk-backup-test-' + uuid.uuid4().hex[:12]
-        subprocess.run(['docker','run','-d','--name',name,'-p','127.0.0.1::5432',
-                        '-e','POSTGRES_HOST_AUTH_METHOD=trust','postgres:17'], check=True, stdout=subprocess.DEVNULL)
+        pg_bin = Path(os.environ.get('JK_TEST_PG_BIN', '/usr/lib/postgresql/17/bin'))
+        cluster = tempfile.TemporaryDirectory(prefix='jk-fixture-pg-')
+        self.addCleanup(cluster.cleanup)
+        root = Path(cluster.name)
+        subprocess.run([str(pg_bin/'initdb'), '-D', str(root/'data'), '-A', 'trust',
+                        '-U', 'postgres', '--no-locale', '--encoding=UTF8'], check=True, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.PIPE)
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1', 0))
+            port = str(sock.getsockname()[1])
+        subprocess.run([str(pg_bin/'pg_ctl'), '-D', str(root/'data'), '-l', str(root/'server.log'),
+                        '-o', f'-h 127.0.0.1 -p {port} -k {root}', '-w', 'start'],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         try:
-            port = subprocess.check_output(['docker','port',name,'5432/tcp'], text=True).strip().rsplit(':',1)[1]
             args = dict(host='127.0.0.1',port=port,user='postgres',dbname='postgres',sslmode='disable')
             deadline = time.monotonic() + 45
             while True:
@@ -82,7 +91,7 @@ class BackupTest(unittest.TestCase):
                     directory = Path(temp)
                     vault = directory / 'encrypted'
                     vault.mkdir()
-                    env = dict(os.environ,PGHOST='127.0.0.1',PGPORT=port,PGUSER='postgres',PGPASSWORD='',
+                    env = dict(os.environ,JK_PG_BIN=str(pg_bin),PGHOST='127.0.0.1',PGPORT=port,PGUSER='postgres',PGPASSWORD='',
                                PGDATABASE='source_fixture',PGSSLMODE='disable',
                                BACKUP_CRYPT_PASSWORD='fixture-only-password-' + 'x'*40,
                                BACKUP_CRYPT_SALT='fixture-only-salt-' + 'y'*40,
@@ -103,9 +112,9 @@ class BackupTest(unittest.TestCase):
                             self.assertNotIn(b'fixture-client',file.read_bytes())
                             self.assertNotIn(b'FAKE PHOTO',file.read_bytes())
                     with (restored / 'database.dump').open('rb') as stream:
-                        subprocess.run(['docker','exec','-i',name,'pg_restore','-U','postgres',
-                                        '-d','restored_fixture','--exit-on-error'],stdin=stream,
-                                       check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
+                        subprocess.run([str(pg_bin/'pg_restore'), '-h', '127.0.0.1', '-p', port,
+                                        '-U', 'postgres', '-d', 'restored_fixture', '--exit-on-error'],
+                                       stdin=stream, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
                     restore_args = dict(args,dbname='restored_fixture')
                     with psycopg.connect(**restore_args) as conn:
                         counts,buckets,objects = backup.inventory(conn)
@@ -120,6 +129,11 @@ class BackupTest(unittest.TestCase):
                     wrong['RCLONE_CONFIG_VAULT_PASSWORD'] = backup.run(['rclone','obscure','-'], wrong, input_text='wrong-fixture-password-' + 'z'*40 + '\n').strip()
                     with self.assertRaises(RuntimeError):
                         backup.download_verified(second,directory / 'wrong-key',wrong)
+                    wrong_salt = dict(configured)
+                    wrong_salt['RCLONE_CONFIG_VAULT_PASSWORD2'] = backup.run(
+                        ['rclone','obscure','-'], wrong_salt, input_text=secrets.token_hex(32)+'\n').strip()
+                    with self.assertRaises(RuntimeError):
+                        backup.download_verified(second,directory / 'wrong-salt',wrong_salt)
                     for obj in restored_manifest['objects']:
                         self.assertEqual((restored / obj['file']).read_bytes(),content[(obj['bucket_id'],obj['name'])])
                     # Detect corruption; never report a damaged payload as a valid restore.
@@ -155,117 +169,94 @@ class BackupTest(unittest.TestCase):
             finally:
                 server.shutdown(); server.server_close()
         finally:
-            subprocess.run(['docker','rm','-f',name],stdout=subprocess.DEVNULL,check=True)
+            subprocess.run([str(pg_bin/'pg_ctl'), '-D', str(root/'data'), '-m', 'immediate',
+                            '-w', 'stop'], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
 
 
-class LocalSafetyTest(unittest.TestCase):
-    def test_diagnostics_never_echo_output_or_exception_secrets(self):
-        cases = [('no matching manifest for linux/arm64', 'architecture'),
-                 ('no space left on device', 'disk'), ('OOMKilled', 'memory'),
-                 ('port is already allocated', 'ports'), ('Mounts denied', 'mount'),
-                 ('failed to pull image: x509: certificate error', 'registry'),
-                 ('container is unhealthy', 'health'), ('unknown flag', 'config'),
-                 ('unrecognized error', 'command')]
-        sensitive = secrets.token_hex(32)
-        with tempfile.TemporaryDirectory() as directory:
-            instance = local.LocalTest(Path(directory))
-            instance.stage = 'start'
-            for output, expected in cases:
-                with self.subTest(expected=expected), patch.object(local.subprocess, 'run',
-                        return_value=subprocess.CompletedProcess([], 1,
-                            stdout=sensitive.encode(), stderr=(output + sensitive).encode())):
-                    with self.assertRaises(local.SafeFailure) as caught:
-                        instance.run(['fixture-only'], 'supabase-start')
-                    self.assertEqual(caught.exception.code, expected)
-                    diagnostic = local.safe_diagnosis(caught.exception, instance.stage)
-                    self.assertNotIn(sensitive, diagnostic)
-                    self.assertNotIn(sensitive, (Path(directory)/'logs/supabase-start.log').read_text())
-            self.assertNotIn(sensitive, local.safe_diagnosis(RuntimeError(sensitive), sensitive))
-
-    def test_cleanup_failure_preserves_original_start_diagnosis(self):
-        with tempfile.TemporaryDirectory() as directory:
-            instance = local.LocalTest(Path(directory))
-            original = local.SafeFailure('registry')
-            with patch.object(instance, 'run', side_effect=[local.CONTEXT, '', '']), \
-                 patch.object(instance, 'supabase', side_effect=[original, local.SafeFailure('command')]):
-                with self.assertRaises(local.SafeFailure) as caught:
-                    instance.start()
-                self.assertIs(caught.exception, original)
-                self.assertEqual(instance.stage, 'start')
-
-    def test_rejects_remote_api_and_redirects(self):
-        local.require_local_url(local.API + '/auth/v1/health')
-        for url in ['https://ercqiavruotoclhvfzud.supabase.co',
-                    'http://127.0.0.1:54321', 'https://127.0.0.1:56321',
-                    'http://secret@127.0.0.1:56321', 'http://127.0.0.1.evil.invalid:56321']:
-            with self.assertRaises(RuntimeError):
-                local.require_local_url(url)
+class BackupSafetyTest(unittest.TestCase):
+    def test_binding_names_match_workflow_and_missing_values_are_rejected(self):
+        workflow = (Path(__file__).parent.parent/'.github/workflows/cloud-backup.yml').read_text()
+        for name, binding in (backup.SECRET_BINDINGS | backup.VARIABLE_BINDINGS).items():
+            namespace = 'secrets' if name in backup.SECRET_BINDINGS else 'vars'
+            self.assertIn(binding + ': ${{ ' + namespace + '.' + name + ' }}', workflow)
         with self.assertRaises(RuntimeError):
-            local.NoRedirect().redirect_request(None)
+            backup.preflight({})
+        present = {binding: secrets.token_hex(32) for binding in
+                   (backup.SECRET_BINDINGS | backup.VARIABLE_BINDINGS).values()}
+        backup.preflight(present)
 
-    def test_production_environment_is_not_forwarded(self):
-        with patch.dict(os.environ, {'PGHOST':'production.invalid', 'PGPASSWORD':secrets.token_hex(16),
-                                    'SUPABASE_ACCESS_TOKEN':'FAKE', 'HTTP_PROXY':'FAKE',
-                                    'RCLONE_CONFIG_CLOUD_SECRET_ACCESS_KEY':'FAKE'}):
-            clean = local.clean_environment(Path('/tmp/fictitious-only'))
-        self.assertEqual(clean['DOCKER_CONTEXT'], local.CONTEXT)
-        self.assertNotIn('PGHOST', clean)
-        self.assertNotIn('PGPASSWORD', clean)
-        self.assertNotIn('SUPABASE_ACCESS_TOKEN', clean)
-        self.assertNotIn('HTTP_PROXY', clean)
-        self.assertNotIn('RCLONE_CONFIG_CLOUD_SECRET_ACCESS_KEY', clean)
+    def test_production_gate_tls_endpoint_and_separate_encryption_keys(self):
+        env = {binding: secrets.token_hex(32) for binding in
+               (backup.SECRET_BINDINGS | backup.VARIABLE_BINDINGS).values()}
+        env.update(JK_BACKUP_AUTHORIZED='true', SUPABASE_PROJECT_REF='ercqiavruotoclhvfzud',
+                   PGHOST='db.ercqiavruotoclhvfzud.supabase.co', PGUSER='postgres', PGPORT='5432',
+                   PGSSLMODE='verify-full', R2_ENDPOINT='https://fake.r2.cloudflarestorage.com', R2_BUCKET='fixture-bucket')
+        with patch.object(backup, 'run', side_effect=['obscured-one', 'obscured-two']) as run:
+            configured = backup.configure(env)
+            self.assertEqual(run.call_args_list[0].kwargs['input_text'], env['BACKUP_CRYPT_PASSWORD']+'\n')
+            self.assertEqual(run.call_args_list[1].kwargs['input_text'], env['BACKUP_CRYPT_SALT']+'\n')
+            self.assertEqual(configured['RCLONE_CONFIG_VAULT_TYPE'], 'crypt')
+            self.assertEqual(configured['RCLONE_CONFIG_VAULT_PASSWORD2'], 'obscured-two')
+        for change in ({'JK_BACKUP_AUTHORIZED':'false'}, {'PGSSLMODE':'disable'}, {'PGPORT':'6543'},
+                       {'PGHOST':'wrong.invalid'}, {'R2_ENDPOINT':'https://user@fake.r2.cloudflarestorage.com'}):
+            with self.assertRaises(RuntimeError):
+                backup.configure(dict(env, **change))
 
-    def test_refuses_a_network_with_external_access(self):
-        with tempfile.TemporaryDirectory() as directory:
-            instance = local.LocalTest(Path(directory))
-            with patch.object(instance, 'run', return_value=json.dumps([
-                    {'Internal':False, 'Labels':{'jkworks.restore':local.PROJECT}}])):
-                with self.assertRaises(RuntimeError):
-                    instance.verify_network()
+    def test_download_requires_complete_correct_project_and_all_checksums(self):
+        snapshot = '20261011T000000Z-aaaaaaaaaaaa'
+        for failure in ('missing-marker', 'wrong-marker', 'wrong-project', 'corrupt-file', None):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temp:
+                def copy_fixture(args, env):
+                    target = Path(args[-1])
+                    data = b'fictitious only'
+                    manifest = {'snapshot':snapshot, 'source_project':'unexpected' if failure == 'wrong-project' else 'local-fixture',
+                        'files':{'data.bin':{'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}}}
+                    raw = json.dumps(manifest).encode()
+                    (target/'manifest.json').write_bytes(raw)
+                    (target/'data.bin').write_bytes(b'corrupt' if failure == 'corrupt-file' else data)
+                    if failure != 'missing-marker':
+                        (target/'COMPLETE').write_text('bad' if failure == 'wrong-marker' else hashlib.sha256(raw).hexdigest())
+                with patch.object(backup, 'run', side_effect=copy_fixture):
+                    if failure:
+                        with self.assertRaises((RuntimeError, FileNotFoundError)):
+                            backup.download_verified(snapshot, Path(temp)/'download', {})
+                    else:
+                        self.assertEqual(backup.download_verified(snapshot, Path(temp)/'download', {})['snapshot'], snapshot)
 
-    def test_mac_pg_tools_use_only_the_internal_network(self):
-        with tempfile.TemporaryDirectory() as directory:
-            instance = local.LocalTest(Path(directory))
-            instance.db_container = 'supabase_db_' + local.PROJECT
-            fake = {'PGHOST':'production.invalid', 'PGPORT':'56322', 'PGUSER':'postgres',
-                    'PGPASSWORD':secrets.token_hex(16), 'PGDATABASE':'postgres', 'PGSSLMODE':'disable',
-                    'JK_PG_IMAGE':'postgres:17'}
-            with patch.object(local.cloud, 'run', return_value='') as run:
-                instance.pg_tool('pg_dump', [], fake)
-                command, env = run.call_args.args
-                self.assertIn(local.NETWORK, command)
-                self.assertNotIn('host', command)
-                self.assertEqual(env['PGHOST'], instance.db_container)
-                self.assertEqual(env['PGPORT'], '5432')
+    def test_download_mode_uses_expected_project_without_production_database_access(self):
+        env = {'R2_ENDPOINT':'https://fake.r2.cloudflarestorage.com','R2_BUCKET':'fixture-bucket',
+               'R2_ACCESS_KEY_ID':secrets.token_hex(16),'R2_SECRET_ACCESS_KEY':secrets.token_hex(32),
+               'BACKUP_CRYPT_PASSWORD':secrets.token_hex(32),'BACKUP_CRYPT_SALT':secrets.token_hex(32)}
+        with patch.object(backup, 'run', return_value='obscured'), patch.object(backup.psycopg, 'connect') as connect:
+            configured = backup.configure(env, download_only=True)
+            self.assertEqual(configured['SUPABASE_PROJECT_REF'], 'ercqiavruotoclhvfzud')
+            connect.assert_not_called()
 
-    def test_refuses_ports_exposed_to_the_lan(self):
-        with tempfile.TemporaryDirectory() as directory:
-            instance = local.LocalTest(Path(directory))
-            net = {'Internal':True, 'Labels':{'jkworks.restore':local.PROJECT},
-                   'Options':{'com.docker.network.bridge.host_binding_ipv4':'127.0.0.1'}}
-            container = {'NetworkSettings':{'Ports':{'5432/tcp':[{'HostIp':'0.0.0.0'}]},
-                                           'Networks':{local.NETWORK:{}}}}
-            with patch.object(instance, 'run', side_effect=[json.dumps([net]),
-                       'supabase_db_'+local.PROJECT, json.dumps([container])]):
-                with self.assertRaises(RuntimeError):
-                    instance.verify_network()
+    def test_rclone_process_does_not_receive_source_credentials(self):
+        env = {'PGPASSWORD':secrets.token_hex(32),'SUPABASE_STORAGE_READ_KEY':secrets.token_hex(32),
+               'RCLONE_CONFIG_VAULT_PASSWORD':'obscured','PATH':os.environ['PATH']}
+        with patch.object(backup.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, '')) as run:
+            backup.run(['rclone','lsf','vault:'], env)
+            self.assertNotIn('PGPASSWORD', run.call_args.kwargs['env'])
+            self.assertNotIn('SUPABASE_STORAGE_READ_KEY', run.call_args.kwargs['env'])
+            self.assertIn('RCLONE_CONFIG_VAULT_PASSWORD', run.call_args.kwargs['env'])
 
-    def test_download_does_not_connect_to_database_or_start_containers(self):
-        with tempfile.TemporaryDirectory() as directory:
-            instance = local.LocalTest(Path(directory))
-            with patch('builtins.input', side_effect=['https://fake.r2.cloudflarestorage.com',
-                       'fake-bucket', '20261011T000000Z-aaaaaaaaaaaa']), \
-                 patch.object(local.getpass, 'getpass', return_value='fixture-only-'+'x'*40), \
-                 patch.object(local.cloud, 'configure', return_value={}) as configure, \
-                 patch.object(local.cloud, 'download_verified', return_value={
-                       'source_project':'ercqiavruotoclhvfzud'}) as download, \
-                 patch.object(instance, 'connect') as connect, \
-                 patch.object(instance, 'run') as run:
-                instance.download()
-                self.assertTrue(configure.call_args.kwargs['download_only'])
-                download.assert_called_once()
-                connect.assert_not_called()
-                run.assert_not_called()
+    def test_storage_redirects_are_never_followed(self):
+        with self.assertRaises(RuntimeError):
+            backup.NoRedirect().redirect_request(None)
+
+    def test_native_dump_forces_read_only_and_keeps_credentials_out_of_arguments(self):
+        with tempfile.TemporaryDirectory() as temp:
+            (Path(temp)/'pg_dump').touch()
+            password = secrets.token_hex(32)
+            env = {'JK_PG_MAJOR':'17','JK_PG_BIN':temp,'PGPASSWORD':password,'PGHOST':'fixture.invalid',
+                   'PGOPTIONS':'unsafe', 'GITHUB_TOKEN':'fixture-only'}
+            with patch.object(backup, 'run', return_value='') as run:
+                backup.pg_tool('pg_dump', ['--format=custom'], env)
+                command, passed = run.call_args.args
+                self.assertNotIn(password, command)
+                self.assertEqual(passed['PGOPTIONS'], '-c default_transaction_read_only=on')
+                self.assertNotIn('GITHUB_TOKEN', passed)
 
 
 class BackupMonitoringTest(unittest.TestCase):
@@ -280,7 +271,7 @@ class BackupMonitoringTest(unittest.TestCase):
             self.assertIsNotNone(monitor.latest_verified_job(now))
 
     def test_stale_backup_and_failed_attempt_warn_without_live_notification(self):
-        fake_env = {'GITHUB_REPOSITORY':monitor.REPOSITORY, 'JK_BACKUPS_ENABLED':'true',
+        fake_env = {'GITHUB_REPOSITORY':monitor.REPOSITORY, 'JK_BACKUP_AUTHORIZED':'true',
                     'GITHUB_RUN_ID':'123', 'JK_BACKUP_RESULT':'success', 'JK_FIXTURE_RESULT':'success'}
         with patch.dict(os.environ, fake_env), patch.object(monitor, 'latest_verified_job', return_value=None), \
              patch.object(monitor, 'sync_alert') as alert:
@@ -292,7 +283,7 @@ class BackupMonitoringTest(unittest.TestCase):
              patch.object(monitor, 'sync_alert') as alert:
             monitor.check()
             self.assertIn('mislukt', alert.call_args.args[0])
-        fake_env['JK_BACKUPS_ENABLED'] = 'false'
+        fake_env['JK_BACKUP_AUTHORIZED'] = 'false'
         with patch.dict(os.environ, fake_env), patch.object(monitor, 'api') as api:
             with self.assertRaises(RuntimeError):
                 monitor.check()
