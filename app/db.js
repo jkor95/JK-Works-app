@@ -55,6 +55,48 @@ const JKDB = (() => {
     }
   }
   async function clear(store){const s=await tx(store,'readwrite');return reqP(s.clear());}
+  // One transaction captures all app data, including pending changes and tombstones.
+  async function snapshot(){
+    const db=await open(), names=[...stores,...internalStores];
+    return new Promise((resolve,reject)=>{
+      const t=db.transaction(names,'readonly'), result={};
+      for(const name of names){const r=t.objectStore(name).getAll();r.onsuccess=()=>{result[name]=r.result;};}
+      t.oncomplete=()=>resolve(result);t.onabort=()=>reject(new Error('Lokale gegevens konden niet worden gelezen.'));
+    });
+  }
+  function snapshotKey(value){
+    if(value instanceof Blob)return JSON.stringify({blob:true,size:value.size,type:value.type,name:value.name||'',lastModified:value.lastModified||0});
+    if(Array.isArray(value))return '['+value.map(snapshotKey).join(',')+']';
+    if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+snapshotKey(value[k])).join(',')+'}';
+    return JSON.stringify(value);
+  }
+  async function replaceFromBackup(records, expected, guard){
+    const db=await open(), names=[...stores,...internalStores];
+    return new Promise((resolve,reject)=>{
+      const t=db.transaction(names,'readwrite'), current={};let remaining=names.length;
+      t.oncomplete=resolve;t.onabort=()=>reject(new Error('Herstel afgebroken; bestaande lokale gegevens zijn behouden.'));
+      t.onerror=()=>{};
+      for(const name of names){
+        const r=t.objectStore(name).getAll();
+        r.onsuccess=()=>{
+          current[name]=r.result;
+          if(--remaining)return;
+          if(snapshotKey(current)!==snapshotKey(expected)){t.abort();return;}
+          try{
+            for(const s of names){
+              const os=t.objectStore(s);os.clear();
+              for(const record of records[s]||[])os.add(record);
+            }
+            const settings=t.objectStore('settings');
+            settings.put({id:'seedVersion',value:6,at:new Date().toISOString()});
+            settings.put({id:'backupRestoreGuard',...guard});
+            // This device's last successful export is not imported from another device.
+            const last=expected.settings.find(x=>x.id==='backup');if(last)settings.put(last);
+          }catch{t.abort();}
+        };
+      }
+    });
+  }
   function reqP(req){return new Promise((res,rej)=>{req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error);});}
   function id(prefix='id'){return prefix+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);}
 
@@ -381,5 +423,5 @@ const JKDB = (() => {
     }
   }
 
-  return {stores,localOnlyStores,open,all,get,put,remove,clear,id,seed,putLocal,removeLocal,markDeleteLocal,isDeletedLocal};
+  return {stores,localOnlyStores,open,all,get,put,remove,clear,id,seed,putLocal,removeLocal,markDeleteLocal,isDeletedLocal,snapshot,snapshotKey,replaceFromBackup};
 })();

@@ -79,6 +79,12 @@ async function files(dir) {
         assert.ok(new URL(request.url()).pathname.startsWith('/rest/v1/app_records'), 'Onverwacht Supabase-leesverzoek');
         await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }); return;
       }
+      if(process.env.HTTPS_PROXY&&new URL(request.url()).protocol==='https:'){
+        // The cloud proxy CA is trusted by Node via NODE_EXTRA_CA_CERTS. Keep
+        // TLS verification enabled while loading genuine external SDK assets.
+        const response=await context.request.get(request.url());
+        await route.fulfill({response});return;
+      }
       await route.continue();
     });
     for (const route of ['/', '/inloggen/', '/app/']) {
@@ -125,7 +131,8 @@ async function files(dir) {
     console.log('PASS: lokale IndexedDB lezen/schrijven/verwijderen in wegwerp-browserprofiel');
     assert.deepEqual(mutations, [], 'Externe of lokale HTTP-schrijfactie geprobeerd');
     assert.deepEqual(failures, [], 'Browser- of resourcefouten');
-    console.log('Backend: gemockte leesantwoorden; ingelogde functies en productie-Supabase niet getest.');
+    await require('./test_manual_backup.cjs')(browser, origin);
+    console.log('Backend: uitsluitend fixtures; echte productie-Supabase en apparaatdeelkaart niet getest.');
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));
