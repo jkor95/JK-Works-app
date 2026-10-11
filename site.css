@@ -55,3 +55,8 @@ button,input,textarea,select{font:inherit}
 
 /* v70: discrete toegang tot de bedrijfsapp in de footer */
 .footer-admin{opacity:.48;font-size:10px;font-weight:400;text-decoration:none}.footer-admin:hover,.footer-admin:focus-visible{opacity:1;text-decoration:underline}
+
+/* v71 beheerde afbeeldingen en secties */
+.managed-section-image{display:block;width:100%;max-height:360px;object-fit:cover;border-radius:18px;margin:0 0 22px}
+[data-section][hidden]{display:none!important}
+@media(max-width:680px){.managed-section-image{max-height:230px;border-radius:12px}}
