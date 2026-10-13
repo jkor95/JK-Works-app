@@ -1,5 +1,15 @@
 # Wijzigingsgeschiedenis
 
+## v71.5.4 — herstel tweerichtingskoppeling betaalstatus
+- De eerdere fix werkte alleen van factuur naar klus bij een exact opgeslagen `meta.jobId`. De klusbewerker werkte de facturen helemaal niet bij.
+- Wijzig je in Klussen > Bewerken de betaalstatus en sla je op, dan worden alle expliciet gekoppelde facturen mee op betaald of onbetaald gezet. Bij een wijziging aan een individuele factuur wordt de klus alleen betaald zodra al haar gekoppelde facturen betaald zijn.
+- Facturen tonen nu hun gekoppelde klus in een keuzelijst, inclusief een optie om een eerder geïmporteerde PDF expliciet aan een bestaande klus te koppelen. Nooit automatisch raden op datum of klantnaam. Oude `jobId`-velden worden herkend.
+- Verplaatsen/verwijderen van facturen behoudt de bestaande herberekening; meerdere facturen, contante klussen met expliciete factuur, onbetaald terugzetten en statusvelden zoals verzonden blijven afgedekt.
+- Alleen een gebruikersactie wijzigt bestaande betaalstatussen; geen automatische massawijziging, Supabase-migratie of back-upherstel. Andere apparaten blijven afhankelijk van de bestaande handmatige Sync.
+- Regressies met uitsluitend fictieve klussen/facturen en bestaande GitHub Actions-browsercontroles. Geen echte ingelogde productiegegevens gewijzigd tijdens tests.
+- Herstelpunt voor de code: branch `recovery/v71-5-3-before-payment-sync` op `6dea88d0343383b85963a9760575b6e88a679ef0`. De gebruikelijke geannoteerde releasetag wordt niet via deze GitHub-koppeling ondersteund.
+
+
 ## v71.5.3 — vrijwillige back-upherinnering per apparaat
 - De permanente back-upwaarschuwing op het dashboard is verwijderd voor browsers/apparaten die nog nooit zelf een back-up maakten. Een back-up blijft volledig handmatig.
 - Na de eerste succesvolle handmatige (volledige of lokale) back-up op dit apparaat toont het dashboard pas na 30 dagen weer een niet-verplichte herinnering.
