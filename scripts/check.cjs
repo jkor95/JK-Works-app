@@ -43,6 +43,8 @@ async function files(dir) {
   console.log('PASS: factuur-betaalstatus en gekoppelde klussen (fictieve gegevens)');
   await require('./test_receipts_invoice.cjs')();
   console.log('PASS: gekoppelde bonnetjes en factuurregels (fictieve uitgaven)');
+  await require('./test_job_receipts.cjs')();
+  console.log('PASS: bonnetjes zichtbaar bij klus en toevoegen vanuit klus (fictieve gegevens)');
   await require('./test_backup_reminders.cjs')();
   console.log('PASS: vrijwillige en per-apparaat back-upherinneringen (fictieve datums)');
 
