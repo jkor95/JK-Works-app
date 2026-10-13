@@ -1,5 +1,14 @@
 # Wijzigingsgeschiedenis
 
+## v71.6.0 — bonnetjes koppelen aan klussen en toevoegen aan facturen
+- In Documenten → Inkoop & bonnetjes kan een bonfoto of PDF bij het invoeren of bewerken aan een bestaande klus worden gekoppeld. De gekoppelde klus staat in lijst/detail. Bestaande uitgaven blijven intact.
+- Bij een nieuwe factuur selecteer je de aan de gekozen klus gekoppelde, nog niet gefactureerde bonnetjes. De app vult voor ieder geselecteerd bonnetje een lege factuurregel met aantal 1, omschrijving, winkel, bondatum en bedrag. Werkuren en eigen regels blijven behouden. Bonbestanden blijven uitsluitend intern en worden niet met de factuur meegestuurd.
+- De factuursjablonen bevatten maximaal 4 regels. Bij onvoldoende plaats verschijnt een waarschuwing; overschrijven van bestaande regels is uitgesloten. De bron-uitgave-ID blijft vastgelegd in de factuurmetadata en eerder gefactureerde bonnetjes worden niet opnieuw selecteerbaar.
+- Voor KOR is het voorgestelde factuurbedrag gelijk aan het bonbedrag incl. btw. Voor normale facturen wordt het voorgestelde bedrag omgerekend naar een prijs excl. 21% btw; de gebruiker moet de prijs en btw altijd controleren. Bij een gewijzigde KOR-keuze worden uitsluitend automatisch ingevulde bonprijzen herberekend.
+- Geen automatische uitlezing/OCR van foto's, geen Supabase-schemawijziging, geen productiedatamigratie en geen wijzigingen aan bestaande facturen of back-ups. Handmatige Sync tussen apparaten blijft vereist.
+- Fictieve regressietests geïntegreerd in de reguliere controles. Herstelbranch: `recovery/v71-5-4-before-receipts` op `772f25485cbe3aa6905661a91b3a188fe7530bab`.
+
+
 ## v71.5.4 — herstel tweerichtingskoppeling betaalstatus
 - De eerdere fix werkte alleen van factuur naar klus bij een exact opgeslagen `meta.jobId`. De klusbewerker werkte de facturen helemaal niet bij.
 - Wijzig je in Klussen > Bewerken de betaalstatus en sla je op, dan worden alle expliciet gekoppelde facturen mee op betaald of onbetaald gezet. Bij een wijziging aan een individuele factuur wordt de klus alleen betaald zodra al haar gekoppelde facturen betaald zijn.
