@@ -1,0 +1,35 @@
+// Tests met uitsluitend fictieve bonnetjes en factuurregels, zonder netwerk/schrijfacties.
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+module.exports=async function testReceiptsInvoice(){
+  const source=fs.readFileSync(path.join(__dirname,'../app/app.js'),'utf8');
+  const start=source.indexOf('  // Factuurregels nemen alleen de bonomschrijving'),end=source.indexOf('  async function createBusinessDoc(',start);
+  assert.ok(start>=0&&end>start);
+  const sandbox={num:v=>Number(String(v??'').replace(',','.'))||0,moneyNumber:v=>Number(v||0).toFixed(2).replace('.',','),nlDate:v=>String(v).split('-').reverse().join('-'),docFolder:d=>d.folder};
+  vm.runInNewContext(source.slice(start,end)+'\nglobalThis.receipts={receiptInvoicePrice,receiptInvoiceLine,receiptInvoiceIsUsed,addReceiptInvoiceLines};',sandbox);
+  const {receiptInvoicePrice,receiptInvoiceLine,receiptInvoiceIsUsed,addReceiptInvoiceLines}=sandbox.receipts;
+  const a={id:'r1',jobId:'j1',supplier:'Bouwmarkt',category:'Materiaal',notes:'Witte plinten',date:'2026-10-11',amountIncl:'12.10',receiptBlob:{}};
+  const b={...a,id:'r2',amountIncl:'24.20'},c={...a,id:'r3'};
+  assert.equal(receiptInvoicePrice(a,true),12.1);
+  assert.equal(receiptInvoicePrice(a,false),10);
+  assert.equal(receiptInvoiceLine(a,true).price,'12,10');
+  assert.match(receiptInvoiceLine(a,true).description,/Witte plinten - Bouwmarkt - bon 11-10-2026/);
+  const rows=[{qty:'2',description:'Uren',price:'35,00'},{qty:'',description:'',price:''},{qty:'',description:'',price:''},{qty:'',description:'',price:''}];
+  const one=addReceiptInvoiceLines(rows,[a],true);
+  assert.equal(one[0].description,'Uren');
+  assert.equal(one[1].expenseId,'r1');
+  assert.equal(rows[1].expenseId,undefined);
+  assert.equal(addReceiptInvoiceLines(rows,[a,b,c],false)[3].expenseId,'r3');
+  assert.throws(()=>addReceiptInvoiceLines(rows,[a,b,c,{...a,id:'r4'}],true),/slechts 3/);
+  assert.throws(()=>addReceiptInvoiceLines(one,[a],true),/al toegevoegd/);
+  assert.throws(()=>addReceiptInvoiceLines(rows,[a,a],true),/meermaals geselecteerd/);
+  assert.throws(()=>receiptInvoicePrice({...a,amountIncl:'0'},true),/hoger zijn dan nul/);
+  assert.equal(receiptInvoiceIsUsed('r1',[{folder:'factuur',meta:{lines:[{expenseId:'r1'}]}}]),true);
+  assert.equal(receiptInvoiceIsUsed('r1',[{folder:'offerte',meta:{lines:[{expenseId:'r1'}]}}]),false);
+  assert.match(source,/name="jobId"/,'Bon formulier heeft kluskeuze');
+  assert.match(source,/jobId:f\.get\('jobId'\)/,'Bon bewaart klus');
+  assert.match(source,/id="invoiceReceiptChoices"/,'Factuur biedt bonnenkeuze');
+  assert.match(source,/id="addInvoiceReceipts"/,'Factuur biedt toevoegenknop');
+  assert.match(source,/receiptInvoiceIsUsed\(receiptId,documents\)/,'Dubbele facturering wordt geweigerd bij opslaan');
+  assert.match(source,/expenseId:receiptId/,'Herkomst wordt op de factuur opgeslagen');
+  assert.match(source,/previousInvoiceJobId!==e\.target\.value/,'Kluswissel leegt oude bonregels');
+};
