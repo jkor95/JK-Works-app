@@ -1,5 +1,14 @@
 # Wijzigingsgeschiedenis
 
+## v71.6.1 — bonnetjes zichtbaar en te openen in klusdetails
+- Klusdetails tonen nu een apart onderdeel ‘Bonnetjes & uitgaven’ met aantal, totaal aan inkoopuitgaven en de gekoppelde bonnetjes per leverancier, datum en bedrag. Bij fotobonnen verschijnt een miniatuur; bij PDF-bonnen een documentpictogram. Dit is alleen een intern overzicht en verandert het klusbedrag niet.
+- Tik op een gekoppeld bonnetje om de foto of PDF in de bestaande uitgavendetailweergave te bekijken en de uitgave te bewerken. Bonbestanden en bestaande koppelingen blijven ongewijzigd.
+- ‘Bonnetje toevoegen’ opent het bestaande bonformulier, met de huidige klus al geselecteerd. Na opslaan ga je terug naar de klus; ‘Alle bonnetjes’ gaat naar de map Documenten → Inkoop & bonnetjes.
+- Ook na bewerken/verwijderen via een klus keert de weergave terug naar de klus. Geen wijziging aan bestaande factuur- of btw-logica, database- of Supabase-schema.
+- Fictieve regressietests voor klusspecifieke selectie, uitgaven zonder gekoppelde klus, PDF-weergave en beide navigatieknoppen. Ingelogde productiegegevens en handmatige Sync op andere apparaten zijn niet getest.
+- Herstelbranch: `recovery/v71-6-0-before-job-receipts` op `c70f9c136150a7b2f5d1336a76f29c898d0985f8`.
+
+
 ## v71.6.0 — bonnetjes koppelen aan klussen en toevoegen aan facturen
 - In Documenten → Inkoop & bonnetjes kan een bonfoto of PDF bij het invoeren of bewerken aan een bestaande klus worden gekoppeld. De gekoppelde klus staat in lijst/detail. Bestaande uitgaven blijven intact.
 - Bij een nieuwe factuur selecteer je de aan de gekozen klus gekoppelde, nog niet gefactureerde bonnetjes. De app vult voor ieder geselecteerd bonnetje een lege factuurregel met aantal 1, omschrijving, winkel, bondatum en bedrag. Werkuren en eigen regels blijven behouden. Bonbestanden blijven uitsluitend intern en worden niet met de factuur meegestuurd.
