@@ -1027,6 +1027,21 @@ const App = (() => {
     const bytes=await pdf.save(),blob=new Blob([bytes],{type:'application/pdf'});downloadBlob(blob,`JK-Works-Jaaroverzicht-Facturen-${year}.pdf`);
   }
   function docFolder(d){const k=String(d.folder||d.kind||'').toLowerCase();return k.includes('offert')?'offerte':k.includes('fact')?'factuur':'diversen'}
+  // De betaalstatus van een factuurklus volgt alle expliciet gekoppelde facturen.
+  function invoicePaymentForJob(job,documents){
+    if(!job||jobPaymentType(job)!=='invoice')return null;
+    const invoices=(documents||[]).filter(d=>docFolder(d)==='factuur'&&d.meta?.jobId===job.id);
+    return invoices.length?invoices.every(d=>d.meta?.paid===true):null;
+  }
+  async function syncJobPaymentForInvoice(jobId){
+    if(!jobId)return false;
+    const job=await JKDB.get('jobs',jobId);
+    if(!job)return false;
+    const paid=invoicePaymentForJob(job,await JKDB.all('documents'));
+    if(paid===null||job.paymentPaid===paid)return false;
+    await JKDB.put('jobs',{...job,paymentPaid:paid});
+    return true;
+  }
   function docStatusHtml(d){const f=docFolder(d),m=d.meta||{};if(f==='factuur')return `<span class="status-chip ${m.sent?'on':''}">${m.sent?'✓ ':''}Verstuurd</span><span class="status-chip ${m.paid?'on':''}">${m.paid?'✓ ':''}Betaald</span>`;if(f==='offerte')return `<span class="status-chip ${m.sent?'on':''}">${m.sent?'✓ ':''}Verstuurd</span><span class="status-chip ${m.confirmed?'on':''}">${m.confirmed?'✓ ':''}Bevestigd</span>`;return ''}
   function renderDocumentList(docs){const c=$('#docList');if(!c)return;const filtered=docs.filter(d=>docFolder(d)===state.docFolder).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));c.innerHTML=`<div class="section-title"><h2>${state.docFolder==='offerte'?'Offertes':state.docFolder==='factuur'?'Facturen':'Diversen'}</h2></div>${filtered.length?`<div class="list">${filtered.map(d=>{const m=d.meta||{},parsed=m.manualImport&&m.pdfParseVersion===PDF_PARSE_VERSION?(m.businessVerified?' · PDF uitgelezen':' · PDF controle nodig'):'';return `<div class="list-item clickable" data-doc="${d.id}"><div class="document-card"><div class="doc-icon">PDF</div><div class="main"><div class="title">${esc(d.filename)}</div><div class="sub">${m.docDate?nlDate(m.docDate):fmtDateTime(d.createdAt)} · ${esc(d.kind||'PDF')}${parsed}</div>${m.total!=null?`<div class="sub"><strong>${money(m.total)}</strong>${m.number?' · '+esc(m.number):''}</div>`:''}<div class="status-row">${docStatusHtml(d)}</div></div></div><span>›</span></div>`}).join('')}</div>`:'<div class="empty">Deze map is nog leeg.</div>'}`;$$('[data-doc]').forEach(x=>x.addEventListener('click',()=>showDocument(x.dataset.doc)))}
   async function renderJobPhotoDocuments(photos,jobs){
@@ -1278,7 +1293,7 @@ const App = (() => {
     if(!korApplied&&isInvoice)drawNormalInvoiceLines(page,helvetica,data.lines);
     else if(korApplied)drawBusinessDescriptions(page,helvetica,data.lines,{x:107,maxWidth:244});
     else drawBusinessDescriptions(page,helvetica,data.lines,{x:102,maxWidth:216});
-    const bytes=await pdf.save(),blob=new Blob([bytes],{type:'application/pdf'}),filename=`${data.number}.pdf`,folder=isInvoice?'factuur':'offerte',doc={id:JKDB.id('doc'),filename,kind:data.kind,folder,blob,createdAt:new Date().toISOString(),meta:{...data,subtotalExVat:subtotal,vatAmount:vat,total,korApplied,korDetected:korApplied,lines:data.lines,sent:false,paid:false,confirmed:false}};await JKDB.put('documents',doc);return doc;
+    const bytes=await pdf.save(),blob=new Blob([bytes],{type:'application/pdf'}),filename=`${data.number}.pdf`,folder=isInvoice?'factuur':'offerte',doc={id:JKDB.id('doc'),filename,kind:data.kind,folder,blob,createdAt:new Date().toISOString(),meta:{...data,subtotalExVat:subtotal,vatAmount:vat,total,korApplied,korDetected:korApplied,lines:data.lines,sent:false,paid:false,confirmed:false}};await JKDB.put('documents',doc);if(isInvoice)await syncJobPaymentForInvoice(data.jobId);return doc;
   }
   function moneyNumber(v){return Number(v||0).toFixed(2).replace('.',',')}
   async function showDocument(id){
@@ -1294,7 +1309,23 @@ const App = (() => {
       d.meta=d.meta||{};d.meta.number=$('#parsedDocNumber').value.trim();d.meta.docDate=$('#parsedDocDate').value;d.meta.client={...(d.meta.client||{}),name:$('#parsedClientName').value.trim()};const raw=$('#parsedTotal').value.trim();d.meta.total=raw?num(raw):null;d.meta.korDetected=$('#parsedKor').checked;d.meta.korApplied=$('#parsedKor').checked;d.meta.businessVerified=true;d.meta.pdfParseError='';await JKDB.put('documents',d);toast('Documentgegevens opgeslagen');
     });
     $('#reparseDoc')?.addEventListener('click',async()=>{const btn=$('#reparseDoc');btn.disabled=true;btn.textContent='PDF uitlezen...';const company=await JKDB.get('settings','company');await parseStoredBusinessDocument(d,company,true);closeModal();toast(d.meta?.businessVerified?'PDF opnieuw uitgelezen':'PDF uitgelezen - controleer de gegevens');showDocument(d.id);});
-    const saveStatus=async()=>{d.meta=d.meta||{};if($('#docSent'))d.meta.sent=$('#docSent').checked;if($('#docPaid'))d.meta.paid=$('#docPaid').checked;if($('#docConfirmed'))d.meta.confirmed=$('#docConfirmed').checked;await JKDB.put('documents',d);toast('Status opgeslagen');refreshActionBadges(false).catch(()=>{});};
+    const saveStatus=async()=>{
+      const previousPaid=d.meta?.paid===true;
+      d.meta=d.meta||{};
+      if($('#docSent'))d.meta.sent=$('#docSent').checked;
+      if($('#docPaid'))d.meta.paid=$('#docPaid').checked;
+      if($('#docConfirmed'))d.meta.confirmed=$('#docConfirmed').checked;
+      try{
+        await JKDB.put('documents',d);
+        if(folder==='factuur'&&previousPaid!==d.meta.paid)await syncJobPaymentForInvoice(d.meta.jobId);
+        toast('Status opgeslagen');
+        if(state.route==='documents')renderDocuments();
+        refreshActionBadges(false).catch(()=>{});
+      }catch(err){
+        console.error('Status document / gekoppelde klus niet volledig bijgewerkt',err);
+        alert('Betaalstatus niet volledig bijgewerkt. Controleer de factuur en de gekoppelde klus. '+(err.message||err));
+      }
+    };
     $('#docSent')?.addEventListener('change',saveStatus);$('#docPaid')?.addEventListener('change',saveStatus);$('#docConfirmed')?.addEventListener('change',saveStatus);
     $('#renameDoc').addEventListener('click',async()=>{
       let name=String($('#docFilename').value||'').trim();
@@ -1308,8 +1339,8 @@ const App = (() => {
       if(state.route==='documents') renderDocuments();
       await showDocument(id);
     });
-    $('#moveDocFolder').addEventListener('change',async e=>{const target=e.target.value;d.folder=target;d.kind=target==='offerte'?'Offerte':target==='factuur'?'Factuur':'Diversen';d.meta=d.meta||{};if(target!=='factuur')d.meta.paid=false;if(target!=='offerte')d.meta.confirmed=false;await JKDB.put('documents',d);toast('Document verplaatst');closeModal();state.docFolder=target;if(state.route==='documents')renderDocuments();});
-    $('#delDoc').addEventListener('click',async()=>{if(confirm('Deze PDF uit de app verwijderen?')){await JKDB.remove('documents',id);closeModal();if(state.route==='documents')renderDocuments();}});
+    $('#moveDocFolder').addEventListener('change',async e=>{const target=e.target.value;d.folder=target;d.kind=target==='offerte'?'Offerte':target==='factuur'?'Factuur':'Diversen';d.meta=d.meta||{};if(target!=='factuur')d.meta.paid=false;if(target!=='offerte')d.meta.confirmed=false;await JKDB.put('documents',d);if(folder==='factuur'||target==='factuur')await syncJobPaymentForInvoice(d.meta.jobId);toast('Document verplaatst');closeModal();state.docFolder=target;if(state.route==='documents')renderDocuments();});
+    $('#delDoc').addEventListener('click',async()=>{if(confirm('Deze PDF uit de app verwijderen?')){await JKDB.remove('documents',id);if(folder==='factuur')await syncJobPaymentForInvoice(d.meta?.jobId);closeModal();if(state.route==='documents')renderDocuments();}});
   }
   function showPaymentReminder(d){
     const m=d.meta||{},client=m.client||{},number=m.number||d.filename.replace(/\.pdf$/i,''),deadline=nlDate(String(m.deadline||'').slice(0,10)),amount=m.total!=null?money(m.total):'',name=client.name||'klant';

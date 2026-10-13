@@ -1,5 +1,12 @@
 # Wijzigingsgeschiedenis
 
+## v71.5.2 — betaalstatus factuur en klus
+- Bij het (uit)vinken van ‘Betaald’ op een aan een klus gekoppelde factuur wordt ‘Betaling ontvangen’ op de klus automatisch aangepast. Met meerdere gekoppelde facturen staat de klus pas op betaald als alle facturen betaald zijn.
+- Nieuwe facturen en het verplaatsen/verwijderen van facturen houden de gekoppelde betaalstatus consistent. Contante klussen, niet-gekoppelde PDF's en handmatig geregistreerde betalingen zonder factuur blijven ongemoeid.
+- Het openstaande klusbedrag en dashboard lezen dezelfde opgeslagen klusstatus; bestaande Supabase-gegevens en database-instellingen zijn niet gemigreerd.
+- Geïsoleerde regressietest met fictieve facturen voor meerdere betalingen, onbetaald terugzetten, geen koppeling en contante afhandeling, geïntegreerd in de bestaande controleworkflow. Ingelogde productiedata en cross-device Sync niet getest.
+
+
 ## v71.5.1 — werkwijze voor zelfstandige publicatie
 - Doorlopende eigenaarstoestemming vastgelegd in AGENTS.md: iedere gewone update via PR, relevante tests en GitGuardian; bij groen zelfstandig samenvoegen en de exacte Pages-publicatie/live website controleren.
 - Afzonderlijke toestemming blijft verplicht bij databaseaanpassingen, beveiligingsinstellingen, gebruikersrechten, betaalgegevens en herstelacties. Latere instructies om niet te publiceren hebben voorrang; geen omzeiling van GitHub-regels/rechten.

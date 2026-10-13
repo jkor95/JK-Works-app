@@ -39,6 +39,8 @@ async function files(dir) {
     assert.equal((await fs.readFile(file)).subarray(0, 5).toString(), '%PDF-', file);
   }
   console.log('PASS: JavaScript-syntax, domein, manifest, precache en PDF-sjablonen');
+  await require('./test_invoice_payment.cjs')();
+  console.log('PASS: factuur-betaalstatus en gekoppelde klussen (fictieve gegevens)');
 
   const mime = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
     '.json': 'application/json', '.webmanifest': 'application/manifest+json',
