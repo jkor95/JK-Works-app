@@ -634,14 +634,27 @@ const App = (() => {
     try{return JKCloud.isSignedIn()?await JKCloud.getWebsiteRequests():[];}catch(e){console.warn('Aanvragen ophalen mislukt',e);return [];}
   }
 
+  // Alleen lokaal opgeslagen, handmatig gemaakte back-ups activeren een maandelijkse herinnering.
+  // 'Later' stelt de melding 30 dagen uit, zonder een back-up te verplichten.
+  function backupReminderInfo(backup,now=Date.now()){
+    const dates=[backup?.lastBackup,backup?.lastLocalBackup]
+      .map(date=>Date.parse(date||'')).filter(Number.isFinite);
+    if(!dates.length)return null;
+    const latest=Math.max(...dates),interval=30*86400000;
+    if(latest>now||now-latest<interval)return null;
+    const dismissed=Date.parse(backup?.reminderDismissedAt||'');
+    if(Number.isFinite(dismissed)&&dismissed>=latest&&dismissed<=now&&now-dismissed<interval)return null;
+    return {daysSinceBackup:Math.floor((now-latest)/86400000)};
+  }
+
   async function renderDashboard(){
     title('Dashboard');
     const [entries,backup,jobs,company,requests,actions]=await Promise.all([JKDB.all('timeEntries'),JKDB.get('settings','backup'),JKDB.all('jobs'),JKDB.get('settings','company'),getWebsiteRequestsSafe(),collectActionItems()]);
-    const daysSinceBackup=backup?.lastBackupVerified&&backup?.lastBackup?Math.floor((Date.now()-new Date(backup.lastBackup))/86400000):999;
+    const backupReminder=backupReminderInfo(backup);
     const newRequests=requests.filter(r=>r.status==='new').length;
     const openPayments=jobs.reduce((sum,j)=>{const amount=jobOwnAmount(j,entries,company);return sum+(jobHasEnded(j)&&!j.paymentPaid&&amount>0?amount:0)},0);
     $('#view').innerHTML=`
-      ${daysSinceBackup>30?`<div class="warning"><strong>Back-up aanbevolen</strong><br><span class="small">${backup?.lastBackupVerified?'Laatste volledige appback-up '+daysSinceBackup+' dagen geleden.':'Nog geen gecontroleerde volledige appback-up bekend.'}</span> <button class="link-btn" id="dashBackup">Nu maken</button></div>`:''}
+      ${backupReminder?`<div class="warning backup-reminder" role="status"><strong>Herinnering: back-up maken?</strong><p class="small">Je laatste back-up op dit apparaat was ${backupReminder.daysSinceBackup} dagen geleden. Jij kiest of en wanneer je opnieuw een back-up maakt.</p><div class="button-row"><button class="link-btn" id="dashBackup" type="button">Back-up maken</button><button class="link-btn" id="dismissBackupReminder" type="button">Herinner mij over 30 dagen</button></div></div>`:''}
       <div class="dashboard-attention"><button id="dashRequests"><span>📥</span><strong>${newRequests}</strong><small>nieuwe aanvragen</small></button><button id="dashActions"><span>🔔</span><strong>${actions.length}</strong><small>open acties</small></button><button id="dashOpenPayments"><span>💶</span><strong>${money(openPayments)}</strong><small>openstaand</small></button></div>
       <div class="section-title dashboard-first-title"><h2>Snel openen</h2></div>
       <div class="quick-grid dashboard-quick-grid">
@@ -664,6 +677,12 @@ const App = (() => {
     $('#dashActions').addEventListener('click',()=>showActionCenter());
     $('#dashOpenPayments').addEventListener('click',()=>go('jobs'));
     $('#dashBackup')?.addEventListener('click',exportBackup);
+    $('#dismissBackupReminder')?.addEventListener('click',async()=>{
+      // Gebruik putLocal: elke browser heeft een eigen uitsteldatum, zonder cloudsync.
+      const local=await JKDB.get('settings','backup')||{id:'backup'};
+      await JKDB.putLocal('settings',{...local,id:'backup',reminderDismissedAt:new Date().toISOString()});
+      await renderDashboard();
+    });
   }
 
   async function showWebsiteRequests(){
@@ -1566,8 +1585,8 @@ const App = (() => {
   const backupSummary=c=>`${c.clients} klanten · ${c.jobs} klussen · ${c.timeEntries} urenregistraties · ${c.documents} documenten · ${c.photos} klusfoto’s`;
   async function showBackup(){
     const b=await JKDB.get('settings','backup'),guard=await JKDB.get('settings','backupRestoreGuard');
-    const full=b?.lastBackupVerified?b.lastBackup:null,old=!full||Date.now()-Date.parse(full)>30*86400000;
-    modal(`${modalHead('💾 Back-up en herstellen')}<div class="card"><p class="muted small">Eén bestand voor jouw appgegevens, PDF’s en foto’s. Bewaar de download zelf in iCloud Drive. Cloudgegevens worden alleen gelezen; dit is geen volledige Supabase- of accountback-up.</p>${full?`<p>Laatste volledige appback-up op dit apparaat: <strong>${fmtDateTime(full)}</strong></p>`:'<p>Nog geen gecontroleerde volledige appback-up op dit apparaat bekend.</p>'}${b?.lastBackup&&!full?`<p class="small">Eerdere back-up zonder cloudcontrole: ${fmtDateTime(b.lastBackup)}</p>`:''}${b?.lastLocalBackup?`<p class="small">Laatste lokale kopie: ${fmtDateTime(b.lastLocalBackup)} — cloud niet volledig gecontroleerd.</p>`:''}${b?.counts?`<p class="small">Laatste download: ${backupSummary(b.counts)} · ${humanBytes(b.bytes)}</p>`:''}${old?'<div class="warning">Geen volledige appback-up van de afgelopen 30 dagen bekend.</div>':''}${guard?.active?'<div class="warning"><strong>Herstelkopie beschermd</strong><br>Synchronisatie is op dit apparaat geblokkeerd, ook na opnieuw inloggen. De cloud en andere apparaten zijn niet teruggezet. Hervatten vereist een afzonderlijk herstelplan; bewaar eerst deze kopie.</div>':''}</div><div class="card"><label class="small"><input id="backupEncrypt" type="checkbox"> Versleutelen met een wachtwoord</label><p class="muted small">Zonder versleuteling kan iedereen met het bestand de gegevens lezen.</p><div id="backupPasswords" hidden><div class="field"><label>Wachtwoord (minimaal 12 tekens)</label><input id="backupPassword" type="password" autocomplete="new-password"></div><div class="field"><label>Herhaal wachtwoord</label><input id="backupPasswordAgain" type="password" autocomplete="new-password"></div><p class="muted small">Bewaar het wachtwoord apart. Zonder dit wachtwoord kan niemand de back-up openen.</p></div><button class="primary" id="exportBackup" style="width:100%">Back-up maken</button></div><div class="card"><p class="muted small">Herstel vervangt alleen lokale appgegevens, na controle, jouw bevestiging en een veiligheidskopie. Foto’s en PDF’s worden hersteld; website-inhoud en website-aanvragen blijven als bijlage in het back-upbestand. Er wordt niets naar Supabase teruggeschreven.</p><div class="field"><label>Wachtwoord van versleutelde back-up (indien nodig)</label><input id="restorePassword" type="password" autocomplete="off"></div><button class="secondary" id="importBackup" style="width:100%">Back-up herstellen</button></div><p id="backupProgress" class="small" role="status" aria-live="polite"></p>${preparedBackupDownload?'<button class="secondary" id="shareBackup">Bewaar laatste download via deelkaart</button>':''}`);
+    const full=b?.lastBackupVerified?b.lastBackup:null;
+    modal(`${modalHead('💾 Back-up en herstellen')}<div class="card"><p class="muted small">Eén bestand voor jouw appgegevens, PDF’s en foto’s. Bewaar de download zelf in iCloud Drive. Cloudgegevens worden alleen gelezen; dit is geen volledige Supabase- of accountback-up.</p>${full?`<p>Laatste volledige appback-up op dit apparaat: <strong>${fmtDateTime(full)}</strong></p>`:'<p>Nog geen gecontroleerde volledige appback-up op dit apparaat bekend.</p>'}${b?.lastBackup&&!full?`<p class="small">Eerdere back-up zonder cloudcontrole: ${fmtDateTime(b.lastBackup)}</p>`:''}${b?.lastLocalBackup?`<p class="small">Laatste lokale kopie: ${fmtDateTime(b.lastLocalBackup)} — cloud niet volledig gecontroleerd.</p>`:''}${b?.counts?`<p class="small">Laatste download: ${backupSummary(b.counts)} · ${humanBytes(b.bytes)}</p>`:''}<p class="muted small">Back-ups zijn vrijwillig. Na je eerste handmatige back-up op dit apparaat verschijnt na 30 dagen een wegklikbare herinnering; je kunt die steeds 30 dagen uitstellen.</p>${guard?.active?'<div class="warning"><strong>Herstelkopie beschermd</strong><br>Synchronisatie is op dit apparaat geblokkeerd, ook na opnieuw inloggen. De cloud en andere apparaten zijn niet teruggezet. Hervatten vereist een afzonderlijk herstelplan; bewaar eerst deze kopie.</div>':''}</div><div class="card"><label class="small"><input id="backupEncrypt" type="checkbox"> Versleutelen met een wachtwoord</label><p class="muted small">Zonder versleuteling kan iedereen met het bestand de gegevens lezen.</p><div id="backupPasswords" hidden><div class="field"><label>Wachtwoord (minimaal 12 tekens)</label><input id="backupPassword" type="password" autocomplete="new-password"></div><div class="field"><label>Herhaal wachtwoord</label><input id="backupPasswordAgain" type="password" autocomplete="new-password"></div><p class="muted small">Bewaar het wachtwoord apart. Zonder dit wachtwoord kan niemand de back-up openen.</p></div><button class="primary" id="exportBackup" style="width:100%">Back-up maken</button></div><div class="card"><p class="muted small">Herstel vervangt alleen lokale appgegevens, na controle, jouw bevestiging en een veiligheidskopie. Foto’s en PDF’s worden hersteld; website-inhoud en website-aanvragen blijven als bijlage in het back-upbestand. Er wordt niets naar Supabase teruggeschreven.</p><div class="field"><label>Wachtwoord van versleutelde back-up (indien nodig)</label><input id="restorePassword" type="password" autocomplete="off"></div><button class="secondary" id="importBackup" style="width:100%">Back-up herstellen</button></div><p id="backupProgress" class="small" role="status" aria-live="polite"></p>${preparedBackupDownload?'<button class="secondary" id="shareBackup">Bewaar laatste download via deelkaart</button>':''}`);
     $('#backupEncrypt').onchange=e=>{$('#backupPasswords').hidden=!e.target.checked;};
     $('#exportBackup').onclick=exportBackup;$('#importBackup').onclick=()=>$('#hiddenBackupInput').click();
     $('#shareBackup')?.addEventListener('click',async()=>{
@@ -1595,7 +1614,7 @@ const App = (() => {
         await JKBackup.read(blob,password);
         await JKBackup.download(blob,name);downloaded=true;preparedBackupDownload={blob,name};
         const previous=await JKDB.get('settings','backup')||{id:'backup'};
-        await JKDB.putLocal('settings',{...previous,id:'backup',...(payload.scope.cloudChecked?{lastBackup:payload.createdAt,lastBackupVerified:true}:{lastLocalBackup:payload.createdAt}),counts:payload.counts,bytes:blob.size});
+        await JKDB.putLocal('settings',{...previous,id:'backup',...(payload.scope.cloudChecked?{lastBackup:payload.createdAt,lastBackupVerified:true}:{lastLocalBackup:payload.createdAt}),reminderDismissedAt:null,counts:payload.counts,bytes:blob.size});
         await showBackup();backupProgress(`${payload.scope.cloudChecked?'Volledige appback-up':'Lokale kopie; cloud niet volledig gecontroleerd'} gecontroleerd. Download gestart (${humanBytes(blob.size)}). Bewaar het bestand zelf in iCloud Drive. ${backupSummary(payload.counts)}`);
       });
     }catch(error){backupProgress(downloaded?'De gecontroleerde download is gestart; het overzicht kon niet worden bijgewerkt. Controleer Bestanden/Downloads.':error.safeBackupMessage?'Back-up niet afgerond: '+error.message:'Back-up niet afgerond. Er is geen nieuwe succesvolle back-up geregistreerd. Controleer verbinding en vrije opslagruimte en probeer opnieuw.');}

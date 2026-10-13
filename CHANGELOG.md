@@ -1,5 +1,13 @@
 # Wijzigingsgeschiedenis
 
+## v71.5.3 — vrijwillige back-upherinnering per apparaat
+- De permanente back-upwaarschuwing op het dashboard is verwijderd voor browsers/apparaten die nog nooit zelf een back-up maakten. Een back-up blijft volledig handmatig.
+- Na de eerste succesvolle handmatige (volledige of lokale) back-up op dit apparaat toont het dashboard pas na 30 dagen weer een niet-verplichte herinnering.
+- Via 'Herinner mij over 30 dagen' verdwijnt de melding onmiddellijk; zonder nieuwe back-up komt ze na 30 dagen opnieuw. Een nieuwe back-up begint een nieuwe periode. De data en het uitstel blijven uitsluitend lokaal op dat apparaat en synchroniseren niet naar andere apparaten.
+- Back-upscherm geeft voortaan een rustige uitleg in plaats van een waarschuwing die direct verschijnt op nieuwe apparaten; export, herstel, encryptie, lokale/cloudcontroles en back-upbestanden zijn functioneel ongewijzigd.
+- Fictieve regressietests voor nooit geback-upt, nieuw apparaat, 29/30 dagen, lokale kopieën, wegklikken, herhaling en per-apparaat opslag in bestaande controleworkflow. Echte apparaatexports en ingelogde productiegegevens niet getest.
+
+
 ## v71.5.2 — betaalstatus factuur en klus
 - Bij het (uit)vinken van ‘Betaald’ op een aan een klus gekoppelde factuur wordt ‘Betaling ontvangen’ op de klus automatisch aangepast. Met meerdere gekoppelde facturen staat de klus pas op betaald als alle facturen betaald zijn.
 - Nieuwe facturen en het verplaatsen/verwijderen van facturen houden de gekoppelde betaalstatus consistent. Contante klussen, niet-gekoppelde PDF's en handmatig geregistreerde betalingen zonder factuur blijven ongemoeid.

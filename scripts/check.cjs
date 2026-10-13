@@ -41,6 +41,8 @@ async function files(dir) {
   console.log('PASS: JavaScript-syntax, domein, manifest, precache en PDF-sjablonen');
   await require('./test_invoice_payment.cjs')();
   console.log('PASS: factuur-betaalstatus en gekoppelde klussen (fictieve gegevens)');
+  await require('./test_backup_reminders.cjs')();
+  console.log('PASS: vrijwillige en per-apparaat back-upherinneringen (fictieve datums)');
 
   const mime = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
     '.json': 'application/json', '.webmanifest': 'application/manifest+json',
