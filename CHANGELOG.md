@@ -1,3 +1,10 @@
+## v71.8.0 — achtergrondpush voor bestaande meldingscategorieën (voorbereid)
+- Zeven bestaande actie-/herinneringscategorieën kunnen via een geplande Supabase-controle pushmeldingen verzenden naar ingeschreven apparaten.
+- Eerste servercontrole legt bestaande openstaande acties vast zonder oude achterstand ineens te versturen; per actie volgt een melding wanneer deze nieuw ontstaat. Status wordt na verdwijnen teruggezet.
+- Bestaande categorievoorkeuren en weggeklikte acties worden uit gesynchroniseerde cloudgegevens gelezen. Lokale niet-gesynchroniseerde wijzigingen zijn niet zichtbaar op de server.
+- Afzonderlijke beveiligde statusregistraties; geen wijzigingen aan bestaande bedrijfsgegevens. Websiteaanvraag-push blijft behouden.
+- Beperking: servercontrole moet worden gepland en Edge Function moet worden uitgerold; daadwerkelijke iPhone-end-to-end-test is nog niet uitgevoerd.
+
 # Wijzigingsgeschiedenis
 
 ## v71.7.0 — voorbereide echte Web Push (nog niet geactiveerd)
