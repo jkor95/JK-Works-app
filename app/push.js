@@ -3,9 +3,9 @@ const JKPush=(()=>{
  const URL='https://ercqiavruotoclhvfzud.supabase.co/functions/v1/jk-push';
  const KEY='sb_publishable_z4kkYgzjr-bYDEcSZlVciw_cP8MfOuX';
  const bytes=s=>{const x=(s+'='.repeat((4-s.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/');return Uint8Array.from(atob(x),c=>c.charCodeAt(0));};
- async function api(action,subscription){
+ async function api(action,subscription,extra={}){
    const token=await JKCloud.getAccessToken();if(!token)throw Error('Log eerst in bij Synchronisatie.');
-   const res=await fetch(URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'apikey':KEY},body:JSON.stringify({action,subscription})});
+   const res=await fetch(URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'apikey':KEY},body:JSON.stringify({action,subscription,...extra})});
    const data=await res.json().catch(()=>({}));if(!res.ok)throw Error(data.error||('Serverfout '+res.status));return data;
  }
  async function subscribe(){
@@ -21,5 +21,15 @@ const JKPush=(()=>{
  }
  async function unsubscribe(){const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();if(sub){await api('unsubscribe',{endpoint:sub.endpoint});await sub.unsubscribe();}}
  async function status(){if(!('PushManager' in window))return 'Push niet ondersteund op dit apparaat.';const reg=await navigator.serviceWorker.ready;return await reg.pushManager.getSubscription()?'Dit apparaat heeft een pushabonnement. Controleer of de server is geactiveerd.':'Push nog niet ingeschakeld op dit apparaat.';}
- return {subscribe,unsubscribe,status};
+ async function test(){
+   const requestId=crypto.randomUUID();
+   let data;try{data=await api('test',undefined,{requestId});}catch(e){
+     // Responses expose only fixed messages. Never display raw endpoint/token errors.
+     if(!await JKCloud.getAccessToken())throw Error('Log eerst in om een testmelding te plannen.');
+     throw Error('Inplannen niet bevestigd. De melding kan toch al zijn ingepland. Wacht minstens 30 seconden voordat je opnieuw probeert.');
+   }
+   if(data?.ok!==true||data.requestId!==requestId||!['scheduled','sending','completed'].includes(data.status)||!Number.isFinite(Date.parse(data.scheduledFor)))throw Error('De server heeft het inplannen niet bevestigd.');
+   return data;
+ }
+ return {subscribe,unsubscribe,status,test};
 })();

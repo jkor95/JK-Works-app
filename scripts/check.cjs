@@ -39,6 +39,7 @@ async function files(dir) {
     assert.equal((await fs.readFile(file)).subarray(0, 5).toString(), '%PDF-', file);
   }
   console.log('PASS: JavaScript-syntax, domein, manifest, precache en PDF-sjablonen');
+  await require('./test_push.cjs').serverTests();
   await require('./test_invoice_payment.cjs')();
   console.log('PASS: factuur-betaalstatus en gekoppelde klussen (fictieve gegevens)');
   await require('./test_receipts_invoice.cjs')();
@@ -140,6 +141,7 @@ async function files(dir) {
     assert.deepEqual(mutations, [], 'Externe of lokale HTTP-schrijfactie geprobeerd');
     assert.deepEqual(failures, [], 'Browser- of resourcefouten');
     await require('./test_manual_backup.cjs')(browser, origin);
+    await require('./test_push.cjs').browserTests(browser, origin);
     console.log('Backend: uitsluitend fixtures; echte productie-Supabase en apparaatdeelkaart niet getest.');
   } finally {
     if (browser) await browser.close();

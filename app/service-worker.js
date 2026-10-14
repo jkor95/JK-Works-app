@@ -1,4 +1,4 @@
-const CACHE='jkworks-v71-8-0-app-scope';
+const CACHE='jkworks-v71-8-1-app-scope';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./push.js','./app.js','./backup.js','./website-editor.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
@@ -39,8 +39,8 @@ self.addEventListener('notificationclick',event=>{
 // Achtergrondpush: werkt ook als de JK Works-webapp gesloten is.
 self.addEventListener('push',event=>{
   let data={};try{data=event.data?.json()||{};}catch{}
-  event.waitUntil(self.registration.showNotification('JK Works - '+(data.title||'Nieuwe aanvraag'),{
+  event.waitUntil(self.registration.showNotification(data.kind==='test'?'JK Works – Testmelding':'JK Works - '+(data.title||'Nieuwe aanvraag'),{
     body:data.body||'Er is een nieuwe melding.',icon:'./icons/icon-192.png',badge:'./icons/icon-192.png',
-    tag:data.tag||'jkworks-new-request',data:{url:'./'},renotify:true
+    tag:data.tag||'jkworks-new-request',data:{url:'./'},renotify:data.kind!=='test'
   }));
 });

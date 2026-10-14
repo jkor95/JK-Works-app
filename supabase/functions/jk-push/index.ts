@@ -9,6 +9,48 @@ if(pub&&priv)webpush.setVapidDetails('mailto:beheer@jkworks.nl',pub,priv);
 const cors={'Access-Control-Allow-Origin':'https://jkworks.nl','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'};
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store'}});
 
+declare const EdgeRuntime:{waitUntil(promise:Promise<unknown>):void};
+// One background task per durable request. Claim before delivery; no automatic
+// retry after an ambiguous transport result, to prevent duplicate notifications.
+async function deliverTest(userId:string,requestId:string,scheduledFor:string){
+ try{
+  await new Promise(resolve=>setTimeout(resolve,Math.max(0,Date.parse(scheduledFor)-Date.now())));
+  const {data:claimed,error:claimError}=await db.from('jk_push_test_requests')
+   .update({status:'sending'}).eq('user_id',userId).eq('request_id',requestId)
+   .eq('status','queued').lte('scheduled_for',new Date().toISOString()).select('request_id').maybeSingle();
+  if(claimError||!claimed)return;
+  const {data:subs,error}=await db.from('jk_push_subscriptions').select('endpoint,subscription').eq('user_id',userId);
+  let delivered=0,failed=0;
+  if(!error){
+   const endpoints=new Set<string>();
+   for(const sub of subs||[]){
+    if(endpoints.has(sub.endpoint))continue;endpoints.add(sub.endpoint);
+    try{await webpush.sendNotification(sub.subscription,JSON.stringify({kind:'test',title:'JK Works – Testmelding',body:'Je pushmeldingen werken! ✅',tag:'jkworks-test-'+requestId}),{TTL:300});delivered++;}
+    catch{failed++;} // No endpoint/key/error payload in logs, and no retry or deletion.
+   }
+  }
+  await db.from('jk_push_test_requests').update({status:error||!delivered?'failed':'completed',delivered,failed}).eq('user_id',userId).eq('request_id',requestId).eq('status','sending');
+ }catch{console.error('Testpush kon niet worden afgerond.');}
+}
+async function scheduleTest(userId:string,requestId:unknown){
+ if(typeof requestId!=='string'||! /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId))return json({error:'Ongeldige aanvraagcode'},400);
+ if(!pub||!priv)return json({error:'Pushdienst is nog niet ingesteld'},503);
+ if(typeof EdgeRuntime==='undefined'||typeof EdgeRuntime.waitUntil!=='function')return json({error:'Achtergrondverzending is niet beschikbaar'},503);
+ const {data:subs,error}=await db.from('jk_push_subscriptions').select('endpoint').eq('user_id',userId).limit(1);
+ if(error)return json({error:'Apparaten controleren mislukt'},503);
+ if(!subs?.length)return json({error:'Schakel eerst pushmeldingen in op een eigen apparaat'},409);
+ const scheduledFor=new Date(Date.now()+30000).toISOString();
+ const {error:insertError}=await db.from('jk_push_test_requests').insert({user_id:userId,request_id:requestId,scheduled_for:scheduledFor,status:'queued'});
+ if(insertError){
+  if(insertError.code!=='23505')return json({error:'Testmelding kon niet worden ingepland'},503);
+  const {data:existing,error:readError}=await db.from('jk_push_test_requests').select('status,scheduled_for').eq('user_id',userId).eq('request_id',requestId).maybeSingle();
+  if(readError||!existing||existing.status==='failed')return json({error:'Eerdere testaanvraag kon niet worden afgerond; er wordt geen extra melding verstuurd'},409);
+  return json({ok:true,requestId,status:existing.status==='queued'?'scheduled':existing.status,scheduledFor:existing.scheduled_for,duplicate:true},202);
+ }
+ EdgeRuntime.waitUntil(deliverTest(userId,requestId,scheduledFor));
+ return json({ok:true,requestId,status:'scheduled',scheduledFor},202);
+}
+
 type Action={key:string;category:string;title:string};
 const folder=(d:any)=>{const x=String(d?.folder||d?.kind||'').toLowerCase();return x.includes('offert')?'offerte':x.includes('fact')?'factuur':'other'};
 const amsterdamNow=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ','T');
@@ -120,6 +162,7 @@ Deno.serve(async req=>{
  if(!bearer.startsWith('Bearer '))return json({error:'Niet ingelogd'},401);
  const {data:{user},error}=await db.auth.getUser(bearer.slice(7));
  if(error||!user)return json({error:'Ongeldige sessie'},401);
+ if(body?.action==='test')return await scheduleTest(user.id,body.requestId);
  if(body.action==='config')return json({publicKey:pub});
  if(body.action==='subscribe'){
    const s=body.subscription;
