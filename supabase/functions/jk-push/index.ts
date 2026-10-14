@@ -9,13 +9,12 @@ if(pub&&priv)webpush.setVapidDetails('mailto:beheer@jkworks.nl',pub,priv);
 const cors={'Access-Control-Allow-Origin':'https://jkworks.nl','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'};
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store'}});
 
-const categories=['hours','photos','quoteCreate','quoteSend','invoiceCreate','invoiceSend','paymentReminder'] as const;
 type Action={key:string;category:string;title:string};
 const folder=(d:any)=>{const x=String(d?.folder||d?.kind||'').toLowerCase();return x.includes('offert')?'offerte':x.includes('fact')?'factuur':'other'};
 const amsterdamNow=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ','T');
 function actionsFor(records:any[]):Action[]{
  const byStore=(store:string)=>records.filter(r=>r.store===store).map(r=>r.data||{});
- const jobs=byStore('jobs'),docs=byStore('documents'),photos=byStore('jobPhotos'),entries=byStore('timeEntries');
+ const jobs=byStore('jobs'),docs=byStore('documents'),photos=byStore('jobPhotos');
  const settings=byStore('settings');
  const prefs=settings.find(x=>x.id==='notificationPrefs')||{};
  const dismissed=settings.find(x=>x.id==='dismissedActions')?.items||{};
@@ -27,12 +26,12 @@ function actionsFor(records:any[]):Action[]{
   const start=String(j.startTime||j.from||j.start||j.timeFrom||j.beginTime||j.begin||j.start_time||'').slice(0,5);
   const end=String(j.endTime||j.to||j.end||j.timeTo||j.finishTime||j.finish||j.end_time||'').slice(0,5);
   const date=String(j.date||'').slice(0,10);
-  const endDay=start&&end&&end<=start?new Date(Date.parse(date+'T12:00:00Z')+86400000).toISOString().slice(0,10):date;
+  const endDay=date&&start&&end&&end<=start?new Date(Date.parse(date+'T12:00:00Z')+86400000).toISOString().slice(0,10):date;
   const ended=j.status==='afgerond'||!!date&&(end?(endDay+'T'+end<=now):(date<day));
   const started=ended||!!date&&(date+'T'+(start||'08:00')<=now);
   const linked=docs.filter(d=>d?.meta?.jobId===j.id||(!d?.meta?.jobId&&date&&d?.meta?.workDate===date&&j.clientName&&String(d?.meta?.client?.name||'').trim().toLowerCase()===String(j.clientName).trim().toLowerCase()));
   const quotes=linked.filter(d=>folder(d)==='offerte'),invoices=linked.filter(d=>folder(d)==='factuur');
-  const label=String(j.title||'Klus').slice(0,80);
+  const label='klus'; // Geen bedrijfs- of klantinformatie in een pushmelding.
   if(ended&&!j.completionPromptHandledAt)add('hours:'+j.id,'hours','Uren controleren: '+label);
   if((j.photoPolicy||'optional')==='required'){
    const has=(phase:string)=>photos.some(p=>p.jobId===j.id&&p.phase===phase);
@@ -74,17 +73,21 @@ async function runActionChecks(){
   // Schakel verdwenen acties uit zodat een later opnieuw ontstane actie opnieuw gemeld kan worden.
   const gone=(previous||[]).filter(x=>x.active&&!keys.has(x.action_key)).map(x=>x.action_key);
   if(gone.length){const {error:e}=await db.from('jk_push_action_state').update({active:false}).eq('user_id',userId).in('action_key',gone);if(e)continue;}
-  for(const a of active){
-   const {error:e}=await db.from('jk_push_action_state').upsert({user_id:userId,action_key:a.key,active:true},{onConflict:'user_id,action_key'});
-   if(e){console.error('Actiestatus opslaan mislukt');continue;}
+  if(!initialized){
+   for(const a of active)await db.from('jk_push_action_state').upsert({user_id:userId,action_key:a.key,active:true},{onConflict:'user_id,action_key'});
+   const {error:initError}=await db.from('jk_push_user_state').upsert({user_id:userId});
+   if(initError)console.error('Push-init mislukt');
+   checked++;continue;
   }
-  if(!initialized){await db.from('jk_push_user_state').upsert({user_id:userId});checked++;continue;}
-  // Per actie één bericht; geen klantnamen, bedragen of andere persoonsgegevens in pushpayload.
-  for(const a of newActions){
-   for(const sub of userSubs){try{
-    await webpush.sendNotification(sub.subscription,JSON.stringify({title:'Actie nodig',body:a.title,tag:'jkworks-action-'+a.key}));
-    sent++;
-   }catch(e:any){if([404,410].includes(e.statusCode))await db.from('jk_push_subscriptions').delete().eq('endpoint',sub.endpoint);}}
+  // Sla status pas na verzending op; bij tijdelijke storingen wordt opnieuw geprobeerd.
+  for(const a of active){
+   let delivered=true;
+   if(newActions.some(x=>x.key===a.key)){
+    for(const sub of userSubs){try{
+     await webpush.sendNotification(sub.subscription,JSON.stringify({title:'Actie nodig',body:a.title,tag:'jkworks-action-'+a.key}));sent++;
+    }catch(e:any){if([404,410].includes(e.statusCode))await db.from('jk_push_subscriptions').delete().eq('endpoint',sub.endpoint);else delivered=false;}}
+   }
+   if(delivered){const {error:e}=await db.from('jk_push_action_state').upsert({user_id:userId,action_key:a.key,active:true},{onConflict:'user_id,action_key'});if(e)console.error('Actiestatus opslaan mislukt');}
   }
   checked++;
  }
