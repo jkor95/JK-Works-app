@@ -6,6 +6,23 @@ on:
   push:
     branches: [main]
 
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Alleen inspecteren of de goedgekeurde jk-push-update uitrollen'
+        type: choice
+        options: [inspect, deploy]
+        default: inspect
+        required: true
+      expected_sha:
+        description: 'Exacte beoordeelde commit met geslaagde GitGuardian-controle'
+        type: string
+        required: true
+      approved_test_table:
+        description: 'Afzonderlijke eigenaarstoestemming voor alleen jk_push_test_requests is vastgelegd'
+        type: boolean
+        default: false
+
 permissions:
   contents: read
 
@@ -28,3 +45,60 @@ jobs:
         env:
           NODE_PATH: ${{ runner.temp }}/jk-tests/node_modules
         run: node scripts/check.cjs
+
+  deploy-push:
+    name: Handmatige jk-push-deployment
+    needs: smoke
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'jkor95/JK-Works-app' &&
+      (github.ref == 'refs/heads/codex/test-push-v71-8-1' || github.ref == 'refs/heads/main') &&
+      github.sha == inputs.expected_sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: jkworks-push-deployment
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Installeer uitsluitend bronvergelijker vóór koppelen van beheergeheim
+        run: npm install --prefix "$RUNNER_TEMP/jk-deploy" --no-save --package-lock=false typescript@5.9.3
+      - name: Controleer GitGuardian op exact deze commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess
+          data=json.loads(subprocess.check_output(['gh','api','repos/'+os.environ['GITHUB_REPOSITORY']+'/commits/'+os.environ['GITHUB_SHA']+'/check-runs'],text=True))
+          checks=[c for c in data['check_runs'] if c['name']=='GitGuardian Security Checks']
+          if not checks or not all(c['status']=='completed' and c['conclusion']=='success' for c in checks):
+              raise SystemExit('GitGuardian niet aantoonbaar geslaagd; geen deployment.')
+          print('GitGuardian op exacte commit: geslaagd.')
+          PY
+      - name: Inspecteer of deploy uitsluitend de goedgekeurde pushfunctie
+        id: deploy
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          NODE_PATH: ${{ runner.temp }}/jk-deploy/node_modules
+          DEPLOY_MODE: ${{ inputs.mode }}
+          APPROVED_TEST_TABLE: ${{ inputs.approved_test_table }}
+        run: |
+          if [[ "$DEPLOY_MODE" == deploy && "$APPROVED_TEST_TABLE" == true ]]; then
+            python3 scripts/deploy_push.py --mode deploy --approved-test-table
+          elif [[ "$DEPLOY_MODE" == inspect ]]; then
+            python3 scripts/deploy_push.py --mode inspect
+          else
+            echo 'Afzonderlijke toestemming voor de nieuwe tabel is vereist; geen deployment.'
+            exit 1
+          fi
+      - name: 'Backendcontrole geslaagd: jk-push versie ${{ steps.deploy.outputs.version }} (${{ steps.deploy.outputs.source_state }})'
+        run: echo 'De beoordeelde functiebron en bestaande JWT-configuratie zijn gecontroleerd.'

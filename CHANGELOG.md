@@ -1,3 +1,11 @@
+## v71.8.1 — handmatige testpush met serververtraging
+- Meer → Meldingen → Echte pushmeldingen krijgt ‘Test pushmelding versturen’. De bestaande gebruikerssessie vraagt uitsluitend een test naar de eigen geregistreerde apparaten aan.
+- Supabase plant de test circa 30 seconden later via EdgeRuntime.waitUntil; geen browsertimer, open app of actieve iPhone nodig na de bevestiging. Titel ‘JK Works – Testmelding’, bericht ‘Je pushmeldingen werken! ✅’.
+- Afzonderlijk register met unieke aanvraagcodes en atomische claim vóór verzending voorkomt dubbele verzending per druk. Bij een onzekere transportuitkomst wordt niet opnieuw verzonden. Alleen de service role heeft toegang; geen wijziging aan bestaande bedrijfsgegevens, automatische meldingsstatus of klantaanvragen.
+- De eigenaar heeft uitsluitend de nieuwe tabel jk_push_test_requests afzonderlijk goedgekeurd. Deployment via een handmatige GitHub Actions-job is geslaagd; repository-secret SUPABASE_ACCESS_TOKEN blijft afgeschermd. Live bronvergelijking, commit-/GitGuardian-controle en hash van exact goedgekeurde SQL beschermen de uitrol. Bestaande VAPID-secrets en functie-JWT/webhookconfiguratie blijven behouden. Op 14 oktober 2026 is jk-push versie 7 uitgerold en de live bron is gelijk aan de beoordeelde code (Actions-run 38640155298). De nieuwe tabel en RLS/toegangsafscherming zijn gecontroleerd. De echte iPhone-test is nog niet uitgevoerd.
+- Geïsoleerde tests voor authenticatie, eigen apparaten, serververtraging, dubbele aanvragen/tikken, verzending na achtergrond-wachtperiode, veilige foutmeldingen, bestaande webhook/planning en serviceworker. Alle bestaande appregressies worden uitgevoerd; productie krijgt geen testmelding.
+- Serviceworker-cache en appversie bijgewerkt. Herstelpunt: recovery-2026-10-14-v71.8.0 op 07793fedac41427abd70f747a21df17c50261ad3, bevestigd als succesvolle Pages-publicatie.
+
 ## v71.8.0 — achtergrondpush voor bestaande meldingscategorieën (voorbereid)
 - Zeven bestaande actie-/herinneringscategorieën kunnen via een geplande Supabase-controle pushmeldingen verzenden naar ingeschreven apparaten.
 - Eerste servercontrole legt bestaande openstaande acties vast zonder oude achterstand ineens te versturen; per actie volgt een melding wanneer deze nieuw ontstaat. Status wordt na verdwijnen teruggezet.
