@@ -180,7 +180,8 @@ def main():
         deploy(Api(os.environ.get('SUPABASE_ACCESS_TOKEN')), args.mode, args.approved_test_table)
     except Exception as error:
         # Only our fixed RuntimeError messages are safe; network/parser exceptions are suppressed.
-        print('DEPLOYMENT STOPPED: ' + (str(error) if type(error) is RuntimeError else type(error).__name__), file=sys.stderr)
+        message = 'DEPLOYMENT STOPPED: ' + (str(error) if type(error) is RuntimeError else type(error).__name__)
+        print(('::error::' if os.environ.get('GITHUB_ACTIONS') == 'true' else '') + message, file=sys.stderr)
         return 1
     return 0
 
