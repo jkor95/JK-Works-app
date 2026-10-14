@@ -1,6 +1,6 @@
 # Echte pushmeldingen
 
-## Testmelding — v71.8.1 (voorbereid)
+## Testmelding — v71.8.1
 
 Onder Meer → Meldingen → Echte pushmeldingen vraagt **Test pushmelding versturen** één test aan. Na de serverbevestiging kan de gebruiker de app sluiten en de iPhone vergrendelen. De server wacht tot circa 30 seconden na de aanvraag en gebruikt de bestaande Web Push-transportlaag en VAPID-sleutels. De melding verschijnt via de serviceworker, niet via een browsermelding of browsertimer. Op iPhone blijven installatie op het beginscherm, pushabonnement en meldingstoestemming vereist; Focus-/systeeminstellingen kunnen zichtbaarheid beïnvloeden.
 
@@ -10,7 +10,9 @@ Iedere druk maakt een nieuwe UUID-aanvraagcode. De aparte tabel `jk_push_test_re
 
 Het register bevat alleen gebruiker, aanvraagcode, tijdstippen, status en aantallen; geen klant- of bedrijfsinhoud, tokens of endpoints. RLS is aan, anon/authenticated hebben geen tabeltoegang. Alleen de Edge Function met bestaande service-role kan lezen/invoegen/bijwerken. Aanvraagcodes blijven bewaard voor blijvende deduplicatie. Bestaande actie-/webhooktabellen en cronjobs worden niet gewijzigd.
 
-**Uitrollen:**
+Op 14 oktober 2026 is de goedgekeurde nieuwe testtabel aangemaakt en is `jk-push` versie 7 via GitHub Actions uitgerold. Run [38640155298](https://github.com/jkor95/JK-Works-app/actions/runs/38640155298) bevestigt de live bron, behouden JWT-instelling en afgeschermde tabel. Er is geen echte push verstuurd; de fysieke iPhone-test staat nog open.
+
+**Uitrolprocedure:**
 1. Eerst afzonderlijke eigenaarstoestemming voor uitsluitend `supabase/migrations/20261014_jk_push_test_requests.sql`. Voer alleen die nieuwe migratie uit, geen oudere voorbereide migraties en geen algemene db push.
 2. Controleer de daadwerkelijk uitgerolde jk-push-code/configuratie via de Supabase Management API. Behoud bestaande VAPID-/webhooksecrets en de huidige verify_jwt-instelling; geen secrets opnieuw genereren. De eigenaar heeft voor deployment via GitHub gekozen. Voeg SUPABASE_ACCESS_TOKEN als repository-secret toe onder GitHub → Settings → Secrets and variables → Actions → New repository secret. De waarde is een Supabase Personal Access Token en komt nooit in chat, bestanden of logs. Een Codex-secret is voor deze route niet nodig.
 3. Start de bestaande workflow JK Works controles handmatig op de beoordeelde branch, met expected_sha gelijk aan exact de groene PR-commit. Eerst mode=inspect, daarna mode=deploy en approved_test_table=true op basis van de al gegeven afzonderlijke toestemming. De deploymentjob draait uitsluitend op expliciete workflow_dispatch, na geslaagde tests en een eigen GitGuardian-controle op dezelfde commit. scripts/deploy_push.py vergelijkt de live functie met de uitgangsversie/propositie en stopt bij onbekende afwijkingen. Het past alleen de via SHA-256 vastgelegde, goedgekeurde SQL toe; bestaande tabelafscherming wordt alleen gecontroleerd. Rol alleen jk-push uit met de beoordeelde broncode. De bestaande automatische acties, klantaanvraag-webhook en authenticatiepaden blijven inhoudelijk gelijk. Controleer de uitgerolde versie/configuratie voordat de frontend wordt samengevoegd/gepubliceerd.
