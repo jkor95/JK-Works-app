@@ -69,7 +69,7 @@ class DeploymentGuards(unittest.TestCase):
                 self.calls.append(path)
                 return {'id':'fixture','slug':'jk-push','name':'jk-push','status':'ACTIVE','version':1,'verify_jwt':False}
         api=Api()
-        with patch.object(deploy,'live_source',return_value=b'new unknown live code'),patch.object(deploy,'canonical_hash',side_effect=['different','baseline','proposed']):
+        with patch.object(deploy.subprocess,'check_output',return_value=b'baseline fixture'),patch.object(deploy,'live_source',return_value=b'new unknown live code'),patch.object(deploy,'canonical_hash',side_effect=['different','baseline','proposed']):
             with self.assertRaises(RuntimeError):deploy.deploy(api,'deploy',True)
         self.assertEqual(api.calls,['/functions/jk-push'])
     def test_canonicaliser_receives_no_credentials(self):
