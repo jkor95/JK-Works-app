@@ -6,14 +6,14 @@ const url=Deno.env.get('SUPABASE_URL')!,admin=Deno.env.get('SUPABASE_SERVICE_ROL
 const db=createClient(url,admin,{auth:{persistSession:false}});
 const pub=Deno.env.get('JK_VAPID_PUBLIC')||'',priv=Deno.env.get('JK_VAPID_PRIVATE')||'';
 if(pub&&priv)webpush.setVapidDetails('mailto:beheer@jkworks.nl',pub,priv);
-const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+const cors={'Access-Control-Allow-Origin':'https://jkworks.nl','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'};\nconst json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store'}});
 Deno.serve(async req=>{
- if(req.method!=='POST')return json({error:'Method not allowed'},405);
+ if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});\n if(req.method!=='POST')return json({error:'Method not allowed'},405);
  let body:any;try{body=await req.json();}catch{return json({error:'Invalid JSON'},400);}
- if(body?.action==='webhook'){
+ if(body?.type==='INSERT'){
    const secret=Deno.env.get('JK_PUSH_WEBHOOK_SECRET');
    if(!secret||req.headers.get('x-jk-push-secret')!==secret)return json({error:'Unauthorized'},401);
-   if(body.type!=='INSERT'||body.table!=='public_requests'||!body.record?.id)return json({ok:true,skipped:true});
+   if(body.type!=='INSERT'||body.table!=='public_requests'||body.schema!=='public'||!body.record?.id)return json({ok:true,skipped:true});
    const {data, error}=await db.from('jk_push_subscriptions').select('endpoint,subscription');
    if(error)return json({error:'Subscription query failed'},500);
    let delivered=0;for(const sub of data||[]){try{
