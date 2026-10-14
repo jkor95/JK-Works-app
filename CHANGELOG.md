@@ -1,5 +1,12 @@
 # Wijzigingsgeschiedenis
 
+## v71.7.0 — voorbereide echte Web Push (nog niet geactiveerd)
+- Nieuwe Push-instellingen per apparaat; Push API-abonnement via ingelogde Supabase Edge Function, achtergrondmelding in serviceworker.
+- Voorbereide beveiligde Edge Function, SQL-tabel en webhook voor nieuwe websiteaanvragen. Geen geheime sleutels in repository.
+- Niet actief vóór afzonderlijk goedgekeurde Supabase-migratie, secrets, functie-deployment en database-webhook. Geen wijzigingen aan bestaande data of betalingslogica.
+- Controles: JavaScript-syntax en statische bestandsintegratie; echte iOS-push, Supabase, ingelogde regressies en Pages-publicatie nog niet geverifieerd.
+
+
 ## v71.6.1 — bonnetjes zichtbaar en te openen in klusdetails
 - Klusdetails tonen nu een apart onderdeel ‘Bonnetjes & uitgaven’ met aantal, totaal aan inkoopuitgaven en de gekoppelde bonnetjes per leverancier, datum en bedrag. Bij fotobonnen verschijnt een miniatuur; bij PDF-bonnen een documentpictogram. Dit is alleen een intern overzicht en verandert het klusbedrag niet.
 - Tik op een gekoppeld bonnetje om de foto of PDF in de bestaande uitgavendetailweergave te bekijken en de uitgave te bewerken. Bonbestanden en bestaande koppelingen blijven ongewijzigd.
