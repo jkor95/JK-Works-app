@@ -97,7 +97,9 @@ Deno.serve(async req=>{
  let body:any;try{body=await req.json();}catch{return json({error:'Invalid JSON'},400);}
  if(body?.action==='scheduled-actions'){
    const secret=Deno.env.get('JK_PUSH_WEBHOOK_SECRET');
-   if(!secret||req.headers.get('x-jk-push-secret')!==secret)return json({error:'Unauthorized'},401);
+   const supplied=req.headers.get('x-jk-push-secret');
+   const {data:scheduleAuth,error:authError}=await db.from('jk_push_schedule_auth').select('secret').eq('id',1).maybeSingle();
+   if(authError||!supplied||!(supplied===secret&&!!secret||supplied===scheduleAuth?.secret))return json({error:'Unauthorized'},401);
    return await runActionChecks();
  }
  if(body?.type==='INSERT'){
