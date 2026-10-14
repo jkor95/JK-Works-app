@@ -1,0 +1,25 @@
+/* JK Works Web Push - uitsluitend aanmelden met ingelogde Supabase sessie. */
+const JKPush=(()=>{
+ const URL='https://ercqiavruotoclhvfzud.supabase.co/functions/v1/jk-push';
+ const KEY='sb_publishable_z4kkYgzjr-bYDEcSZlVciw_cP8MfOuX';
+ const bytes=s=>{const x=(s+'='.repeat((4-s.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/');return Uint8Array.from(atob(x),c=>c.charCodeAt(0));};
+ async function api(action,subscription){
+   const token=await JKCloud.getAccessToken();if(!token)throw Error('Log eerst in bij Synchronisatie.');
+   const res=await fetch(URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'apikey':KEY},body:JSON.stringify({action,subscription})});
+   const data=await res.json().catch(()=>({}));if(!res.ok)throw Error(data.error||('Serverfout '+res.status));return data;
+ }
+ async function subscribe(){
+   if(!('PushManager' in window)||!('serviceWorker' in navigator)||!('Notification' in window))throw Error('Dit apparaat ondersteunt geen webpush.');
+   if(/iPhone|iPad|iPod/i.test(navigator.userAgent)&&!(navigator.standalone||matchMedia('(display-mode: standalone)').matches))throw Error('Voeg JK Works eerst toe aan het beginscherm en open het via dat pictogram.');
+   const {publicKey}=await api('config');if(!publicKey)throw Error('Pushdienst is nog niet ingesteld.');
+   const permission=await Notification.requestPermission();if(permission!=='granted')throw Error('Meldingstoestemming is niet verleend.');
+   const reg=await navigator.serviceWorker.ready;
+   let sub=await reg.pushManager.getSubscription();
+   if(sub&&JSON.stringify(Array.from(new Uint8Array(sub.options.applicationServerKey||[])))!==JSON.stringify(Array.from(bytes(publicKey)))){await sub.unsubscribe();sub=null;}
+   if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytes(publicKey)});
+   await api('subscribe',sub.toJSON());return true;
+ }
+ async function unsubscribe(){const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();if(sub){await api('unsubscribe',{endpoint:sub.endpoint});await sub.unsubscribe();}}
+ async function status(){if(!('PushManager' in window))return 'Push niet ondersteund op dit apparaat.';const reg=await navigator.serviceWorker.ready;return await reg.pushManager.getSubscription()?'Dit apparaat heeft een pushabonnement. Controleer of de server is geactiveerd.':'Push nog niet ingeschakeld op dit apparaat.';}
+ return {subscribe,unsubscribe,status};
+})();

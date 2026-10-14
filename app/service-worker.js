@@ -1,6 +1,6 @@
-const CACHE='jkworks-v71-6-1-app-scope';
+const CACHE='jkworks-v71-7-0-app-scope';
 const LOCAL=[
-  './','./index.html','./styles.css','./db.js','./cloud.js','./app.js','./backup.js','./website-editor.js','./manifest.webmanifest',
+  './','./index.html','./styles.css','./db.js','./cloud.js','./push.js','./app.js','./backup.js','./website-editor.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
   './templates/factuur-kor.pdf','./templates/offerte-kor.pdf','./templates/factuur-normaal.pdf','./templates/offerte-normaal.pdf',
   './icons/icon-192.png','./icons/icon-512.png','./icons/icon-maskable-512.png','./icons/apple-touch-icon.png'
@@ -34,4 +34,13 @@ self.addEventListener('notificationclick',event=>{
     for(const w of wins){if('focus' in w)return w.focus();}
     if(clients.openWindow)return clients.openWindow('./');
   })());
+});
+
+// Achtergrondpush: werkt ook als de JK Works-webapp gesloten is.
+self.addEventListener('push',event=>{
+  let data={};try{data=event.data?.json()||{};}catch{}
+  event.waitUntil(self.registration.showNotification('JK Works - '+(data.title||'Nieuwe aanvraag'),{
+    body:data.body||'Er is een nieuwe melding.',icon:'./icons/icon-192.png',badge:'./icons/icon-192.png',
+    tag:data.tag||'jkworks-new-request',data:{url:'./'},renotify:true
+  }));
 });
