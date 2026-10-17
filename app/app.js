@@ -661,13 +661,20 @@ const App = (() => {
   async function renderDashboard(){
     title('Dashboard');
     const [entries,backup,jobs,company,requests,actions]=await Promise.all([JKDB.all('timeEntries'),JKDB.get('settings','backup'),JKDB.all('jobs'),JKDB.get('settings','company'),getWebsiteRequestsSafe(),collectActionItems()]);
+    const now=new Date();
+    const eligibleJobs=jobs.filter(j=>j?.id&&j.date&&j.status!=='afgerond'&&j.status!=='geannuleerd');
+    const currentJobs=eligibleJobs.filter(j=>{const start=jobPlannedStart(j),end=jobPlannedEnd(j);return start&&start<=now&&(!end||end>now)&&j.date===today();}).sort((a,b)=>(+jobPlannedStart(a))-(+jobPlannedStart(b)));
+    const upcomingJobs=eligibleJobs.filter(j=>{const start=jobPlannedStart(j);return start&&start>now;}).sort((a,b)=>(+jobPlannedStart(a))-(+jobPlannedStart(b)));
+    const dashboardJob=currentJobs[0]||upcomingJobs[0]||null;
+    const dashboardJobCurrent=!!currentJobs.length;
+    const dashboardJobHtml=dashboardJob?`<div class="section-title"><h2>${dashboardJobCurrent?'Huidige klus':'Aankomende klus'}</h2></div><button type="button" id="dashboardJobOpen" class="card" style="width:100%;text-align:left;cursor:pointer;display:block"><strong>${esc(dashboardJob.title||'Klus')}</strong><div class="muted small">${esc(dashboardJob.clientName||'Geen klant')} · ${nlDate(dashboardJob.date)}${jobTimeLabel(dashboardJob)?' · '+esc(jobTimeLabel(dashboardJob)):''}</div><div class="muted small">Tik om de klus te openen en te bewerken →</div></button>`:'';
     const backupReminder=backupReminderInfo(backup);
     const newRequests=requests.filter(r=>r.status==='new').length;
     const openPayments=jobs.reduce((sum,j)=>{const amount=jobOwnAmount(j,entries,company);return sum+(jobHasEnded(j)&&!j.paymentPaid&&amount>0?amount:0)},0);
     $('#view').innerHTML=`
       ${backupReminder?`<div class="warning backup-reminder" role="status"><strong>Herinnering: back-up maken?</strong><p class="small">Je laatste back-up op dit apparaat was ${backupReminder.daysSinceBackup} dagen geleden. Jij kiest of en wanneer je opnieuw een back-up maakt.</p><div class="button-row"><button class="link-btn" id="dashBackup" type="button">Back-up maken</button><button class="link-btn" id="dismissBackupReminder" type="button">Herinner mij over 30 dagen</button></div></div>`:''}
       <div class="dashboard-attention"><button id="dashRequests"><span>📥</span><strong>${newRequests}</strong><small>nieuwe aanvragen</small></button><button id="dashActions"><span>🔔</span><strong>${actions.length}</strong><small>open acties</small></button><button id="dashOpenPayments"><span>💶</span><strong>${money(openPayments)}</strong><small>openstaand</small></button></div>
-      <div class="section-title dashboard-first-title"><h2>Snel openen</h2></div>
+      ${dashboardJobHtml}\n      <div class="section-title dashboard-first-title"><h2>Snel openen</h2></div>
       <div class="quick-grid dashboard-quick-grid">
         <button class="quick" id="newJobDash"><span class="emoji">👷</span><strong>Nieuwe klus</strong><small>Opdracht en klant koppelen</small></button>
         <button class="quick" id="addHours"><span class="emoji">🕒</span><strong>Uren invoeren</strong><small>Datum en van-tot registreren</small></button>
@@ -678,6 +685,7 @@ const App = (() => {
         <button class="quick quick-stat" id="timeStatsDash"><span class="quick-stat-title"><span class="emoji">📊</span><strong>Urenstatistieken</strong></span>${dashboardYearMiniChart(entries)}</button>
       </div>`;
     $$('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
+    $('#dashboardJobOpen')?.addEventListener('click',()=>showJob(dashboardJob.id));
     $('#newInvoice').addEventListener('click',()=>createBusinessDoc('Factuur'));
     $('#newQuote').addEventListener('click',()=>createBusinessDoc('Offerte'));
     $('#addHours').addEventListener('click',()=>editTimeEntry());
