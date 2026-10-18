@@ -87,4 +87,20 @@ assert.equal(compatCtx.window.JKCopyCompat.isLegacy(
   'contactTitle', 'Zelf aangepaste contacttekst'), false);
 
 
+
+// Dienstkaarten: vier met link eerst, twee zonder link onderaan.
+const dienstenHtml = home.match(/<div class="service-grid">([\s\S]*?)<\/div>\s*<\/section>/)?.[1];
+assert.ok(dienstenHtml, 'Dienstenblok ontbreekt');
+const dienstenKaarten = [...dienstenHtml.matchAll(/<article class="service-card">([\s\S]*?)<\/article>/g)].map(x => x[1]);
+assert.equal(dienstenKaarten.length, 6);
+assert.deepEqual(dienstenKaarten.map(x => Number(x.match(/data-site="service(\d)Title"/)?.[1])), [1,3,4,5,2,6]);
+assert.ok(dienstenKaarten.slice(0,4).every(x => x.includes('class="service-detail-link"')));
+assert.ok(dienstenKaarten.slice(4).every(x => !x.includes('class="service-detail-link"')));
+assert.equal(dienstenKaarten.filter(x => x.includes('class="service-detail-link"')).length, 4);
+// Btw-vermelding hoort zichtbaar bij de bedrijfsgegevens in de footer.
+const footerHtml = home.split('<footer class="site-footer">')[1]?.split('</footer>')[0] || '';
+assert.match(footerHtml, /kleineondernemersregeling \(KOR\)/);
+assert.match(footerHtml, /geen btw in rekening gebracht/);
+assert.equal((home.match(/kleineondernemersregeling \(KOR\)/g) || []).length, 1);
+
 console.log('PASS: SEO-pagina\'s, unieke metadata, interne links, schema, sitemap en robots');
