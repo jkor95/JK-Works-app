@@ -196,7 +196,7 @@ const App = (() => {
         if(ended&&!has('after'))add({key:`photo:after:${j.id}`,type:'photo',phase:'after',category:'Foto’s',icon:'✅',title:'Foto na de klus maken',detail:`${j.clientName||j.title||'Klus'} · ${nlDate(j.date)}`});
       }
       const quotes=jobDocs.filter(d=>docFolder(d)==='offerte'),invoices=jobDocs.filter(d=>docFolder(d)==='factuur');
-      if(prefs.quoteCreate&&j.quoteNeeded&&!quotes.length&&!ended)add({key:`quoteCreate:${j.id}`,type:'quoteCreate',category:'Offerte',icon:'📄',title:'Offerte opmaken',detail:`${j.clientName||j.title||'Klus'}${j.date?' · '+nlDate(j.date):''}`});
+      if(prefs.quoteCreate&&j.quoteNeeded&&!quotes.length)add({key:`quoteCreate:${j.id}`,type:'quoteCreate',category:'Offerte',icon:'📄',title:'Offerte opmaken',detail:`${j.clientName||j.title||'Klus'}${j.date?' · '+nlDate(j.date):''}`});
       if(prefs.quoteSend)for(const d of quotes.filter(d=>!d.meta?.sent))add({key:`quoteSend:${d.id}`,type:'quoteSend',docId:d.id,category:'Offerte',icon:'📤',title:'Offerte versturen',detail:`${d.meta?.number||d.filename||j.clientName||j.title}`});
       if(jobPaymentType(j)==='invoice'&&ended){
         if(prefs.invoiceCreate&&!invoices.length)add({key:`invoiceCreate:${j.id}`,type:'invoiceCreate',category:'Factuur',icon:'🧾',title:'Factuur opmaken',detail:`${j.clientName||j.title||'Klus'} · ${nlDate(j.date)}`});
