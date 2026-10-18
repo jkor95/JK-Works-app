@@ -1,3 +1,10 @@
+## v71.8.7 — Instagram bij Contact
+- Instagram toegevoegd aan de contactknoppen op de openbare homepage met herkenbaar icoon en de zichtbare gebruikersnaam @jkworksdordrecht (geen lange URL).
+- De HTTPS-profielkoppeling maakt gebruik van de normale app-/webkoppeling van het toestel: als Instagram app-links ondersteunt en dat toestel ze toelaat, opent de app; anders de website.
+- Instagram-profiel is ook gekoppeld in LocalBusiness structured data via sameAs.
+- Geen wijzigingen aan bedrijfsapp, Supabase, aanvraagverwerking, betalingen, publieke website-editor of andere pagina's.
+- Regressietest voor contactknop, label, pictogram, HTTPS-doel en JSON-LD.
+
 ## v71.8.6 — diensten met links eerst en KOR in footer
 - Dienstkaarten op de homepage gesorteerd: Catering & horeca, Kleine klussen, Meubels & montage, Verbouwing & demontage, Extra ondersteuning, Andere praktische hulp.
 - De vier kaarten met een detailpagina staan bovenaan, de twee zonder link onderaan. Bestaande teksten, links en website-editor zijn ongewijzigd.
