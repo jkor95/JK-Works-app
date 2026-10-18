@@ -99,7 +99,11 @@ const DURATION_MS:Record<string,number>={'1h':3600000,'12h':43200000,'7d':604800
 const allowedKey=/^(?:hours|photo:before|photo:during|photo:after|quoteCreate|quoteSend|invoiceCreate|invoiceSend|paymentReminder):[a-zA-Z0-9_-]{1,110}$/;
 function dueAt(duration:string){
  const date=new Date();
- if(duration==='1m'){date.setUTCMonth(date.getUTCMonth()+1);return date.toISOString();}
+ if(duration==='1m'){
+  const day=date.getUTCDate();date.setUTCDate(1);date.setUTCMonth(date.getUTCMonth()+1);
+  const last=new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,0)).getUTCDate();
+  date.setUTCDate(Math.min(day,last));return date.toISOString();
+ }
  const ms=DURATION_MS[duration];
  if(!ms)return null;
  return new Date(date.getTime()+ms).toISOString();
@@ -195,12 +199,8 @@ async function runActionChecks(){
    // Niet in de actieve lijst = inmiddels afgehandeld (mits cloud up-to-date).
    // Bij handmatig nog niet gesynchroniseerde wijzigingen blijft cloud leidend.
    const act=active.find(a=>a.key===sn.action_key);
-   if(!act){
-    // De actie bestaat niet meer in de laatst gesynchroniseerde data.
-    // Alleen afgehandelde taken niet opnieuw als push versturen.
-    await db.from('jk_push_action_snoozes').update({status:'sent',notified_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('user_id',userId).eq('action_key',sn.action_key).eq('status','pending');
-    continue;
-   }
+   // Een bewust uitgestelde actie kan nog uitsluitend lokaal staan doordat
+   // synchronisatie handmatig is; stuur daarom ook zonder cloudactie een reminder.
    const {data:claimed,error:claimError}=await db.from('jk_push_action_snoozes')
      .update({status:'sending',updated_at:new Date().toISOString()})
      .eq('user_id',userId).eq('action_key',sn.action_key).eq('status','pending')
