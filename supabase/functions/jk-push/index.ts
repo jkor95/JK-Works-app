@@ -81,7 +81,7 @@ function actionsFor(records:any[]):Action[]{
    if(started&&!has('during'))add('photo:during:'+j.id,'photos','Foto tijdens de klus: '+label);
    if(ended&&!has('after'))add('photo:after:'+j.id,'photos','Foto na de klus: '+label);
   }
-  if(j.quoteNeeded&&!quotes.length&&!ended)add('quoteCreate:'+j.id,'quoteCreate','Offerte opmaken: '+label);
+  if(j.quoteNeeded&&!quotes.length)add('quoteCreate:'+j.id,'quoteCreate','Offerte opmaken: '+label);
   for(const d of quotes)if(!d.meta?.sent)add('quoteSend:'+d.id,'quoteSend','Offerte versturen');
   if((j.paymentType||'invoice')!=='cash'&&ended){
    if(!invoices.length)add('invoiceCreate:'+j.id,'invoiceCreate','Factuur opmaken: '+label);
@@ -93,6 +93,61 @@ function actionsFor(records:any[]):Action[]{
   if(m.sent&&!m.paid&&deadline&&deadline<day)add('paymentReminder:'+d.id,'paymentReminder','Betaalherinnering nodig');
  }
  return out;
+}
+
+const DURATION_MS:Record<string,number>={'1h':3600000,'12h':43200000,'7d':604800000,'14d':1209600000};
+const allowedKey=/^(?:hours|photo:before|photo:during|photo:after|quoteCreate|quoteSend|invoiceCreate|invoiceSend|paymentReminder):[a-zA-Z0-9_-]{1,110}$/;
+function dueAt(duration:string){
+ const date=new Date();
+ if(duration==='1m'){
+  const day=date.getUTCDate();date.setUTCDate(1);date.setUTCMonth(date.getUTCMonth()+1);
+  const last=new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,0)).getUTCDate();
+  date.setUTCDate(Math.min(day,last));return date.toISOString();
+ }
+ const ms=DURATION_MS[duration];
+ if(!ms)return null;
+ return new Date(date.getTime()+ms).toISOString();
+}
+function reminderTitle(key:string){
+ const cat=key.split(':')[0];
+ const names:Record<string,string>={hours:'Uren invoeren of controleren',photo:'Foto bij klus maken',quoteCreate:'Offerte opmaken',quoteSend:'Offerte versturen',invoiceCreate:'Factuur opmaken',invoiceSend:'Factuur versturen',paymentReminder:'Betaalherinnering'};
+ return names[cat]||'Uitgestelde actie';
+}
+async function handleSnoozes(userId:string,body:any){
+ if(body.action==='snoozes'){
+  const {data,error}=await db.from('jk_push_action_snoozes').select('action_key,due_at,status').eq('user_id',userId).eq('status','pending').limit(500);
+  return error?json({error:'Herinneringen ophalen mislukt'},503):json({ok:true,items:data||[]});
+ }
+ const key=body.key;
+ if(typeof key!=='string'||!allowedKey.test(key))return json({error:'Ongeldige actie'},400);
+ if(body.action==='unsnooze'){
+  const {error}=await db.from('jk_push_action_snoozes').delete().eq('user_id',userId).eq('action_key',key);
+  return error?json({error:'Uitstel annuleren mislukt'},503):json({ok:true,key});
+ }
+ const due=dueAt(body.duration);
+ if(!due)return json({error:'Kies een geldige uitsteltijd'},400);
+ const {error}=await db.from('jk_push_action_snoozes').upsert({user_id:userId,action_key:key,due_at:due,status:'pending',updated_at:new Date().toISOString(),notified_at:null},{onConflict:'user_id,action_key'});
+ return error?json({error:'Herinnering plannen mislukt'},503):json({ok:true,key,dueAt:due});
+}
+
+async function notifyQuoteNeeded(userId:string,jobId:unknown){
+ if(typeof jobId!=='string'||!/^job_[a-zA-Z0-9_-]{1,100}$/.test(jobId))return json({error:'Ongeldige klus'},400);
+ const key='quoteCreate:'+jobId;
+ const {data:snooze,error:se}=await db.from('jk_push_action_snoozes').select('due_at,status').eq('user_id',userId).eq('action_key',key).maybeSingle();
+ if(se)return json({error:'Herinneringsstatus niet beschikbaar'},503);
+ if(snooze?.status==='pending'&&Date.parse(snooze.due_at)>Date.now())return json({ok:true,suppressed:true});
+ const {data:existing,error:xe}=await db.from('jk_push_action_state').select('active').eq('user_id',userId).eq('action_key',key).maybeSingle();
+ if(xe)return json({error:'Actiestatus niet beschikbaar'},503);
+ if(existing?.active===true)return json({ok:true,duplicate:true});
+ const {data:subs,error}=await db.from('jk_push_subscriptions').select('endpoint,subscription').eq('user_id',userId);
+ if(error)return json({error:'Pushapparaten niet beschikbaar'},503);
+ let sent=0;
+ for(const sub of subs||[]){
+  try{await webpush.sendNotification(sub.subscription,JSON.stringify({title:'Offerte nodig',body:'Maak een offerte voor de bijgewerkte klus.',tag:'jkworks-action-'+key}),{TTL:3600});sent++;}
+  catch(e:any){if([404,410].includes(e.statusCode))await db.from('jk_push_subscriptions').delete().eq('endpoint',sub.endpoint);}
+ }
+ if(sent)await db.from('jk_push_action_state').upsert({user_id:userId,action_key:key,active:true},{onConflict:'user_id,action_key'});
+ return json({ok:true,delivered:sent});
 }
 async function runActionChecks(){
  if(!pub||!priv)return json({error:'Pushsleutels ontbreken'},503);
@@ -107,11 +162,15 @@ async function runActionChecks(){
   if(re){console.error('Actiecontrole: gegevens niet beschikbaar');continue;}
   const active=actionsFor(records||[]),keys=new Set(active.map(a=>a.key));
   const {data:previous,error:pe}=await db.from('jk_push_action_state').select('action_key,active').eq('user_id',userId);
+  const {data:snoozes,error:snoozeError}=await db.from('jk_push_action_snoozes').select('action_key,due_at,status').eq('user_id',userId).eq('status','pending');
+  if(snoozeError){console.error('Uitgestelde acties niet beschikbaar');continue;}
+  const futureSnoozes=new Set((snoozes||[]).filter(s=>Date.parse(s.due_at)>Date.now()).map(s=>s.action_key));
   if(pe){console.error('Actiecontrole: status niet beschikbaar');continue;}
   const {data:initialized,error:ie}=await db.from('jk_push_user_state').select('user_id').eq('user_id',userId).maybeSingle();
   if(ie)continue;
   const seen=new Map((previous||[]).map(x=>[x.action_key,x.active]));
-  const newActions=initialized?active.filter(a=>seen.get(a.key)!==true):[];
+  const allSnoozed=new Set((snoozes||[]).map(s=>s.action_key));
+  const newActions=initialized?active.filter(a=>seen.get(a.key)!==true&&!allSnoozed.has(a.key)):[];
   // Schakel verdwenen acties uit zodat een later opnieuw ontstane actie opnieuw gemeld kan worden.
   const gone=(previous||[]).filter(x=>x.active&&!keys.has(x.action_key)).map(x=>x.action_key);
   if(gone.length){const {error:e}=await db.from('jk_push_action_state').update({active:false}).eq('user_id',userId).in('action_key',gone);if(e)continue;}
@@ -130,6 +189,38 @@ async function runActionChecks(){
     }catch(e:any){if([404,410].includes(e.statusCode))await db.from('jk_push_subscriptions').delete().eq('endpoint',sub.endpoint);else delivered=false;}}
    }
    if(delivered){const {error:e}=await db.from('jk_push_action_state').upsert({user_id:userId,action_key:a.key,active:true},{onConflict:'user_id,action_key'});if(e)console.error('Actiestatus opslaan mislukt');}
+  }
+  // Uitgestelde acties worden afzonderlijk gemeld, ook als de oorspronkelijke
+  // actie al eerder als actief was geregistreerd. Bij een gesloten app loopt
+  // deze controle op de server; een dubbele melding wordt op de iPhone
+  // via de vaste notification-tag samengevoegd.
+  for(const sn of snoozes||[]){
+   if(Date.parse(sn.due_at)>Date.now())continue;
+   // Niet in de actieve lijst = inmiddels afgehandeld (mits cloud up-to-date).
+   // Bij handmatig nog niet gesynchroniseerde wijzigingen blijft cloud leidend.
+   const act=active.find(a=>a.key===sn.action_key);
+   // Een bewust uitgestelde actie kan nog uitsluitend lokaal staan doordat
+   // synchronisatie handmatig is; stuur daarom ook zonder cloudactie een reminder.
+   const {data:claimed,error:claimError}=await db.from('jk_push_action_snoozes')
+     .update({status:'sending',updated_at:new Date().toISOString()})
+     .eq('user_id',userId).eq('action_key',sn.action_key).eq('status','pending')
+     .lte('due_at',new Date().toISOString()).select('action_key').maybeSingle();
+   if(claimError||!claimed)continue;
+   let delivered=0,transient=false;
+   for(const sub of userSubs){
+    try{
+     await webpush.sendNotification(sub.subscription,JSON.stringify({kind:'reminder',title:'Uitgestelde herinnering',body:act?.title||reminderTitle(sn.action_key),tag:'jkworks-reminder-'+sn.action_key}),{TTL:3600});
+     delivered++;sent++;
+    }catch(e:any){
+     if([404,410].includes(e.statusCode))await db.from('jk_push_subscriptions').delete().eq('endpoint',sub.endpoint);
+     else transient=true;
+    }
+   }
+   // Bij tijdelijke netwerkstoring opnieuw proberen op de volgende cron-run.
+   // Als minstens één apparaat is bereikt, voorkom dubbele herinneringen.
+   const status=delivered?'sent':transient?'pending':'failed';
+   await db.from('jk_push_action_snoozes').update({status,notified_at:delivered?new Date().toISOString():null,updated_at:new Date().toISOString()})
+     .eq('user_id',userId).eq('action_key',sn.action_key).eq('status','sending');
   }
   checked++;
  }
@@ -162,6 +253,8 @@ Deno.serve(async req=>{
  if(!bearer.startsWith('Bearer '))return json({error:'Niet ingelogd'},401);
  const {data:{user},error}=await db.auth.getUser(bearer.slice(7));
  if(error||!user)return json({error:'Ongeldige sessie'},401);
+ if(['snoozes','snooze','unsnooze'].includes(body?.action))return await handleSnoozes(user.id,body);
+ if(body?.action==='quote-needed')return await notifyQuoteNeeded(user.id,body.jobId);
  if(body?.action==='test')return await scheduleTest(user.id,body.requestId);
  if(body.action==='config')return json({publicKey:pub});
  if(body.action==='subscribe'){
