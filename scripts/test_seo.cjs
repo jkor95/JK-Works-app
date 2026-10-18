@@ -165,4 +165,21 @@ assert.match(editorAppHtml, /website-editor\.js\?v=71\.8\.8/);
 assert.match(home, /site-editor-public\.js\?v=71\.8\.8/);
 assert.match(editorWorker, /jkworks-website-editor-20261018-v7188/);
 
+
+// Alleen de geïnstalleerde webapp krijgt extra ruimte rond de iOS-statusbalk.
+const appStyles=read('app/styles.css');
+const mobileEditor=read('app/website-editor.js');
+const appHtml=read('app/index.html');
+const pwaWorker=read('app/service-worker.js');
+assert.match(mobileEditor, /matchMedia\?\.\('\(display-mode: standalone\)'\)/);
+assert.match(mobileEditor, /navigator\.standalone===true/);
+assert.match(mobileEditor, /we-pwa-safe-area/);
+assert.match(appStyles, /\.website-editor-overlay\.we-pwa-safe-area\s*\{/);
+assert.match(appStyles, /padding-top:env\(safe-area-inset-top,0px\)/);
+assert.match(appStyles, /\.we-v714\.we-pwa-safe-area \.we-shell\{height:100%;min-height:0\}/);
+assert.doesNotMatch(read('site.css'), /we-pwa-safe-area/);
+assert.match(appHtml, /styles\.css\?v=71\.8\.9/);
+assert.match(appHtml, /website-editor\.js\?v=71\.8\.9/);
+assert.match(pwaWorker, /jkworks-pwa-editor-safearea-v7189/);
+
 console.log('PASS: SEO-pagina\'s, unieke metadata, interne links, schema, sitemap en robots');
