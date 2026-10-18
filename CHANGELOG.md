@@ -1,3 +1,10 @@
+## v71.8.4 — kitwerk niet langer als dienst aangeboden
+- Kitwerk verwijderd uit homepage, meta-omschrijvingen, zoekmachinegegevens, dienstenkaarten en het opdrachtformulier. Andere losse klusvragen blijven mogelijk via de algemene aanvraag.
+- Dienstkaart 'Meubels & montage' en nieuwe openbare /montage/-pagina met montagehulp voor bedrijven en particulieren; de oude /montage-kitwerk/-pagina verwijst naar /montage/ en is niet indexeerbaar.
+- Interne links en sitemap verwijzen nu naar /montage/; bestaande bedrijfsapp, klantdata en aanvraagverwerking blijven ongewijzigd.
+- Website-editorcompatibiliteit voorkomt dat oude opgeslagen kitwerk-teksten terugkeren, terwijl andere handmatig bewerkte teksten behouden blijven.
+- Regressietests uitgebreid voor zichtbare inhoud, sitemap, canonicals, aanvraagcategorie en oude URL.
+
 ## v71.8.3 — teksten voor particulieren én bedrijven
 - Homepage, dienstenkaarten, aanvraagteksten en vier SEO-dienstenpagina's presenteren JK Works voor zowel particulieren als zakelijke opdrachtgevers.
 - SEO-omschrijvingen, sociale metadata en lokale bedrijfsomschrijving aangepast zonder wijzigingen aan domein of routes.
