@@ -1,3 +1,10 @@
+## v71.8.2 — lokale SEO JK Works (voorstel)
+- Vier zelfstandige, indexeerbare dienstenpagina's voor horeca/catering, kleine klussen, montage en kitwerk, en praktische ondersteuning bij verbouwen. Elke pagina heeft eigen titel, meta-omschrijving, canonical, sociale metadata, Service/BreadcrumbList-gegevens, originele beschrijving en interne navigatie.
+- Links vanuit de bestaande dienstkaarten, mobiele menu's en gerelateerde diensten, zonder wijzigingen aan de publieke aanvraaglogica, Supabase, bedrijfsapp of de bewerkbare homepage-inhoud.
+- Sitemap uitgebreid met de vier openbare URL's; app- en inlogroutes blijven uitgesloten van robots en sitemap.
+- Styling sluit aan op bestaande website. Validatie: bronstructuur, canonicals, robots- en sitemapdekking; GitHub PR- en GitGuardian-controles volgen.
+- Beperking: indexering en posities in Google worden niet gegarandeerd; publieke Pages-publicatie pas na succesvolle checks.
+
 ## v71.8.1 — handmatige testpush met serververtraging
 - Meer → Meldingen → Echte pushmeldingen krijgt ‘Test pushmelding versturen’. De bestaande gebruikerssessie vraagt uitsluitend een test naar de eigen geregistreerde apparaten aan.
 - Supabase plant de test circa 30 seconden later via EdgeRuntime.waitUntil; geen browsertimer, open app of actieve iPhone nodig na de bevestiging. Titel ‘JK Works – Testmelding’, bericht ‘Je pushmeldingen werken! ✅’.
