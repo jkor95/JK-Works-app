@@ -1,3 +1,9 @@
+## v71.8.6 — diensten met links eerst en KOR in footer
+- Dienstkaarten op de homepage gesorteerd: Catering & horeca, Kleine klussen, Meubels & montage, Verbouwing & demontage, Extra ondersteuning, Andere praktische hulp.
+- De vier kaarten met een detailpagina staan bovenaan, de twee zonder link onderaan. Bestaande teksten, links en website-editor zijn ongewijzigd.
+- Footer vermeldt dat JK Works deelneemt aan de kleineondernemersregeling (KOR), een btw-vrijstelling, en daarom geen btw in rekening brengt.
+- Regresstest toegevoegd voor kaartvolgorde, linkverdeling en KOR-footer. Geen wijzigingen aan Supabase, interne app of klantgegevens.
+
 ## v71.8.5 — minder herhaling op homepage
 - De doelgroep (bedrijven én particulieren) staat duidelijk in de hoofdtitel en wordt niet langer in vrijwel elke sectie herhaald.
 - Hero, dienstenintro, zes dienstkaarten, persoonlijke introductie, aanvraagblok en contactblok zijn compacter en elk inhoudelijk verschillend gemaakt.
