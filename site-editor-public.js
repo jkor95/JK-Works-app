@@ -26,5 +26,6 @@ if(editorMode){
  window.addEventListener('message',e=>{if(e.origin!==location.origin||e.source!==window.parent)return;if(e.data?.type==='jkworks-v71-preview')apply(e.data.content||{});if(e.data?.type==='jkworks-editor-clear')document.querySelectorAll('.jk-edit-selected').forEach(el=>el.classList.remove('jk-edit-selected'));});
 
 }
-load().finally(()=>{if(editorMode)window.parent.postMessage({type:'jkworks-editor-ready',defaults:Object.fromEntries(defaults)},location.origin)});
+if(editorMode)window.parent.postMessage({type:'jkworks-editor-ready',defaults:Object.fromEntries(defaults)},location.origin);
+else load();
 })();
