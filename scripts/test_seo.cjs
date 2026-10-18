@@ -103,4 +103,16 @@ assert.match(footerHtml, /kleineondernemersregeling \(KOR\)/);
 assert.match(footerHtml, /geen btw in rekening gebracht/);
 assert.equal((home.match(/kleineondernemersregeling \(KOR\)/g) || []).length, 1);
 
+
+// Instagram contactlink: zichtbare gebruikersnaam met icoon; app/web-overname via HTTPS.
+const contact = home.split('<section class="section" id="contact"')[1]?.split('</section>')[0] || '';
+assert.match(contact, /href="https:\/\/www\.instagram\.com\/jkworksdordrecht\/"/);
+assert.match(contact, /<span>@jkworksdordrecht<\/span>/);
+assert.match(contact, /<svg aria-hidden="true"/);
+assert.match(contact, /aria-label="Instagram-profiel van JK Works Dordrecht openen"/);
+assert.ok(!contact.includes('instagram://'), 'Geen app-only URL zonder webfallback');
+assert.ok(!contact.includes('target="_blank"'), 'Universele link gebruikt normale navigatie');
+const localBusiness = JSON.parse(home.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1] || '{}');
+assert.deepEqual(localBusiness.sameAs, ['https://www.instagram.com/jkworksdordrecht/']);
+
 console.log('PASS: SEO-pagina\'s, unieke metadata, interne links, schema, sitemap en robots');
