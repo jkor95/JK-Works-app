@@ -60,3 +60,35 @@ button,input,textarea,select{font:inherit}
 .managed-section-image{display:block;width:100%;max-height:360px;object-fit:cover;border-radius:18px;margin:0 0 22px}
 [data-section][hidden]{display:none!important}
 @media(max-width:680px){.managed-section-image{max-height:230px;border-radius:12px}}
+
+/* Publieke, indexeerbare dienstenpagina's. Bestaande website- en appstijl blijft intact. */
+.service-detail-link{display:inline-flex;margin-top:16px;color:var(--gold-dark);font-size:13px;font-weight:800;text-decoration:underline;text-underline-offset:3px}
+.service-detail-link:hover,.detail-inline-link:hover{color:var(--ink)}
+.detail-wrap{max-width:1120px;margin:0 auto;padding:0 22px 50px}
+.detail-breadcrumb{display:flex;align-items:center;gap:9px;padding-top:26px;font-size:12px;color:var(--muted)}
+.detail-breadcrumb a{text-decoration:underline;text-underline-offset:3px}
+.detail-hero{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(250px,.65fr);gap:35px;align-items:center;padding:65px 0}
+.detail-hero h1{font-size:clamp(38px,5vw,60px);line-height:1.04;letter-spacing:-.05em;margin:17px 0 20px;max-width:780px}
+.detail-lead{font-size:18px;color:var(--muted);max-width:750px}
+.detail-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
+.detail-aside{padding:30px;background:var(--ink);color:#fff;border-radius:28px;box-shadow:var(--shadow)}
+.detail-aside img{display:block;width:110px;height:110px;object-fit:contain;border-radius:18px;background:#fff;padding:5px;margin-bottom:24px}
+.detail-aside strong{display:block;font-size:22px;line-height:1.15}
+.detail-aside p{color:#d2d7da;margin-bottom:0}
+.detail-section{padding:34px 0 48px;border-top:1px solid var(--line)}
+.detail-section h2{font-size:clamp(25px,3vw,35px);line-height:1.1;letter-spacing:-.03em;margin:0 0 20px}
+.detail-section p{max-width:850px;color:var(--muted)}
+.detail-bullets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:0;list-style:none;margin:22px 0}
+.detail-bullets li{background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:18px 18px 18px 42px;position:relative;font-size:15px}
+.detail-bullets li:before{content:"✓";font-weight:900;color:var(--gold-dark);position:absolute;left:17px;top:16px}
+.detail-note{font-size:13px}
+.detail-soft{background:var(--gold-soft);border:1px solid var(--line);border-radius:23px;padding:32px;margin-bottom:44px}
+.detail-soft p{color:var(--ink-2)}
+.detail-inline-link{font-weight:850;text-decoration:underline;text-underline-offset:3px;color:var(--gold-dark)}
+.detail-related{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.detail-related a{display:block;padding:19px;background:var(--surface);border:1px solid var(--line);border-radius:17px}
+.detail-related a:hover{border-color:var(--gold)}
+.detail-related strong{display:block;margin-bottom:8px}
+.detail-related span{display:block;color:var(--muted);font-size:12px}
+@media(max-width:900px){.detail-hero{grid-template-columns:1fr;gap:18px}.detail-aside{max-width:540px}.detail-related{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.detail-wrap{padding:0 15px 35px}.detail-hero{padding:42px 0}.detail-hero h1{font-size:38px}.detail-bullets,.detail-related{grid-template-columns:1fr}.detail-actions .btn{width:100%}.detail-aside{padding:22px}.detail-soft{padding:21px}}
