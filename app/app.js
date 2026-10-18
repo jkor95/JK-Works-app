@@ -189,11 +189,11 @@ const App = (() => {
   function openActionSnooze(item){
     if(!item)return;
     modal(`${modalHead('Actie uitstellen')}<div class="card"><strong>${esc(item.title)}</strong><p class="muted small">De actie en de rode badge verdwijnen tijdelijk. Na de gekozen tijd komt de actie terug en verstuurt de server een nieuwe pushmelding naar je aangemelde apparaten.</p><div class="snooze-options">${SNOOZE_OPTIONS.map(([v,label])=>`<button type="button" class="secondary" data-snooze="${v}">${label}</button>`).join('')}</div><p class="muted small">Voor een push met gesloten app moet push zijn ingeschakeld op dit toestel. Herinneringen komen normaal binnen 5 minuten na de gekozen tijd; netwerk- en iOS-instellingen kunnen vertraging geven.</p></div>`);
-    $('[data-snooze]').forEach(button=>button.addEventListener('click',async()=>{
+    document.querySelectorAll('[data-snooze]').forEach(button=>button.addEventListener('click',async()=>{
       if(button.disabled)return;
-      $('[data-snooze]').forEach(b=>b.disabled=true);
+      document.querySelectorAll('[data-snooze]').forEach(b=>b.disabled=true);
       try{await snoozeActionItem(item,button.dataset.snooze);toast('Herinnering uitgesteld');await showActionCenter();}
-      catch(error){alert('Uitstellen mislukt: '+(error.message||error));$('[data-snooze]').forEach(b=>b.disabled=false);}
+      catch(error){alert('Uitstellen mislukt: '+(error.message||error));document.querySelectorAll('[data-snooze]').forEach(b=>b.disabled=false);}
     }));
   }
 
@@ -302,8 +302,8 @@ const App = (() => {
     const items=await refreshActionBadges(false)||[];
     modal(`${modalHead('Acties')}<div class="card"><div class="section-inline"><h3>Actie nodig</h3><span class="pill ${items.length?'warn':'success'}">${items.length}</span></div><p class="muted small">Deze lijst wordt lokaal berekend uit je klussen, uren, foto’s, offertes en facturen. Open een actie, kies <strong>Uitstellen</strong> voor een nieuwe herinnering of <strong>Niet nodig</strong> om hem te verwijderen.</p></div>${items.length?`<div class="action-list">${items.map((i,n)=>`<div class="action-row"><button class="action-open" type="button" data-action-index="${n}"><span class="action-emoji">${i.icon}</span><span class="action-main"><span class="action-category">${esc(i.category)}</span><strong>${esc(i.title)}</strong><small>${esc(i.detail||'')}</small></span><span class="action-chevron">›</span></button><button class="action-snooze" type="button" data-snooze-index="${n}" title="Deze actie uitstellen">⏰<span>Uitstellen</span></button><button class="action-dismiss" type="button" data-dismiss-index="${n}" title="Deze melding is niet nodig">✓<span>Niet nodig</span></button></div>`).join('')}</div>`:'<div class="successbox"><strong>Alles bijgewerkt</strong><br><span class="small">Er zijn nu geen openstaande acties.</span></div>'}<button class="secondary" id="actionSettings" style="width:100%;margin-top:12px">Meldingsinstellingen</button>`);
     $$('[data-action-index]').forEach(b=>b.addEventListener('click',()=>runActionItem(items[Number(b.dataset.actionIndex)])));
-    $('[data-snooze-index]').forEach(b=>b.addEventListener('click',()=>openActionSnooze(items[Number(b.dataset.snoozeIndex)])));
-    $('[data-dismiss-index]').forEach(b=>b.addEventListener('click',async()=>{const item=items[Number(b.dataset.dismissIndex)];await dismissActionItem(item);showActionCenter();}));
+    document.querySelectorAll('[data-snooze-index]').forEach(b=>b.addEventListener('click',()=>openActionSnooze(items[Number(b.dataset.snoozeIndex)])));
+    document.querySelectorAll('[data-dismiss-index]').forEach(b=>b.addEventListener('click',async()=>{const item=items[Number(b.dataset.dismissIndex)];await dismissActionItem(item);showActionCenter();}));
     $('#actionSettings').addEventListener('click',()=>showNotificationSettings());
   }
   async function requestNotificationAccess(){
