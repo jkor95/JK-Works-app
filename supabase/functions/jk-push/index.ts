@@ -206,18 +206,20 @@ async function runActionChecks(){
      .eq('user_id',userId).eq('action_key',sn.action_key).eq('status','pending')
      .lte('due_at',new Date().toISOString()).select('action_key').maybeSingle();
    if(claimError||!claimed)continue;
-   let delivered=0;
+   let delivered=0,transient=false;
    for(const sub of userSubs){
     try{
      await webpush.sendNotification(sub.subscription,JSON.stringify({kind:'reminder',title:'Uitgestelde herinnering',body:act?.title||reminderTitle(sn.action_key),tag:'jkworks-reminder-'+sn.action_key}),{TTL:3600});
      delivered++;sent++;
     }catch(e:any){
      if([404,410].includes(e.statusCode))await db.from('jk_push_subscriptions').delete().eq('endpoint',sub.endpoint);
+     else transient=true;
     }
    }
-   // Herinnering maximaal eenmaal versturen; bij ontbrekend actief abonnement
-   // toont de lokale actie-badge de taak alsnog na de vervaltijd.
-   await db.from('jk_push_action_snoozes').update({status:delivered?'sent':'failed',notified_at:new Date().toISOString(),updated_at:new Date().toISOString()})
+   // Bij tijdelijke netwerkstoring opnieuw proberen op de volgende cron-run.
+   // Als minstens één apparaat is bereikt, voorkom dubbele herinneringen.
+   const status=delivered?'sent':transient?'pending':'failed';
+   await db.from('jk_push_action_snoozes').update({status,notified_at:delivered?new Date().toISOString():null,updated_at:new Date().toISOString()})
      .eq('user_id',userId).eq('action_key',sn.action_key).eq('status','sending');
   }
   checked++;
