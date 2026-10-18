@@ -1,3 +1,11 @@
+## v71.8.8 — website-editor toont voortaan actuele homepage-teksten
+- De ingelogde website-editor haalt voortaan standaardteksten rechtstreeks uit de huidige HTML van de homepage, niet uit oude teksten in de database.
+- Oude opgeslagen standaardteksten worden in de editor genegeerd (zoals vroegere koppen en het verwijderde kitwerk); eigen tekstwijzigingen blijven behouden.
+- Alleen eigen tekstafwijkingen worden gepubliceerd. Een niet-aangepaste tekst blijft gekoppeld aan de website-standaard, zodat latere websitewijzigingen automatisch in de editor te zien zijn.
+- De iframe-preview laadt geen oude cloudinhoud over het voorbeeld heen; daardoor blijven preview en invulvelden gelijk.
+- Versienummers voor de editor en de preview vernieuwd en PWA-cache bijgewerkt. Extra regressietests toegevoegd.
+- Geen wijziging aan productie-Supabase, bestaande klantgegevens, website-aanvragen, autorisaties of betaalverwerking.
+
 ## v71.8.7 — Instagram bij Contact
 - Instagram toegevoegd aan de contactknoppen op de openbare homepage met herkenbaar icoon en de zichtbare gebruikersnaam @jkworksdordrecht (geen lange URL).
 - De HTTPS-profielkoppeling maakt gebruik van de normale app-/webkoppeling van het toestel: als Instagram app-links ondersteunt en dat toestel ze toelaat, opent de app; anders de website.
