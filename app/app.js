@@ -1234,8 +1234,8 @@ const App = (() => {
   }
   function businessDescriptionForJob(job,kind,documents=[],checklists=[]){
     if(!job)return 'Werkzaamheden';
-    const ctx=businessJobContext(job,checklists),date=job.date?nlDate(job.date):'',time=jobTimeRange(job);
-    if(/catering|horeca/.test(ctx))return ['Cateringwerkzaamheden',date,time].filter(Boolean).join(' - ');
+    const ctx=businessJobContext(job,checklists);
+    if(/catering|horeca/.test(ctx))return 'Cateringwerkzaamheden';
     if(/keuken/.test(ctx)){
       if(kind==='Factuur'){
         const quote=linkedQuoteNumber(job,documents);
@@ -1244,8 +1244,8 @@ const App = (() => {
       return 'Keuken plaatsen en afwerken';
     }
     const title=String(job.title||'').trim();
-    if(title&&!/^werkuren$/i.test(title))return [title,date].filter(Boolean).join(' - ');
-    return ['Werkzaamheden',date].filter(Boolean).join(' - ');
+    if(title&&!/^werkuren$/i.test(title))return title;
+    return 'Werkzaamheden';
   }
   // Factuurregels nemen alleen de bonomschrijving en het bedrag over, niet de bonfoto.
   function receiptInvoicePrice(e,kor){
