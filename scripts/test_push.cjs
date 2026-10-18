@@ -99,7 +99,7 @@ async function browserTests(browser,origin){
   await page.evaluate(()=>{
    window.fixtureToken='fixture-session';window.JKCloud={getAccessToken:async()=>window.fixtureToken};
    window.$=selector=>document.querySelector(selector);window.modal=html=>{$('#modalRoot').innerHTML=html;};window.modalHead=title=>'<h2>'+title+'</h2>';
-   window.getNotificationPrefs=async()=>({});window.getDismissedActions=async()=>({});window.notificationPermissionLabel=()=>['Test',''];window.esc=x=>x;
+   window.getNotificationPrefs=async()=>({});window.getDismissedActions=async()=>({});window.getActionSnoozes=async()=>({});window.notificationPermissionLabel=()=>['Test',''];window.esc=x=>x;
    window.requestNotificationAccess=()=>{};window.testSystemNotification=()=>{};window.refreshActionBadges=()=>{};
   });
   await page.addScriptTag({url:origin+'/app/push.js'});
