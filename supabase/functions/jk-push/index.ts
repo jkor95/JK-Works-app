@@ -126,6 +126,25 @@ async function handleSnoozes(userId:string,body:any){
  return error?json({error:'Herinnering plannen mislukt'},503):json({ok:true,key,dueAt:due});
 }
 
+async function notifyQuoteNeeded(userId:string,jobId:unknown){
+ if(typeof jobId!=='string'||!/^job_[a-zA-Z0-9_-]{1,100}$/.test(jobId))return json({error:'Ongeldige klus'},400);
+ const key='quoteCreate:'+jobId;
+ const {data:snooze,error:se}=await db.from('jk_push_action_snoozes').select('due_at,status').eq('user_id',userId).eq('action_key',key).maybeSingle();
+ if(se)return json({error:'Herinneringsstatus niet beschikbaar'},503);
+ if(snooze?.status==='pending'&&Date.parse(snooze.due_at)>Date.now())return json({ok:true,suppressed:true});
+ const {data:existing,error:xe}=await db.from('jk_push_action_state').select('active').eq('user_id',userId).eq('action_key',key).maybeSingle();
+ if(xe)return json({error:'Actiestatus niet beschikbaar'},503);
+ if(existing?.active===true)return json({ok:true,duplicate:true});
+ const {data:subs,error}=await db.from('jk_push_subscriptions').select('endpoint,subscription').eq('user_id',userId);
+ if(error)return json({error:'Pushapparaten niet beschikbaar'},503);
+ let sent=0;
+ for(const sub of subs||[]){
+  try{await webpush.sendNotification(sub.subscription,JSON.stringify({title:'Offerte nodig',body:'Maak een offerte voor de bijgewerkte klus.',tag:'jkworks-action-'+key}),{TTL:3600});sent++;}
+  catch(e:any){if([404,410].includes(e.statusCode))await db.from('jk_push_subscriptions').delete().eq('endpoint',sub.endpoint);}
+ }
+ if(sent)await db.from('jk_push_action_state').upsert({user_id:userId,action_key:key,active:true},{onConflict:'user_id,action_key'});
+ return json({ok:true,delivered:sent});
+}
 async function runActionChecks(){
  if(!pub||!priv)return json({error:'Pushsleutels ontbreken'},503);
  const {data:subs,error:se}=await db.from('jk_push_subscriptions').select('endpoint,user_id,subscription');
@@ -146,7 +165,8 @@ async function runActionChecks(){
   const {data:initialized,error:ie}=await db.from('jk_push_user_state').select('user_id').eq('user_id',userId).maybeSingle();
   if(ie)continue;
   const seen=new Map((previous||[]).map(x=>[x.action_key,x.active]));
-  const newActions=initialized?active.filter(a=>seen.get(a.key)!==true&&!futureSnoozes.has(a.key)):[];
+  const allSnoozed=new Set((snoozes||[]).map(s=>s.action_key));
+  const newActions=initialized?active.filter(a=>seen.get(a.key)!==true&&!allSnoozed.has(a.key)):[];
   // Schakel verdwenen acties uit zodat een later opnieuw ontstane actie opnieuw gemeld kan worden.
   const gone=(previous||[]).filter(x=>x.active&&!keys.has(x.action_key)).map(x=>x.action_key);
   if(gone.length){const {error:e}=await db.from('jk_push_action_state').update({active:false}).eq('user_id',userId).in('action_key',gone);if(e)continue;}
@@ -176,8 +196,10 @@ async function runActionChecks(){
    // Bij handmatig nog niet gesynchroniseerde wijzigingen blijft cloud leidend.
    const act=active.find(a=>a.key===sn.action_key);
    if(!act){
-    // Bewaar de herinnering wanneer de actie lokaal nog niet is gesynchroniseerd:
-    // voor de ingelogde gebruiker is het uitstel immers bewust aangevraagd.
+    // De actie bestaat niet meer in de laatst gesynchroniseerde data.
+    // Alleen afgehandelde taken niet opnieuw als push versturen.
+    await db.from('jk_push_action_snoozes').update({status:'sent',notified_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('user_id',userId).eq('action_key',sn.action_key).eq('status','pending');
+    continue;
    }
    const {data:claimed,error:claimError}=await db.from('jk_push_action_snoozes')
      .update({status:'sending',updated_at:new Date().toISOString()})
@@ -230,6 +252,7 @@ Deno.serve(async req=>{
  const {data:{user},error}=await db.auth.getUser(bearer.slice(7));
  if(error||!user)return json({error:'Ongeldige sessie'},401);
  if(['snoozes','snooze','unsnooze'].includes(body?.action))return await handleSnoozes(user.id,body);
+ if(body?.action==='quote-needed')return await notifyQuoteNeeded(user.id,body.jobId);
  if(body?.action==='test')return await scheduleTest(user.id,body.requestId);
  if(body.action==='config')return json({publicKey:pub});
  if(body.action==='subscribe'){
