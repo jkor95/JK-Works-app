@@ -71,4 +71,20 @@ assert.equal(compatCtx.window.JKCopyCompat.isLegacy('service4Title', 'Kit- & afw
 assert.equal(compatCtx.window.JKCopyCompat.isLegacy('service4Text', 'Plinten, naden en aansluitingen netjes afwerken in woningen, kantoren en andere werkruimtes, passend bij de opdracht en ondergrond.'), true);
 assert.equal(compatCtx.window.JKCopyCompat.isLegacy('service4Title', 'Mijn eigen monteertekst'), false);
 
+// Op de homepage één duidelijke doelgroepboodschap; overige secties hebben een eigen functie.
+const mainOnly = home.split('<main>')[1]?.split('</main>')[0] || '';
+assert.equal((mainOnly.match(/\bbedrijven\b/gi) || []).length, 1, 'Bedrijven niet op elke sectie herhalen');
+assert.equal((mainOnly.match(/\bparticulieren\b/gi) || []).length, 1, 'Particulieren niet op elke sectie herhalen');
+assert.match(mainOnly, /Waarmee kan ik helpen\?/);
+assert.match(mainOnly, /Wie zit er achter JK Works\?/);
+assert.match(mainOnly, /Liever direct contact\?/);
+assert.match(mainOnly, /Omschrijf je opdracht/);
+assert.equal(compatCtx.window.JKCopyCompat.isLegacy(
+  'servicesTitle', 'Voor bedrijven én particulieren'), true);
+assert.equal(compatCtx.window.JKCopyCompat.isLegacy(
+  'heroCopy', 'JK Works helpt bedrijven én particulieren in Dordrecht en omgeving. Van extra mankracht bij horeca, catering en evenementen tot meubelmontage, kleine klussen en praktische hulp in woningen en bedrijfsruimtes. Vooral beschikbaar in de avonduren, weekenden en schoolvakanties.'), true);
+assert.equal(compatCtx.window.JKCopyCompat.isLegacy(
+  'contactTitle', 'Zelf aangepaste contacttekst'), false);
+
+
 console.log('PASS: SEO-pagina\'s, unieke metadata, interne links, schema, sitemap en robots');
