@@ -1232,20 +1232,52 @@ const App = (() => {
     });
     return String(quotes[0]?.meta?.number||'').trim();
   }
-  function businessDescriptionForJob(job,kind,documents=[],checklists=[]){
+  const DEFAULT_WORK_CATEGORIES=[
+    {id:'kit',label:'Kitwerkzaamheden',keywords:'kitten, afkitten, kitwerk, siliconenkit, acrylaatkit, plinten'},
+    {id:'catering',label:'Cateringwerkzaamheden',keywords:'catering, buffet, bruiloft catering'},
+    {id:'horeca',label:'Horecawerkzaamheden',keywords:'horeca, achter de bar, barwerk, bediening, bartender, tappen, barmedewerker'},
+    {id:'montage',label:'Montagewerkzaamheden',keywords:'montage, monteren, keuken, ikea, kasten, meubelmontage'},
+    {id:'vloer',label:'Vloerwerkzaamheden',keywords:'laminaat, pvc vloer, vloer leggen, parket, plavuizen'},
+    {id:'elektra',label:'Elektrawerkzaamheden',keywords:'elektra, elektrisch, bekabeling, kabel trekken, stopcontact, verlichting'},
+    {id:'schilder',label:'Schilderwerkzaamheden',keywords:'schilderen, verven, schilderwerk, lakken'},
+    {id:'bestrating',label:'Bestratingswerkzaamheden',keywords:'bestraten, bestrating, tegels leggen, klinkers, terras aanleggen'},
+    {id:'tuin',label:'Tuinwerkzaamheden',keywords:'tuin, schutting, snoeien, tuinonderhoud'},
+    {id:'verhuis',label:'Verhuiswerkzaamheden',keywords:'verhuizen, verhuizing, sjouwen, inboedel'},
+    {id:'evenement',label:'Opbouw- en afbouwwerkzaamheden',keywords:'festival opbouwen, evenement opbouwen, afbouw, podiumbouw'}
+  ];
+  async function workCategories(){
+    const saved=await JKDB.get('settings','workCategories');
+    return Array.isArray(saved?.items)?saved.items:DEFAULT_WORK_CATEGORIES.map(x=>({...x}));
+  }
+  function workDescriptionForJob(job,categories,checklists=[]){
     if(!job)return 'Werkzaamheden';
-    const ctx=businessJobContext(job,checklists);
-    if(/catering|horeca/.test(ctx))return 'Cateringwerkzaamheden';
-    if(/keuken/.test(ctx)){
-      if(kind==='Factuur'){
-        const quote=linkedQuoteNumber(job,documents);
-        return `Keuken plaatsen en afwerken conform geaccepteerde offerte/opdracht${quote?' '+quote:''}`;
-      }
-      return 'Keuken plaatsen en afwerken';
+    const title=String(job.title||'').toLocaleLowerCase('nl-NL');
+    const context=businessJobContext(job,checklists);
+    for(const category of categories){
+      const terms=String(category.keywords||'').split(',').map(x=>x.trim().toLocaleLowerCase('nl-NL')).filter(Boolean);
+      if(terms.some(term=>title.includes(term)))return category.label;
     }
-    const title=String(job.title||'').trim();
-    if(title&&!/^werkuren$/i.test(title))return title;
-    return 'Werkzaamheden';
+    for(const category of categories){
+      const terms=String(category.keywords||'').split(',').map(x=>x.trim().toLocaleLowerCase('nl-NL')).filter(Boolean);
+      if(terms.some(term=>context.includes(term)))return category.label;
+    }
+    return String(job.title||'').trim()||'Werkzaamheden';
+  }
+  function businessDescriptionForJob(job,kind,documents=[],checklists=[],categories=DEFAULT_WORK_CATEGORIES){
+    return workDescriptionForJob(job,categories,checklists);
+  }
+  async function showWorkCategories(){
+    const categories=await workCategories();
+    const paint=()=>{
+      modal(`${modalHead('Werkzaamhedencategorieën')}<div class="card"><p class="muted small">De volgorde bepaalt welke categorie voorrang krijgt. Trefwoorden scheid je met komma's. De omschrijving wordt automatisch gebruikt bij nieuwe offertes en facturen en blijft daar handmatig aanpasbaar.</p><div class="list">${categories.map((cat,i)=>`<div class="card"><div class="field"><label>Omschrijving</label><input data-category-label="${i}" value="${esc(cat.label)}"></div><div class="field"><label>Trefwoorden (komma-gescheiden)</label><textarea data-category-keywords="${i}" rows="2">${esc(cat.keywords)}</textarea></div><div class="button-row"><button type="button" class="secondary" data-category-up="${i}" ${i===0?'disabled':''}>↑</button><button type="button" class="secondary" data-category-down="${i}" ${i===categories.length-1?'disabled':''}>↓</button><button type="button" class="danger-btn" data-category-delete="${i}">Verwijderen</button></div></div>`).join('')}</div><div class="button-row"><button type="button" class="secondary" id="categoryAdd">+ Categorie</button><button type="button" class="primary" id="categorySave">Opslaan</button></div></div>`);
+      const collect=()=>{categories.forEach((cat,i)=>{cat.label=document.querySelector(`[data-category-label="${i}"]`)?.value.trim()||'';cat.keywords=document.querySelector(`[data-category-keywords="${i}"]`)?.value.trim()||'';});};
+      $('#categoryAdd').addEventListener('click',()=>{collect();categories.push({id:JKDB.id('category'),label:'',keywords:''});paint();});
+      $$('[data-category-up]').forEach(b=>b.addEventListener('click',()=>{collect();const i=Number(b.dataset.categoryUp);[categories[i-1],categories[i]]=[categories[i],categories[i-1]];paint();}));
+      $$('[data-category-down]').forEach(b=>b.addEventListener('click',()=>{collect();const i=Number(b.dataset.categoryDown);[categories[i+1],categories[i]]=[categories[i],categories[i+1]];paint();}));
+      $$('[data-category-delete]').forEach(b=>b.addEventListener('click',()=>{collect();categories.splice(Number(b.dataset.categoryDelete),1);paint();}));
+      $('#categorySave').addEventListener('click',async()=>{collect();if(categories.some(x=>!x.label||!x.keywords)){alert('Vul bij iedere categorie een omschrijving en minimaal één trefwoord in.');return;}await JKDB.put('settings',{id:'workCategories',items:categories});closeModal();toast('Werkzaamhedencategorieën opgeslagen');});
+    };
+    paint();
   }
   // Factuurregels nemen alleen de bonomschrijving en het bedrag over, niet de bonfoto.
   function receiptInvoicePrice(e,kor){
@@ -1276,7 +1308,7 @@ const App = (() => {
     return result;
   }
   async function createBusinessDoc(kind,prefill={}){
-    const [clients,entries,company,jobs,checklists,documents,expenses]=await Promise.all([JKDB.all('clients'),JKDB.all('timeEntries'),JKDB.get('settings','company'),JKDB.all('jobs'),JKDB.all('checklists'),JKDB.all('documents'),JKDB.all('expenses')]);
+    const [clients,entries,company,jobs,checklists,documents,expenses,categories]=await Promise.all([JKDB.all('clients'),JKDB.all('timeEntries'),JKDB.get('settings','company'),JKDB.all('jobs'),JKDB.all('checklists'),JKDB.all('documents'),JKDB.all('expenses'),workCategories()]);
     const number=await nextDocNumber(kind),isInvoice=kind==='Factuur',docDate=today();
     const defaultKor=typeof prefill.korApplied==='boolean'?prefill.korApplied:!!(company?.kor&&(!company?.korSince||docDate>=company.korSince));
     const initialWorkDate=prefill.workDate||'';
@@ -1381,7 +1413,7 @@ const App = (() => {
       }
       previousInvoiceJobId=e.target.value;
       showInvoiceReceiptChoices();
-      if(!j)return;let c=j.clientId?clients.find(x=>x.id===j.clientId):null;if(!c)c={id:j.clientId||'',name:j.clientName||'',attention:j.attention||'',street:j.street||j.address||'',postal:j.postal||'',city:j.city||'',phone:j.phone||'',email:j.email||''};fillDocClient(c);if(j.date)$('[name=workDate]').value=isInvoice?nlDate(j.date):j.date;const description=businessDescriptionForJob(j,kind,documents,checklists);if(desc0&&(!desc0.value.trim()||desc0.dataset.autoDescription==='1'||/^Werkuren$/i.test(desc0.value.trim()))){desc0.value=description;desc0.dataset.autoDescription='1';}if(!isInvoice){const ev=new Event('change');$('[name=workDate]').dispatchEvent(ev);}});
+      if(!j)return;let c=j.clientId?clients.find(x=>x.id===j.clientId):null;if(!c)c={id:j.clientId||'',name:j.clientName||'',attention:j.attention||'',street:j.street||j.address||'',postal:j.postal||'',city:j.city||'',phone:j.phone||'',email:j.email||''};fillDocClient(c);if(j.date)$('[name=workDate]').value=isInvoice?nlDate(j.date):j.date;const description=businessDescriptionForJob(j,kind,documents,checklists,categories);if(desc0&&(!desc0.value.trim()||desc0.dataset.autoDescription==='1'||/^Werkuren$/i.test(desc0.value.trim()))){desc0.value=description;desc0.dataset.autoDescription='1';}if(!isInvoice){const ev=new Event('change');$('[name=workDate]').dispatchEvent(ev);}});
     if(prefill.clientId)$('#clientPick').dispatchEvent(new Event('change'));
     if(prefillJob){if(desc0&&!String(prefill.lines?.[0]?.description||'').trim())desc0.dataset.autoDescription='1';$('#jobPick').dispatchEvent(new Event('change'));}
     if(isInvoice){
@@ -1395,7 +1427,7 @@ const App = (() => {
       $('[name=docDate]').addEventListener('change',()=>{syncQuoteDeadline();if(docKor&&docKor.dataset.manual!=='1'){const d=$('[name=docDate]').value;docKor.checked=!!(company?.kor&&(!company?.korSince||d>=company.korSince));recalc();}});$('[name=workDate]').addEventListener('change',syncQuoteDeadline);$('[name=deadline]').addEventListener('input',e=>e.target.dataset.auto='0');syncQuoteDeadline();
     }
     $('#calendarBusinessJob')?.addEventListener('click',()=>{const j=jobs.find(x=>x.id===$('#jobPick').value);if(!j){alert('Selecteer eerst een klus.');return;}openGoogleCalendarForJob(j,{kind,number:document.querySelector('[name=number]')?.value||''});});
-    $('#hoursToLine')?.addEventListener('click',()=>{const ids=$$('[data-hour-entry]:checked').map(x=>x.dataset.hourEntry);if(!ids.length){alert('Selecteer eerst één of meer urenregistraties.');return}const jobId=$('#jobPick').value;let selected=entries.filter(e=>ids.includes(e.id));if(jobId){const matching=selected.filter(e=>!e.jobId||e.jobId===jobId);if(matching.length!==selected.length){alert('Selecteer alleen urenregistraties die bij de gekozen klus horen.');return;}selected=matching;}const minutes=selected.reduce((s,e)=>s+entryMinutes(e),0),hours=Math.round(minutes/60*100)/100,rate=num($('#hourRate').value);const idx=0,dates=[...new Set(selected.map(entryDate))].sort(),job=jobs.find(j=>j.id===jobId),description=businessDescriptionForJob(job,kind,documents,checklists);$(`[name=qty${idx}]`).value=String(hours).replace('.',',');const desc=$(`[name=desc${idx}]`);if(desc&&(!desc.value.trim()||desc.dataset.autoDescription==='1'||/^Werkuren$/i.test(desc.value.trim()))){desc.value=description;desc.dataset.autoDescription='1';}$(`[name=price${idx}]`).value=rate?String(rate).replace('.',','):'';if(!$('[name=workDate]').value&&dates.length)$('[name=workDate]').value=dates.length===1?nlDate(dates[0]):`${nlDate(dates[0])} t/m ${nlDate(dates.at(-1))}`;recalc();toast('Geregistreerde uren met passende omschrijving op regel 1 gezet');});
+    $('#hoursToLine')?.addEventListener('click',()=>{const ids=$$('[data-hour-entry]:checked').map(x=>x.dataset.hourEntry);if(!ids.length){alert('Selecteer eerst één of meer urenregistraties.');return}const jobId=$('#jobPick').value;let selected=entries.filter(e=>ids.includes(e.id));if(jobId){const matching=selected.filter(e=>!e.jobId||e.jobId===jobId);if(matching.length!==selected.length){alert('Selecteer alleen urenregistraties die bij de gekozen klus horen.');return;}selected=matching;}const minutes=selected.reduce((s,e)=>s+entryMinutes(e),0),hours=Math.round(minutes/60*100)/100,rate=num($('#hourRate').value);const idx=0,dates=[...new Set(selected.map(entryDate))].sort(),job=jobs.find(j=>j.id===jobId),description=businessDescriptionForJob(job,kind,documents,checklists,categories);$(`[name=qty${idx}]`).value=String(hours).replace('.',',');const desc=$(`[name=desc${idx}]`);if(desc&&(!desc.value.trim()||desc.dataset.autoDescription==='1'||/^Werkuren$/i.test(desc.value.trim()))){desc.value=description;desc.dataset.autoDescription='1';}$(`[name=price${idx}]`).value=rate?String(rate).replace('.',','):'';if(!$('[name=workDate]').value&&dates.length)$('[name=workDate]').value=dates.length===1?nlDate(dates[0]):`${nlDate(dates[0])} t/m ${nlDate(dates.at(-1))}`;recalc();toast('Geregistreerde uren met passende omschrijving op regel 1 gezet');});
     $('#businessDocForm').addEventListener('submit',async e=>{e.preventDefault();const selectedJob=jobs.find(x=>x.id===$('#jobPick').value);if(!selectedJob){alert('Selecteer eerst een klus.');return;}const f=new FormData(e.target),items=[];for(let i=0;i<4;i++){
         const receiptId=$(`[data-line="${i}"]`)?.dataset.expenseId||'';
         if(receiptId){
@@ -1570,8 +1602,8 @@ const App = (() => {
 
   async function renderMore(){
     title('Meer');const [clients,entries,company,backup,cloudStatus,requests]=await Promise.all([JKDB.all('clients'),JKDB.all('timeEntries'),JKDB.get('settings','company'),JKDB.get('settings','backup'),JKDB.get('settings','cloudStatus'),getWebsiteRequestsSafe()]);const cs=JKCloud.status(),openRequests=requests.filter(r=>r.status==='new'||r.status==='contact').length;
-    $('#view').innerHTML=`<div class="list"><div class="list-item clickable" id="cloudMenu"><div class="main"><div class="title">☁️ Synchronisatie</div><div class="sub">${cs.signedIn?(cs.email+' · '+(cloudStatus?.lastSync?'laatst '+fmtDateTime(cloudStatus.lastSync):'nog niet gesynchroniseerd')):'Niet ingelogd'}</div></div><span>›</span></div><div class="list-item clickable" id="notificationMenu"><div class="main"><div class="title">🔔 Meldingen</div><div class="sub">Acties, badges en meldingen per categorie</div></div><span>›</span></div><div class="list-item clickable" id="timeMenu"><div class="main"><div class="title">🕒 Urenregistratie</div><div class="sub">${entries.length} registraties · handmatig van-tot</div></div><span>›</span></div><div class="list-item clickable" id="timeStatsMenu"><div class="main"><div class="title">📊 Urenstatistieken</div><div class="sub">Grafieken per maand, kwartaal en kalenderjaar</div></div><span>›</span></div><div class="list-item clickable" id="clientMenu"><div class="main"><div class="title">👥 Klanten</div><div class="sub">${clients.length} klanten</div></div><span>›</span></div><div class="list-item clickable" id="companyMenu"><div class="main"><div class="title">🏢 Bedrijfsgegevens</div><div class="sub">${esc(company?.companyName||'JK Works Dordrecht')}</div></div><span>›</span></div><div class="list-item clickable" id="websiteRequestsMenu"><div class="main"><div class="title">📥 Website-aanvragen</div><div class="sub">${openRequests} open aanvraag${openRequests===1?'':'en'}</div></div><span>›</span></div><div class="list-item clickable" id="websiteMenu"><div class="main"><div class="title">🌐 Website beheren</div><div class="sub">Teksten van jkworks.nl aanpassen en direct publiceren</div></div><span>›</span></div><div class="list-item clickable" id="backupMenu"><div class="main"><div class="title">💾 Back-up en herstellen</div><div class="sub">${backup?.lastBackup?'Laatst '+fmtDateTime(backup.lastBackup):'Nog geen back-up'}</div></div><span>›</span></div></div>`;
-    $('#cloudMenu').addEventListener('click',showCloud);$('#notificationMenu').addEventListener('click',showNotificationSettings);$('#timeMenu').addEventListener('click',showTimeEntries);$('#timeStatsMenu').addEventListener('click',showTimeStats);$('#clientMenu').addEventListener('click',showClients);$('#companyMenu').addEventListener('click',showCompany);$('#websiteRequestsMenu').addEventListener('click',showWebsiteRequests);$('#websiteMenu').addEventListener('click',()=>window.JKWebsiteEditor.open());$('#backupMenu').addEventListener('click',showBackup);
+    $('#view').innerHTML=`<div class="list"><div class="list-item clickable" id="cloudMenu"><div class="main"><div class="title">☁️ Synchronisatie</div><div class="sub">${cs.signedIn?(cs.email+' · '+(cloudStatus?.lastSync?'laatst '+fmtDateTime(cloudStatus.lastSync):'nog niet gesynchroniseerd')):'Niet ingelogd'}</div></div><span>›</span></div><div class="list-item clickable" id="notificationMenu"><div class="main"><div class="title">🔔 Meldingen</div><div class="sub">Acties, badges en meldingen per categorie</div></div><span>›</span></div><div class="list-item clickable" id="timeMenu"><div class="main"><div class="title">🕒 Urenregistratie</div><div class="sub">${entries.length} registraties · handmatig van-tot</div></div><span>›</span></div><div class="list-item clickable" id="timeStatsMenu"><div class="main"><div class="title">📊 Urenstatistieken</div><div class="sub">Grafieken per maand, kwartaal en kalenderjaar</div></div><span>›</span></div><div class="list-item clickable" id="clientMenu"><div class="main"><div class="title">👥 Klanten</div><div class="sub">${clients.length} klanten</div></div><span>›</span></div><div class="list-item clickable" id="workCategoriesMenu"><div class="main"><div class="title">🧰 Werkzaamhedencategorieën</div><div class="sub">Automatische omschrijvingen en trefwoorden beheren</div></div><span>›</span></div><div class="list-item clickable" id="companyMenu"><div class="main"><div class="title">🏢 Bedrijfsgegevens</div><div class="sub">${esc(company?.companyName||'JK Works Dordrecht')}</div></div><span>›</span></div><div class="list-item clickable" id="websiteRequestsMenu"><div class="main"><div class="title">📥 Website-aanvragen</div><div class="sub">${openRequests} open aanvraag${openRequests===1?'':'en'}</div></div><span>›</span></div><div class="list-item clickable" id="websiteMenu"><div class="main"><div class="title">🌐 Website beheren</div><div class="sub">Teksten van jkworks.nl aanpassen en direct publiceren</div></div><span>›</span></div><div class="list-item clickable" id="backupMenu"><div class="main"><div class="title">💾 Back-up en herstellen</div><div class="sub">${backup?.lastBackup?'Laatst '+fmtDateTime(backup.lastBackup):'Nog geen back-up'}</div></div><span>›</span></div></div>`;
+    $('#cloudMenu').addEventListener('click',showCloud);$('#notificationMenu').addEventListener('click',showNotificationSettings);$('#timeMenu').addEventListener('click',showTimeEntries);$('#timeStatsMenu').addEventListener('click',showTimeStats);$('#clientMenu').addEventListener('click',showClients);$('#companyMenu').addEventListener('click',showCompany);$('#workCategoriesMenu').addEventListener('click',showWorkCategories);$('#websiteRequestsMenu').addEventListener('click',showWebsiteRequests);$('#websiteMenu').addEventListener('click',()=>window.JKWebsiteEditor.open());$('#backupMenu').addEventListener('click',showBackup);
   }
 
   function showCloud(){
