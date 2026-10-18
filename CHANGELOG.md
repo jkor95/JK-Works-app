@@ -1,3 +1,10 @@
+## v71.8.5 — minder herhaling op homepage
+- De doelgroep (bedrijven én particulieren) staat duidelijk in de hoofdtitel en wordt niet langer in vrijwel elke sectie herhaald.
+- Hero, dienstenintro, zes dienstkaarten, persoonlijke introductie, aanvraagblok en contactblok zijn compacter en elk inhoudelijk verschillend gemaakt.
+- Horeca, catering, montage en verbouwingshulp blijven herkenbaar en via eigen dienstenpagina's vindbaar; kitwerk keert niet terug in het aanbod.
+- Bestaande website-editor bewaart eigen teksten; eerdere standaardteksten worden herkend zodat de verkorte versie zichtbaar blijft.
+- Alle bestaande website- en appfuncties blijven ongewijzigd. Controle op herhaling toegevoegd aan SEO-regressietests.
+
 ## v71.8.4 — kitwerk niet langer als dienst aangeboden
 - Kitwerk verwijderd uit homepage, meta-omschrijvingen, zoekmachinegegevens, dienstenkaarten en het opdrachtformulier. Andere losse klusvragen blijven mogelijk via de algemene aanvraag.
 - Dienstkaart 'Meubels & montage' en nieuwe openbare /montage/-pagina met montagehulp voor bedrijven en particulieren; de oude /montage-kitwerk/-pagina verwijst naar /montage/ en is niet indexeerbaar.
