@@ -31,5 +31,9 @@ const JKPush=(()=>{
    if(data?.ok!==true||data.requestId!==requestId||!['scheduled','sending','completed'].includes(data.status)||!Number.isFinite(Date.parse(data.scheduledFor)))throw Error('De server heeft het inplannen niet bevestigd.');
    return data;
  }
- return {subscribe,unsubscribe,status,test};
+ async function snooze(key,duration){return api('snooze',undefined,{key,duration});}
+ async function unsnooze(key){return api('unsnooze',undefined,{key});}
+ async function snoozes(){return api('snoozes');}
+ async function quoteNeeded(jobId){return api('quote-needed',undefined,{jobId});}
+ return {subscribe,unsubscribe,status,test,snooze,unsnooze,snoozes,quoteNeeded};
 })();
