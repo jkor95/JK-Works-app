@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
-const routes = ['horeca-catering', 'kleine-klussen', 'montage-kitwerk', 'verbouwing-ondersteuning'];
+const routes = ['horeca-catering', 'kleine-klussen', 'montage', 'verbouwing-ondersteuning'];
 const home = read('index.html');
 const robots = read('robots.txt');
 const sitemap = read('sitemap.xml');
@@ -53,5 +53,22 @@ for (const route of routes) {
   assert.match(page, /bedrijven|bedrijfsruimte/);
   assert.match(page, /particulieren|particuliere/);
 }
+
+
+const legacyRoute = read('montage-kitwerk/index.html');
+assert.match(legacyRoute, /content="0;url=https:\/\/jkworks\.nl\/montage\//);
+assert.match(legacyRoute, /name="robots" content="noindex,follow"/);
+assert.ok(!sitemap.includes('montage-kitwerk/'));
+assert.ok(home.includes('href="/montage/"'));
+assert.doesNotMatch(home, /kitwerk|kitten|Kit-\s*&|kit- en/i);
+assert.ok(!home.includes('<option>Kit- / afwerkwerk</option>'));
+assert.ok(home.includes('<option>Meubelmontage</option>'));
+for (const route of routes) {
+  const page = read(route + '/index.html');
+  assert.doesNotMatch(page, /kitwerk|kitten|kit- en/i);
+}
+assert.equal(compatCtx.window.JKCopyCompat.isLegacy('service4Title', 'Kit- & afwerkwerk'), true);
+assert.equal(compatCtx.window.JKCopyCompat.isLegacy('service4Text', 'Plinten, naden en aansluitingen netjes afwerken in woningen, kantoren en andere werkruimtes, passend bij de opdracht en ondergrond.'), true);
+assert.equal(compatCtx.window.JKCopyCompat.isLegacy('service4Title', 'Mijn eigen monteertekst'), false);
 
 console.log('PASS: SEO-pagina\'s, unieke metadata, interne links, schema, sitemap en robots');
