@@ -115,4 +115,49 @@ assert.ok(!contact.includes('target="_blank"'), 'Universele link gebruikt normal
 const localBusiness = JSON.parse(home.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1] || '{}');
 assert.deepEqual(localBusiness.sameAs, ['https://www.instagram.com/jkworksdordrecht/']);
 
+
+// Website-editor gebruikt de actuele homepage als tekstbron; oude opgeslagen
+// standaardwaarden mogen geen vorige diensten of koppen terugbrengen.
+const previewSource = read('site-editor-public.js');
+const editorSource = read('app/website-editor.js');
+const editorAppHtml = read('app/index.html');
+const editorWorker = read('app/service-worker.js');
+const editorCtx = { window: {} };
+vm.runInNewContext(editorSource, editorCtx);
+const normalizeWebsiteContent = editorCtx.window.JKWebsiteEditor?.normalizeContent;
+assert.equal(typeof normalizeWebsiteContent, 'function');
+const htmlDefaults = {
+  heroTitle1: 'Praktische hulp voor bedrijven',
+  servicesTitle: 'Waarmee kan ik helpen?',
+  service4Title: 'Meubels & montage',
+  contactTitle: 'Liever direct contact?'
+};
+const stored = {
+  heroTitle1: 'Flexibele ondersteuning waar',
+  servicesTitle: 'Waarmee kan ik helpen?',
+  service4Title: 'Kit- & afwerkwerk',
+  contactTitle: 'Mijn eigen contacttekst',
+  sectionVisibility: { contact: false },
+  sectionOrder: ['hero', 'diensten', 'contact'],
+  siteImages: { hero: 'https://example.org/mijn-foto.jpg' }
+};
+const normalizedWebsite = normalizeWebsiteContent(stored, htmlDefaults,
+  (key, value) => compatCtx.window.JKCopyCompat.isLegacy(key, value));
+assert.equal(Object.hasOwn(normalizedWebsite, 'heroTitle1'), false);
+assert.equal(Object.hasOwn(normalizedWebsite, 'servicesTitle'), false);
+assert.equal(Object.hasOwn(normalizedWebsite, 'service4Title'), false);
+assert.equal(normalizedWebsite.contactTitle, 'Mijn eigen contacttekst');
+assert.equal(normalizedWebsite.sectionVisibility.contact, false);
+assert.equal(normalizedWebsite.sectionOrder[0], 'hero');
+assert.equal(normalizedWebsite.siteImages.hero, 'https://example.org/mijn-foto.jpg');
+assert.equal(stored.heroTitle1, 'Flexibele ondersteuning waar');
+assert.equal(Object.hasOwn(normalizeWebsiteContent(
+  { heroTitle1: htmlDefaults.heroTitle1 }, htmlDefaults, () => false), 'heroTitle1'), false);
+assert.match(previewSource, /defaults:Object\.fromEntries\(defaults\)/);
+assert.match(editorSource, /siteDefaults=msg\.defaults/);
+assert.match(editorSource, /const val=content\[sel\.key\]\?\?siteDefaults\[sel\.key\]/);
+assert.match(editorAppHtml, /website-editor\.js\?v=71\.8\.8/);
+assert.match(home, /site-editor-public\.js\?v=71\.8\.8/);
+assert.match(editorWorker, /jkworks-website-editor-20261018-v7188/);
+
 console.log('PASS: SEO-pagina\'s, unieke metadata, interne links, schema, sitemap en robots');
