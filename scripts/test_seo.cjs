@@ -154,6 +154,11 @@ assert.equal(stored.heroTitle1, 'Flexibele ondersteuning waar');
 assert.equal(Object.hasOwn(normalizeWebsiteContent(
   { heroTitle1: htmlDefaults.heroTitle1 }, htmlDefaults, () => false), 'heroTitle1'), false);
 assert.match(previewSource, /defaults:Object\.fromEntries\(defaults\)/);
+assert.match(previewSource, /if\(editorMode\)window\.parent\.postMessage/);
+assert.match(previewSource, /else load\(\)/);
+assert.match(read('site.js'), /if\(!\(new URLSearchParams\(location\.search\)\.has\('jkedit'\)/);
+assert.match(home, /site\.js\?v=71\.8\.8/);
+
 assert.match(editorSource, /siteDefaults=msg\.defaults/);
 assert.match(editorSource, /const val=content\[sel\.key\]\?\?siteDefaults\[sel\.key\]/);
 assert.match(editorAppHtml, /website-editor\.js\?v=71\.8\.8/);
