@@ -15,7 +15,7 @@
       if(error)throw error;
       const content=rows?.[0]?.data;
       if(!content||typeof content!=='object')return;
-      document.querySelectorAll('[data-site]').forEach(el=>{const key=el.dataset.site;if(Object.prototype.hasOwnProperty.call(content,key)&&String(content[key]).trim())el.textContent=content[key];});
+      document.querySelectorAll('[data-site]').forEach(el=>{const key=el.dataset.site;if(Object.prototype.hasOwnProperty.call(content,key)&&String(content[key]).trim()&&!window.JKCopyCompat?.isLegacy(key,content[key]))el.textContent=content[key];});
     }catch(e){console.debug('Openbare website gebruikt ingebouwde standaardtekst.',e);}
   }
 
