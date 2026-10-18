@@ -38,4 +38,20 @@ for (const route of routes) {
   assert.ok(html.includes('href="/"') && html.includes('href="/#contact"'));
 }
 assert.equal((sitemap.match(/<loc>/g) || []).length, 5, 'Alleen openbare pagina\'s in sitemap');
+
+// Klantgroepen: homepage en diensten expliciet voor particulieren en bedrijven.
+assert.match(home, /particulieren/);
+assert.match(home, /bedrijven/);
+assert.ok(home.includes('site-copy-compat.js'));
+const vm = require('node:vm');
+const compatCtx = { window: {} };
+vm.runInNewContext(read('site-copy-compat.js'), compatCtx);
+assert.equal(compatCtx.window.JKCopyCompat.isLegacy('heroTitle1', 'Flexibele ondersteuning waar'), true);
+assert.equal(compatCtx.window.JKCopyCompat.isLegacy('heroTitle1', 'Mijn eigen webeditortekst'), false);
+for (const route of routes) {
+  const page = read(route + '/index.html');
+  assert.match(page, /bedrijven|bedrijfsruimte/);
+  assert.match(page, /particulieren|particuliere/);
+}
+
 console.log('PASS: SEO-pagina\'s, unieke metadata, interne links, schema, sitemap en robots');

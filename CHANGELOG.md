@@ -1,3 +1,10 @@
+## v71.8.3 — teksten voor particulieren én bedrijven
+- Homepage, dienstenkaarten, aanvraagteksten en vier SEO-dienstenpagina's presenteren JK Works voor zowel particulieren als zakelijke opdrachtgevers.
+- SEO-omschrijvingen, sociale metadata en lokale bedrijfsomschrijving aangepast zonder wijzigingen aan domein of routes.
+- Verouderde standaardteksten uit de website-editor worden in de browser genegeerd zodat de nieuwe teksten zichtbaar zijn; eigen afwijkende teksten van de eigenaar blijven behouden.
+- Geen wijzigingen aan productie-Supabase, bedrijfsapp, inlogroutes, klantdata, aanvraagverwerking of betaalinstellingen.
+- Extra regressiecontrole voor beide klantgroepen en compatibiliteit met website-editor. Google-indexering kan opnieuw tijd kosten.
+
 ## v71.8.2 — lokale SEO JK Works (voorstel)
 - Vier zelfstandige, indexeerbare dienstenpagina's voor horeca/catering, kleine klussen, montage en kitwerk, en praktische ondersteuning bij verbouwen. Elke pagina heeft eigen titel, meta-omschrijving, canonical, sociale metadata, Service/BreadcrumbList-gegevens, originele beschrijving en interne navigatie.
 - Links vanuit de bestaande dienstkaarten, mobiele menu's en gerelateerde diensten, zonder wijzigingen aan de publieke aanvraaglogica, Supabase, bedrijfsapp of de bewerkbare homepage-inhoud.
