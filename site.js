@@ -81,7 +81,8 @@
   }
 
   document.querySelector('#publicRequestForm')?.addEventListener('submit',e=>{e.preventDefault();submitPublicRequest(e.currentTarget);});
-  loadPublishedWebsiteText();
+  // In de website-editor beheert de iframe zijn eigen preview; geen oude cloudtekst eroverheen laden.
+  if(!(new URLSearchParams(location.search).has('jkedit')&&window.parent!==window))loadPublishedWebsiteText();
 
   // Oude root-PWA opruimen. De bedrijfsapp heeft een eigen /app/-scope.
   if('serviceWorker' in navigator){
