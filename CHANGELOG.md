@@ -1,3 +1,10 @@
+## v71.8.9 — bedienbare bovenrand in iPhone-webapp
+- De schermvullende website-editor houdt voortaan alleen in de geïnstalleerde standalone webapp rekening met de veilige iOS-statusbalkruimte (ook bij dynamische inkepingen).
+- De bovenste editorbediening blijft hierdoor onder de klok/statusindicatoren bereikbaar. De openbare website en gewone Safari-weergave krijgen geen extra ruimte.
+- Script- en CSS-cacheversies en de service-worker-cache vernieuwd, zodat de geïnstalleerde app de aanpassing ophaalt.
+- Regressietests voor standalone-herkenning en safe-area-styling toegevoegd; geen wijzigingen aan Supabase, ingevoerde teksten, aanvragen of bedrijfsapp-functies.
+- Beperking: iOS-installatie en daadwerkelijke statusbalkhit-testing moeten na publicatie op een echte iPhone gecontroleerd worden.
+
 ## v71.8.8 — website-editor toont voortaan actuele homepage-teksten
 - De ingelogde website-editor haalt voortaan standaardteksten rechtstreeks uit de huidige HTML van de homepage, niet uit oude teksten in de database.
 - Oude opgeslagen standaardteksten worden in de editor genegeerd (zoals vroegere koppen en het verwijderde kitwerk); eigen tekstwijzigingen blijven behouden.
