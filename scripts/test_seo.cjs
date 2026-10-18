@@ -42,7 +42,7 @@ assert.equal((sitemap.match(/<loc>/g) || []).length, 5, 'Alleen openbare pagina\
 // Klantgroepen: homepage en diensten expliciet voor particulieren en bedrijven.
 assert.match(home, /particulieren/);
 assert.match(home, /bedrijven/);
-assert.match(home, /site-copy-compat\\.js/);
+assert.ok(home.includes('site-copy-compat.js'));
 const vm = require('node:vm');
 const compatCtx = { window: {} };
 vm.runInNewContext(read('site-copy-compat.js'), compatCtx);
