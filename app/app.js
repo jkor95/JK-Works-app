@@ -148,6 +148,55 @@ const App = (() => {
     const row=await JKDB.get('settings','dismissedActions');
     return row&&row.items&&typeof row.items==='object'?row.items:{};
   }
+
+  const SNOOZE_OPTIONS=[['1h','1 uur'],['12h','12 uur'],['7d','7 dagen'],['14d','14 dagen'],['1m','1 maand']];
+  async function getActionSnoozes(){
+    const cached=await JKDB.get('settings','actionSnoozeCache');
+    let items=cached?.items||{};
+    if(JKCloud.isSignedIn()&&navigator.onLine&&window.JKPush?.snoozes){
+      try{
+        const result=await JKPush.snoozes();
+        if(result?.ok===true&&Array.isArray(result.items)){
+          items=Object.fromEntries(result.items.map(x=>[x.action_key,x.due_at]));
+          await JKDB.putLocal('settings',{id:'actionSnoozeCache',items,updatedAt:new Date().toISOString()});
+        }
+      }catch(error){console.warn('Uitgestelde acties tijdelijk niet bijgewerkt',error);}
+    }
+    return items;
+  }
+  async function snoozeActionItem(item,duration){
+    if(!item?.key||!SNOOZE_OPTIONS.some(x=>x[0]===duration))return;
+    const response=await JKPush.snooze(item.key,duration);
+    if(response?.ok!==true||!Number.isFinite(Date.parse(response.dueAt)))throw Error('Herinnering is niet bevestigd door de server.');
+    const record=await JKDB.get('settings','actionSnoozeCache')||{id:'actionSnoozeCache',items:{}};
+    record.items={...(record.items||{}),[item.key]:response.dueAt};
+    await JKDB.putLocal('settings',record);
+    // Een nieuwe melding moet ook binnen dezelfde kalenderdag opnieuw kunnen verschijnen.
+    try{
+      const key='jkworks-notified-actions',saved=JSON.parse(localStorage.getItem(key)||'{}');
+      if(Array.isArray(saved.keys)){saved.keys=saved.keys.filter(x=>x!==item.key);localStorage.setItem(key,JSON.stringify(saved));}
+    }catch{}
+    await refreshActionBadges(false);
+  }
+  async function cancelSnooze(key){
+    const response=await JKPush.unsnooze(key);
+    if(response?.ok!==true)throw Error('Uitstel opheffen is niet bevestigd.');
+    const record=await JKDB.get('settings','actionSnoozeCache')||{id:'actionSnoozeCache',items:{}};
+    delete record.items[key];
+    await JKDB.putLocal('settings',record);
+    await refreshActionBadges(false);
+  }
+  function openActionSnooze(item){
+    if(!item)return;
+    modal(`${modalHead('Actie uitstellen')}<div class="card"><strong>${esc(item.title)}</strong><p class="muted small">De actie en de rode badge verdwijnen tijdelijk. Na de gekozen tijd komt de actie terug en verstuurt de server een nieuwe pushmelding naar je aangemelde apparaten.</p><div class="snooze-options">${SNOOZE_OPTIONS.map(([v,label])=>`<button type="button" class="secondary" data-snooze="${v}">${label}</button>`).join('')}</div><p class="muted small">Voor een push met gesloten app moet push zijn ingeschakeld op dit toestel. Herinneringen komen normaal binnen 5 minuten na de gekozen tijd; netwerk- en iOS-instellingen kunnen vertraging geven.</p></div>`);
+    $('[data-snooze]').forEach(button=>button.addEventListener('click',async()=>{
+      if(button.disabled)return;
+      $('[data-snooze]').forEach(b=>b.disabled=true);
+      try{await snoozeActionItem(item,button.dataset.snooze);toast('Herinnering uitgesteld');await showActionCenter();}
+      catch(error){alert('Uitstellen mislukt: '+(error.message||error));$('[data-snooze]').forEach(b=>b.disabled=false);}
+    }));
+  }
+
   async function dismissActionItem(item){
     if(!item?.key)return;
     const items=await getDismissedActions();
@@ -176,7 +225,7 @@ const App = (() => {
     return !!j?.date && j.date<today();
   }
   async function collectActionItems(){
-    const [prefs,jobs,entries,photos,docs,dismissed]=await Promise.all([getNotificationPrefs(),JKDB.all('jobs'),JKDB.all('timeEntries'),JKDB.all('jobPhotos'),JKDB.all('documents'),getDismissedActions()]);
+    const [prefs,jobs,entries,photos,docs,dismissed,snoozes]=await Promise.all([getNotificationPrefs(),JKDB.all('jobs'),JKDB.all('timeEntries'),JKDB.all('jobPhotos'),JKDB.all('documents'),getDismissedActions(),getActionSnoozes()]);
     const now=new Date(),todayIso=today(),items=[];
     const docsByJob=new Map();
     for(const d of docs){const jid=d?.meta?.jobId;if(!jid)continue;if(!docsByJob.has(jid))docsByJob.set(jid,[]);docsByJob.get(jid).push(d);}
@@ -211,7 +260,7 @@ const App = (() => {
         }
       }
     }
-    return items.filter(i=>!dismissed[i.key]);
+    return items.filter(i=>!dismissed[i.key] && !(Number.isFinite(Date.parse(snoozes[i.key]))&&Date.parse(snoozes[i.key])>Date.now()));
   }
   async function updateAppBadge(count,prefs){
     if(!('setAppBadge' in navigator))return;
@@ -251,9 +300,10 @@ const App = (() => {
   }
   async function showActionCenter(){
     const items=await refreshActionBadges(false)||[];
-    modal(`${modalHead('Acties')}<div class="card"><div class="section-inline"><h3>Actie nodig</h3><span class="pill ${items.length?'warn':'success'}">${items.length}</span></div><p class="muted small">Deze lijst wordt lokaal berekend uit je klussen, uren, foto’s, offertes en facturen. Open een actie of kies <strong>Niet nodig</strong> om hem weg te strepen uit de melding en badge.</p></div>${items.length?`<div class="action-list">${items.map((i,n)=>`<div class="action-row"><button class="action-open" type="button" data-action-index="${n}"><span class="action-emoji">${i.icon}</span><span class="action-main"><span class="action-category">${esc(i.category)}</span><strong>${esc(i.title)}</strong><small>${esc(i.detail||'')}</small></span><span class="action-chevron">›</span></button><button class="action-dismiss" type="button" data-dismiss-index="${n}" title="Deze melding is niet nodig">✓<span>Niet nodig</span></button></div>`).join('')}</div>`:'<div class="successbox"><strong>Alles bijgewerkt</strong><br><span class="small">Er zijn nu geen openstaande acties.</span></div>'}<button class="secondary" id="actionSettings" style="width:100%;margin-top:12px">Meldingsinstellingen</button>`);
+    modal(`${modalHead('Acties')}<div class="card"><div class="section-inline"><h3>Actie nodig</h3><span class="pill ${items.length?'warn':'success'}">${items.length}</span></div><p class="muted small">Deze lijst wordt lokaal berekend uit je klussen, uren, foto’s, offertes en facturen. Open een actie, kies <strong>Uitstellen</strong> voor een nieuwe herinnering of <strong>Niet nodig</strong> om hem te verwijderen.</p></div>${items.length?`<div class="action-list">${items.map((i,n)=>`<div class="action-row"><button class="action-open" type="button" data-action-index="${n}"><span class="action-emoji">${i.icon}</span><span class="action-main"><span class="action-category">${esc(i.category)}</span><strong>${esc(i.title)}</strong><small>${esc(i.detail||'')}</small></span><span class="action-chevron">›</span></button><button class="action-snooze" type="button" data-snooze-index="${n}" title="Deze actie uitstellen">⏰<span>Uitstellen</span></button><button class="action-dismiss" type="button" data-dismiss-index="${n}" title="Deze melding is niet nodig">✓<span>Niet nodig</span></button></div>`).join('')}</div>`:'<div class="successbox"><strong>Alles bijgewerkt</strong><br><span class="small">Er zijn nu geen openstaande acties.</span></div>'}<button class="secondary" id="actionSettings" style="width:100%;margin-top:12px">Meldingsinstellingen</button>`);
     $$('[data-action-index]').forEach(b=>b.addEventListener('click',()=>runActionItem(items[Number(b.dataset.actionIndex)])));
-    $$('[data-dismiss-index]').forEach(b=>b.addEventListener('click',async()=>{const item=items[Number(b.dataset.dismissIndex)];await dismissActionItem(item);showActionCenter();}));
+    $('[data-snooze-index]').forEach(b=>b.addEventListener('click',()=>openActionSnooze(items[Number(b.dataset.snoozeIndex)])));
+    $('[data-dismiss-index]').forEach(b=>b.addEventListener('click',async()=>{const item=items[Number(b.dataset.dismissIndex)];await dismissActionItem(item);showActionCenter();}));
     $('#actionSettings').addEventListener('click',()=>showNotificationSettings());
   }
   async function requestNotificationAccess(){
@@ -264,9 +314,10 @@ const App = (() => {
   }
   function notificationPermissionLabel(){if(!('Notification' in window))return ['Niet ondersteund','blocked'];if(Notification.permission==='granted')return ['Toegestaan','on'];if(Notification.permission==='denied')return ['Geblokkeerd','blocked'];return ['Nog niet toegestaan',''];}
   async function showNotificationSettings(){
-    const [prefs,dismissed]=await Promise.all([getNotificationPrefs(),getDismissedActions()]),perm=notificationPermissionLabel(),dismissedCount=Object.keys(dismissed).length;
+    const [prefs,dismissed,snoozes]=await Promise.all([getNotificationPrefs(),getDismissedActions(),getActionSnoozes()]),perm=notificationPermissionLabel(),dismissedCount=Object.keys(dismissed).length,snoozedItems=Object.entries(snoozes).filter(([key,due])=>Number.isFinite(Date.parse(due))&&Date.parse(due)>Date.now());
     const row=(name,label,desc)=>`<label class="notification-pref"><span class="pref-copy"><strong>${label}</strong><small>${desc}</small></span><input type="checkbox" name="${name}" ${prefs[name]?'checked':''}></label>`;
-    modal(`${modalHead('Meldingen')}<form id="notificationForm"><div class="card"><div class="section-inline"><h3>iPhone / browser</h3><span class="notification-status ${perm[1]}">${perm[0]}</span></div><p class="muted small">De rode app-badge werkt op ondersteunde geïnstalleerde web-apps. Systeemmeldingen kunnen op iPhone worden toegestaan als JK Works op het beginscherm staat.</p><div class="button-row"><button type="button" class="secondary" id="allowNotifications">Meldingen toestaan</button>${('Notification' in window&&Notification.permission==='granted')?'<button type="button" class="secondary" id="testNotification">Test melding</button>':''}</div>${row('badges','Badge op app-icoon','Toon het aantal openstaande acties op het JK Works-icoon.')}${('Notification' in window&&Notification.permission==='granted')?row('systemNotifications','Systeemmeldingen','Toon een melding wanneer tijdens gebruik van de app een nieuwe actie nodig wordt.'):''}</div><div class="card"><h3>Echte pushmeldingen</h3><p class="muted small">Ontvang nieuwe websiteaanvragen en meldingen uit de ingeschakelde categorieën op je iPhone, ook wanneer de app gesloten is. Actieherinneringen gebruiken de laatst gesynchroniseerde cloudgegevens.</p><div class="button-row"><button type="button" class="secondary" id="enableRealPush">Push inschakelen</button><button type="button" class="secondary" id="disableRealPush">Push uitschakelen</button><button type="button" class="secondary" id="testRealPush">Test pushmelding versturen</button></div><p class="muted small">De testmelding wordt na ongeveer 30 seconden naar je eigen geregistreerde apparaten verstuurd. Na bevestiging kun je de app sluiten en je iPhone vergrendelen.</p><p id="realPushStatus" class="muted small" role="status" aria-live="polite"></p></div><div class="card"><h3>Categorieën</h3>${row('hours','Uren invoeren / controleren','Na de geplande eindtijd van een klus.')}${row('photos','Foto’s maken','Bij verplichte voor-, tijdens- en na-foto’s.')}${row('quoteCreate','Offerte opmaken','Alleen als bij de klus “Offerte nodig” is aangevinkt.')}${row('quoteSend','Offerte versturen','Als een gekoppelde offerte nog niet als Verstuurd staat.')}${row('invoiceCreate','Factuur opmaken','Na een factuurklus als nog geen factuur is gemaakt.')}${row('invoiceSend','Factuur versturen','Als een gekoppelde factuur nog niet als Verstuurd staat.')}${row('paymentReminder','Betaalherinnering','Als een verstuurde factuur na de vervaldatum nog niet betaald is.')}</div>${dismissedCount?`<div class="card"><div class="section-inline"><h3>Weggeklikte meldingen</h3><span class="pill">${dismissedCount}</span></div><p class="muted small">Meldingen die je met ‘Niet nodig’ hebt weggeklikt blijven verborgen. Herstel ze hier als je ze opnieuw wilt laten verschijnen.</p><button type="button" class="secondary" id="restoreDismissed" style="width:100%">Alle weggeklikte meldingen herstellen</button></div>`:''}<button class="primary" style="width:100%">Instellingen opslaan</button></form>`);
+    modal(`${modalHead('Meldingen')}<form id="notificationForm"><div class="card"><div class="section-inline"><h3>iPhone / browser</h3><span class="notification-status ${perm[1]}">${perm[0]}</span></div><p class="muted small">De rode app-badge werkt op ondersteunde geïnstalleerde web-apps. Systeemmeldingen kunnen op iPhone worden toegestaan als JK Works op het beginscherm staat.</p><div class="button-row"><button type="button" class="secondary" id="allowNotifications">Meldingen toestaan</button>${('Notification' in window&&Notification.permission==='granted')?'<button type="button" class="secondary" id="testNotification">Test melding</button>':''}</div>${row('badges','Badge op app-icoon','Toon het aantal openstaande acties op het JK Works-icoon.')}${('Notification' in window&&Notification.permission==='granted')?row('systemNotifications','Systeemmeldingen','Toon een melding wanneer tijdens gebruik van de app een nieuwe actie nodig wordt.'):''}</div><div class="card"><h3>Echte pushmeldingen</h3><p class="muted small">Ontvang nieuwe websiteaanvragen en meldingen uit de ingeschakelde categorieën op je iPhone, ook wanneer de app gesloten is. Actieherinneringen gebruiken de laatst gesynchroniseerde cloudgegevens.</p><div class="button-row"><button type="button" class="secondary" id="enableRealPush">Push inschakelen</button><button type="button" class="secondary" id="disableRealPush">Push uitschakelen</button><button type="button" class="secondary" id="testRealPush">Test pushmelding versturen</button></div><p class="muted small">De testmelding wordt na ongeveer 30 seconden naar je eigen geregistreerde apparaten verstuurd. Na bevestiging kun je de app sluiten en je iPhone vergrendelen.</p><p id="realPushStatus" class="muted small" role="status" aria-live="polite"></p></div><div class="card"><h3>Categorieën</h3>${row('hours','Uren invoeren / controleren','Na de geplande eindtijd van een klus.')}${row('photos','Foto’s maken','Bij verplichte voor-, tijdens- en na-foto’s.')}${row('quoteCreate','Offerte opmaken','Alleen als bij de klus “Offerte nodig” is aangevinkt.')}${row('quoteSend','Offerte versturen','Als een gekoppelde offerte nog niet als Verstuurd staat.')}${row('invoiceCreate','Factuur opmaken','Na een factuurklus als nog geen factuur is gemaakt.')}${row('invoiceSend','Factuur versturen','Als een gekoppelde factuur nog niet als Verstuurd staat.')}${row('paymentReminder','Betaalherinnering','Als een verstuurde factuur na de vervaldatum nog niet betaald is.')}</div>${snoozedItems.length?`<div class="card"><h3>Uitgestelde acties (${snoozedItems.length})</h3><p class="muted small">Deze acties tellen voorlopig niet mee voor de rode badge.</p>${snoozedItems.map(([key,due],n)=>`<div class="action-row"><div class="action-open"><span class="action-main"><strong>${esc(key.split(':')[0])}</strong><small>Herinnering: ${new Date(due).toLocaleString('nl-NL')}</small></span></div><button type="button" class="action-snooze" data-unsnooze="${n}">↩<span>Herstellen</span></button></div>`).join('')}</div>`:''}${dismissedCount?`<div class="card"><div class="section-inline"><h3>Weggeklikte meldingen</h3><span class="pill">${dismissedCount}</span></div><p class="muted small">Meldingen die je met ‘Niet nodig’ hebt weggeklikt blijven verborgen. Herstel ze hier als je ze opnieuw wilt laten verschijnen.</p><button type="button" class="secondary" id="restoreDismissed" style="width:100%">Alle weggeklikte meldingen herstellen</button></div>`:''}<button class="primary" style="width:100%">Instellingen opslaan</button></form>`);
+    $('[data-unsnooze]').forEach(b=>b.addEventListener('click',async()=>{const key=snoozedItems[Number(b.dataset.unsnooze)]?.[0];if(!key)return;try{await cancelSnooze(key);showNotificationSettings();}catch(error){alert(error.message||error);}}));
     $('#enableRealPush')?.addEventListener('click',async()=>{const el=$('#realPushStatus');el.textContent='Aanmelden...';try{await JKPush.subscribe();el.textContent='Pushmeldingen zijn ingeschakeld op dit apparaat.';}catch(e){el.textContent='Inschakelen mislukt: '+(e.message||e);}});
     $('#disableRealPush')?.addEventListener('click',async()=>{const el=$('#realPushStatus');try{await JKPush.unsubscribe();el.textContent='Pushmeldingen zijn uitgeschakeld op dit apparaat.';}catch(e){el.textContent='Uitschakelen mislukt: '+(e.message||e);}});
     $('#testRealPush')?.addEventListener('click',async event=>{
@@ -769,7 +820,7 @@ const App = (() => {
       const ch=checks.find(c=>c.id===e.target.value),name=String(ch?.name||'').toLowerCase();
       $('#jobPhotoPolicy').value=!ch?'optional':name.includes('catering')||name.includes('horeca')?'none':'required';
     });
-    $('#jobForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);let clientId=f.get('clientId'),client=clients.find(c=>c.id===clientId);const values={name:String(f.get('clientName')||'').trim(),attention:f.get('attention')||'',street:f.get('street')||'',postal:f.get('postal')||'',city:f.get('city')||'',phone:f.get('phone')||'',email:f.get('email')||''};if(client){Object.assign(client,values);await JKDB.put('clients',client);}else if(values.name){client={id:JKDB.id('client'),...values,notes:''};clientId=client.id;await JKDB.put('clients',client);}const paymentWasReceived=j.paymentPaid===true;const oldSchedule=`${j.date||''}|${jobStartTime(j)}|${jobEndTime(j)}`;Object.assign(j,{title:f.get('title'),clientId:clientId||'',clientName:values.name,attention:values.attention,street:values.street,address:values.street,postal:values.postal,city:values.city,phone:values.phone,email:values.email,date:f.get('date'),startTime:f.get('startTime')||'',endTime:f.get('endTime')||'',status:f.get('status'),paymentType:f.get('paymentType')==='cash'?'cash':'invoice',hourlyRate:f.get('hourlyRate')||'',extraAmount:f.get('extraAmount')||'',paymentPaid:f.get('paymentPaid')==='on',quoteNeeded:f.get('quoteNeeded')==='on',checklistId:f.get('checklistId'),photoPolicy:f.get('photoPolicy')||'optional',notes:f.get('notes')});const newSchedule=`${j.date||''}|${jobStartTime(j)}|${jobEndTime(j)}`;if(oldSchedule!==newSchedule)j.completionPromptHandledAt=null;await JKDB.put('jobs',j);try{if(paymentWasReceived!==j.paymentPaid)await syncInvoicesFromJob(j.id,j.paymentPaid);}catch(err){console.error('Betaalstatus koppelen mislukt',err);alert('Klus opgeslagen, maar niet alle gekoppelde facturen zijn bijgewerkt: '+(err.message||err));return;}const autoEntry=await ensureJobTimeEntry(j);closeModal();toast(autoEntry?'Klus en urenregistratie opgeslagen':'Klus opgeslagen - vul start- en eindtijd in voor automatische uren');render();});
+    $('#jobForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);let clientId=f.get('clientId'),client=clients.find(c=>c.id===clientId);const values={name:String(f.get('clientName')||'').trim(),attention:f.get('attention')||'',street:f.get('street')||'',postal:f.get('postal')||'',city:f.get('city')||'',phone:f.get('phone')||'',email:f.get('email')||''};if(client){Object.assign(client,values);await JKDB.put('clients',client);}else if(values.name){client={id:JKDB.id('client'),...values,notes:''};clientId=client.id;await JKDB.put('clients',client);}const paymentWasReceived=j.paymentPaid===true,quoteWasNeeded=j.quoteNeeded===true;const oldSchedule=`${j.date||''}|${jobStartTime(j)}|${jobEndTime(j)}`;Object.assign(j,{title:f.get('title'),clientId:clientId||'',clientName:values.name,attention:values.attention,street:values.street,address:values.street,postal:values.postal,city:values.city,phone:values.phone,email:values.email,date:f.get('date'),startTime:f.get('startTime')||'',endTime:f.get('endTime')||'',status:f.get('status'),paymentType:f.get('paymentType')==='cash'?'cash':'invoice',hourlyRate:f.get('hourlyRate')||'',extraAmount:f.get('extraAmount')||'',paymentPaid:f.get('paymentPaid')==='on',quoteNeeded:f.get('quoteNeeded')==='on',checklistId:f.get('checklistId'),photoPolicy:f.get('photoPolicy')||'optional',notes:f.get('notes')});const newSchedule=`${j.date||''}|${jobStartTime(j)}|${jobEndTime(j)}`;if(oldSchedule!==newSchedule)j.completionPromptHandledAt=null;await JKDB.put('jobs',j);try{if(paymentWasReceived!==j.paymentPaid)await syncInvoicesFromJob(j.id,j.paymentPaid);}catch(err){console.error('Betaalstatus koppelen mislukt',err);alert('Klus opgeslagen, maar niet alle gekoppelde facturen zijn bijgewerkt: '+(err.message||err));return;}const autoEntry=await ensureJobTimeEntry(j);closeModal();toast(autoEntry?'Klus en urenregistratie opgeslagen':'Klus opgeslagen - vul start- en eindtijd in voor automatische uren');render();if(!quoteWasNeeded&&j.quoteNeeded){await refreshActionBadges(true);JKPush.quoteNeeded(j.id).catch(e=>console.warn('Offertepush niet verstuurd',e));}});
     $('#delJob')?.addEventListener('click',async()=>{if(confirm('Klus verwijderen?')){if(j.autoTimeEntryId)await JKDB.remove('timeEntries',j.autoTimeEntryId).catch(()=>{});for(const p of (await JKDB.all('jobPhotos')).filter(x=>x.jobId===j.id))await JKDB.remove('jobPhotos',p.id);await JKDB.remove('jobs',j.id);closeModal();render();}});
   }
   async function repeatJob(id){
