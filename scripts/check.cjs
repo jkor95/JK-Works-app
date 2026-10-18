@@ -39,6 +39,7 @@ async function files(dir) {
     assert.equal((await fs.readFile(file)).subarray(0, 5).toString(), '%PDF-', file);
   }
   console.log('PASS: JavaScript-syntax, domein, manifest, precache en PDF-sjablonen');
+  require('./test_seo.cjs');
   const deploymentGuards=spawnSync('python3',['-m','unittest','discover','-s','scripts','-p','test_deploy_push.py'],{cwd:root,encoding:'utf8'});
   assert.equal(deploymentGuards.status,0,deploymentGuards.stderr);
   console.log('PASS: veilige deployment, goedgekeurde SQL, afscherming en behoud bestaande functieconfiguratie (fictieve API)');
