@@ -1,3 +1,12 @@
+## v71.9.0 — alle actieherinneringen uitstellen en offerte-na-edit melden
+- Elke actie in Acties heeft nu een Uitstellen-knop met 1 uur, 12 uur, 7 dagen, 14 dagen en 1 kalendermaand.
+- Tijdens het uitstel verdwijnen actie en appicoon-badge; bij verlopen uitstel wordt de actie opnieuw zichtbaar. Onder Meldingsinstellingen kun je uitgestelde acties eerder herstellen.
+- Uitstel wordt centraal door de ingelogde Supabase Edge Function opgeslagen. De server controleert de bestaande geautoriseerde pushplanning nu elke 5 minuten en verstuurt de herhaal-push ook wanneer de PWA is gesloten (mits push op het toestel aanstaat en het toestel bereikbaar is).
+- Offerte nodig levert ook bij afgeronde klussen een actie op; later opnieuw aanvinken verwijdert oude afwijzingen en probeert direct een pushmelding naar je eigen apparaten te versturen.
+- Uitstel-API valideert actietype en gebruikersidentiteit; snoozegegevens in Supabase zijn met RLS afgesloten van publieke gebruikers en lopen uitsluitend via de beveiligde functie.
+- Regressietests voor alle uitsteltijden, badgeonderdrukking, iPhone-layout, push en offerteacties. Back-up/herstel, overige documenten en klantdata zijn niet veranderd.
+- Technische beperking: pushlevering hangt af van webpush-toestemming, browser/iOS en bereikbaarheid; serverplanning heeft maximaal vijf minuten wachttijd na afloop van het uitstel.
+
 ## v71.8.9 — bedienbare bovenrand in iPhone-webapp
 - De schermvullende website-editor houdt voortaan alleen in de geïnstalleerde standalone webapp rekening met de veilige iOS-statusbalkruimte (ook bij dynamische inkepingen).
 - De bovenste editorbediening blijft hierdoor onder de klok/statusindicatoren bereikbaar. De openbare website en gewone Safari-weergave krijgen geen extra ruimte.
