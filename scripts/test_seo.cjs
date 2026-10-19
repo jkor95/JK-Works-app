@@ -163,7 +163,7 @@ assert.match(editorSource, /siteDefaults=msg\.defaults/);
 assert.match(editorSource, /const val=content\[sel\.key\]\?\?siteDefaults\[sel\.key\]/);
 assert.match(editorAppHtml, /website-editor\.js\?v=71\.8\.9/);
 assert.match(home, /site-editor-public\.js\?v=71\.8\.8/);
-assert.match(editorWorker, /jkworks-action-snooze-v7190/);
+assert.match(editorWorker, /jkworks-action-labels-v7191/);
 
 
 // Alleen de geïnstalleerde webapp krijgt extra ruimte rond de iOS-statusbalk.
@@ -180,7 +180,7 @@ assert.match(appStyles, /\.we-v714\.we-pwa-safe-area \.we-shell\{height:100%;min
 assert.doesNotMatch(read('site.css'), /we-pwa-safe-area/);
 assert.match(appHtml, /styles\.css\?v=71\.9\.0/);
 assert.match(appHtml, /website-editor\.js\?v=71\.8\.9/);
-assert.match(pwaWorker, /jkworks-action-snooze-v7190/);
+assert.match(pwaWorker, /jkworks-action-labels-v7191/);
 
 
 // Actieuitstel en direct offerteverzoek, onafhankelijk van browser-cache.
@@ -189,6 +189,11 @@ const pushSource=read('app/push.js');
 const edgeSource=read('supabase/functions/jk-push/index.ts');
 assert.match(appSource,/SNOOZE_OPTIONS=\[\['1h','1 uur'\],\['12h','12 uur'\],\['7d','7 dagen'\],\['14d','14 dagen'\],\['1m','1 maand'\]\]/);
 assert.match(appSource,/data-snooze-index/);
+assert.match(appSource,/async function collectActionItems\(\{includeSnoozed=false,knownSnoozes=null\}=\{\}\)/);
+assert.match(appSource,/function snoozedActionDescription\(key\)/);
+assert.match(appSource,/const describeJob=job=>/);
+assert.match(appSource,/esc\(snoozedActionDescription\(key\)\.title\)/);
+assert.doesNotMatch(appSource,/esc\(key\.split\(':'\)\[0\]\)/);
 assert.match(appSource,/getActionSnoozes\(\)/);
 assert.match(appSource,/Date\.parse\(snoozes\[i\.key\]\)>Date\.now\(\)/);
 assert.match(appSource,/await JKDB\.putLocal\('settings',record\)/);
@@ -209,7 +214,7 @@ assert.match(edgeSource,/duration==='1m'/);
 assert.match(read('app/index.html'),/push\.js\?v=71\.9\.0/);
 assert.match(read('app/index.html'),/app\.js\?v=71\.9\.1/);
 assert.match(read('app/styles.css'),/\.action-snooze\{/);
-assert.match(read('app/service-worker.js'),/jkworks-action-snooze-v7190/);
+assert.match(read('app/service-worker.js'),/jkworks-action-labels-v7191/);
 assert.match(read('supabase/migrations/20261018_action_snoozes.sql'),/enable row level security/);
 
 console.log('PASS: SEO-pagina\'s, unieke metadata, interne links, schema, sitemap en robots');
