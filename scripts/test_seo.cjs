@@ -207,7 +207,7 @@ assert.match(edgeSource,/await notifyQuoteNeeded\(user\.id,body\.jobId\)/);
 assert.match(edgeSource,/if\(j\.quoteNeeded&&!quotes\.length\)add/);
 assert.match(edgeSource,/duration==='1m'/);
 assert.match(read('app/index.html'),/push\.js\?v=71\.9\.0/);
-assert.match(read('app/index.html'),/app\.js\?v=71\.9\.0/);
+assert.match(read('app/index.html'),/app\.js\?v=71\.9\.1/);
 assert.match(read('app/styles.css'),/\.action-snooze\{/);
 assert.match(read('app/service-worker.js'),/jkworks-action-snooze-v7190/);
 assert.match(read('supabase/migrations/20261018_action_snoozes.sql'),/enable row level security/);
