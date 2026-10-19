@@ -224,8 +224,8 @@ const App = (() => {
     const end=jobPlannedEnd(j);if(end)return end<=now;
     return !!j?.date && j.date<today();
   }
-  async function collectActionItems(){
-    const [prefs,jobs,entries,photos,docs,dismissed,snoozes]=await Promise.all([getNotificationPrefs(),JKDB.all('jobs'),JKDB.all('timeEntries'),JKDB.all('jobPhotos'),JKDB.all('documents'),getDismissedActions(),getActionSnoozes()]);
+  async function collectActionItems({includeSnoozed=false,knownSnoozes=null}={}){
+    const [prefs,jobs,entries,photos,docs,dismissed,snoozes]=await Promise.all([getNotificationPrefs(),JKDB.all('jobs'),JKDB.all('timeEntries'),JKDB.all('jobPhotos'),JKDB.all('documents'),getDismissedActions(),knownSnoozes||getActionSnoozes()]);
     const now=new Date(),todayIso=today(),items=[];
     const docsByJob=new Map();
     for(const d of docs){const jid=d?.meta?.jobId;if(!jid)continue;if(!docsByJob.has(jid))docsByJob.set(jid,[]);docsByJob.get(jid).push(d);}
@@ -260,7 +260,7 @@ const App = (() => {
         }
       }
     }
-    return items.filter(i=>!dismissed[i.key] && !(Number.isFinite(Date.parse(snoozes[i.key]))&&Date.parse(snoozes[i.key])>Date.now()));
+    return items.filter(i=>!dismissed[i.key] && (includeSnoozed || !(Number.isFinite(Date.parse(snoozes[i.key]))&&Date.parse(snoozes[i.key])>Date.now())));
   }
   async function updateAppBadge(count,prefs){
     if(!('setAppBadge' in navigator))return;
@@ -315,8 +315,41 @@ const App = (() => {
   function notificationPermissionLabel(){if(!('Notification' in window))return ['Niet ondersteund','blocked'];if(Notification.permission==='granted')return ['Toegestaan','on'];if(Notification.permission==='denied')return ['Geblokkeerd','blocked'];return ['Nog niet toegestaan',''];}
   async function showNotificationSettings(){
     const [prefs,dismissed,snoozes]=await Promise.all([getNotificationPrefs(),getDismissedActions(),getActionSnoozes()]),perm=notificationPermissionLabel(),dismissedCount=Object.keys(dismissed).length,snoozedItems=Object.entries(snoozes).filter(([key,due])=>Number.isFinite(Date.parse(due))&&Date.parse(due)>Date.now());
+    // Reconstructie uit de huidige klus- en documentgegevens, niet uit de technische actiecode.
+    // De badge blijft geschorst; alleen dit instellingenoverzicht mag die acties tonen.
+    const [sourceActions,jobs,documents]=await Promise.all([
+      collectActionItems({includeSnoozed:true,knownSnoozes:snoozes}),
+      JKDB.all('jobs'),
+      JKDB.all('documents')
+    ]);
+    const sourceByKey=new Map(sourceActions.map(a=>[a.key,a]));
+    const jobsById=new Map(jobs.map(j=>[j.id,j]));
+    const docsById=new Map(documents.map(d=>[d.id,d]));
+    const describeJob=job=>[job.title,job.clientName,job.date?nlDate(job.date):'']
+      .map(value=>String(value||'').trim()).filter((value,index,values)=>value&&values.indexOf(value)===index).join(' · ')||'Klus';
+    function snoozedActionDescription(key){
+      const active=sourceByKey.get(key);
+      if(active){
+        const job=jobsById.get(active.jobId);
+        return {title:active.title,detail:job?describeJob(job):active.detail||''};
+      }
+      const type=key.split(':')[0],phase=key.split(':')[1],ref=key.slice(type==='photo'?('photo:'+phase+':').length:(type+':').length);
+      const titles={
+        hours:'Uren invoeren of controleren',
+        photo:phase==='before'?'Foto vóór de klus maken':phase==='during'?'Foto tijdens de klus maken':'Foto na de klus maken',
+        quoteCreate:'Offerte opmaken',
+        quoteSend:'Offerte versturen',
+        invoiceCreate:'Factuur opmaken',
+        invoiceSend:'Factuur versturen',
+        paymentReminder:'Betaalherinnering nodig'
+      };
+      const job=jobsById.get(ref),doc=docsById.get(ref);
+      const related=job?describeJob(job)
+        :doc?(doc.meta?.number||doc.filename||'Document'):'De oorspronkelijke klus of het document is niet meer beschikbaar';
+      return {title:titles[type]||'Uitgestelde actie',detail:related};
+    }
     const row=(name,label,desc)=>`<label class="notification-pref"><span class="pref-copy"><strong>${label}</strong><small>${desc}</small></span><input type="checkbox" name="${name}" ${prefs[name]?'checked':''}></label>`;
-    modal(`${modalHead('Meldingen')}<form id="notificationForm"><div class="card"><div class="section-inline"><h3>iPhone / browser</h3><span class="notification-status ${perm[1]}">${perm[0]}</span></div><p class="muted small">De rode app-badge werkt op ondersteunde geïnstalleerde web-apps. Systeemmeldingen kunnen op iPhone worden toegestaan als JK Works op het beginscherm staat.</p><div class="button-row"><button type="button" class="secondary" id="allowNotifications">Meldingen toestaan</button>${('Notification' in window&&Notification.permission==='granted')?'<button type="button" class="secondary" id="testNotification">Test melding</button>':''}</div>${row('badges','Badge op app-icoon','Toon het aantal openstaande acties op het JK Works-icoon.')}${('Notification' in window&&Notification.permission==='granted')?row('systemNotifications','Systeemmeldingen','Toon een melding wanneer tijdens gebruik van de app een nieuwe actie nodig wordt.'):''}</div><div class="card"><h3>Echte pushmeldingen</h3><p class="muted small">Ontvang nieuwe websiteaanvragen en meldingen uit de ingeschakelde categorieën op je iPhone, ook wanneer de app gesloten is. Actieherinneringen gebruiken de laatst gesynchroniseerde cloudgegevens.</p><div class="button-row"><button type="button" class="secondary" id="enableRealPush">Push inschakelen</button><button type="button" class="secondary" id="disableRealPush">Push uitschakelen</button><button type="button" class="secondary" id="testRealPush">Test pushmelding versturen</button></div><p class="muted small">De testmelding wordt na ongeveer 30 seconden naar je eigen geregistreerde apparaten verstuurd. Na bevestiging kun je de app sluiten en je iPhone vergrendelen.</p><p id="realPushStatus" class="muted small" role="status" aria-live="polite"></p></div><div class="card"><h3>Categorieën</h3>${row('hours','Uren invoeren / controleren','Na de geplande eindtijd van een klus.')}${row('photos','Foto’s maken','Bij verplichte voor-, tijdens- en na-foto’s.')}${row('quoteCreate','Offerte opmaken','Alleen als bij de klus “Offerte nodig” is aangevinkt.')}${row('quoteSend','Offerte versturen','Als een gekoppelde offerte nog niet als Verstuurd staat.')}${row('invoiceCreate','Factuur opmaken','Na een factuurklus als nog geen factuur is gemaakt.')}${row('invoiceSend','Factuur versturen','Als een gekoppelde factuur nog niet als Verstuurd staat.')}${row('paymentReminder','Betaalherinnering','Als een verstuurde factuur na de vervaldatum nog niet betaald is.')}</div>${snoozedItems.length?`<div class="card"><h3>Uitgestelde acties (${snoozedItems.length})</h3><p class="muted small">Deze acties tellen voorlopig niet mee voor de rode badge.</p>${snoozedItems.map(([key,due],n)=>`<div class="action-row"><div class="action-open"><span class="action-main"><strong>${esc(key.split(':')[0])}</strong><small>Herinnering: ${new Date(due).toLocaleString('nl-NL')}</small></span></div><button type="button" class="action-snooze" data-unsnooze="${n}">↩<span>Herstellen</span></button></div>`).join('')}</div>`:''}${dismissedCount?`<div class="card"><div class="section-inline"><h3>Weggeklikte meldingen</h3><span class="pill">${dismissedCount}</span></div><p class="muted small">Meldingen die je met ‘Niet nodig’ hebt weggeklikt blijven verborgen. Herstel ze hier als je ze opnieuw wilt laten verschijnen.</p><button type="button" class="secondary" id="restoreDismissed" style="width:100%">Alle weggeklikte meldingen herstellen</button></div>`:''}<button class="primary" style="width:100%">Instellingen opslaan</button></form>`);
+    modal(`${modalHead('Meldingen')}<form id="notificationForm"><div class="card"><div class="section-inline"><h3>iPhone / browser</h3><span class="notification-status ${perm[1]}">${perm[0]}</span></div><p class="muted small">De rode app-badge werkt op ondersteunde geïnstalleerde web-apps. Systeemmeldingen kunnen op iPhone worden toegestaan als JK Works op het beginscherm staat.</p><div class="button-row"><button type="button" class="secondary" id="allowNotifications">Meldingen toestaan</button>${('Notification' in window&&Notification.permission==='granted')?'<button type="button" class="secondary" id="testNotification">Test melding</button>':''}</div>${row('badges','Badge op app-icoon','Toon het aantal openstaande acties op het JK Works-icoon.')}${('Notification' in window&&Notification.permission==='granted')?row('systemNotifications','Systeemmeldingen','Toon een melding wanneer tijdens gebruik van de app een nieuwe actie nodig wordt.'):''}</div><div class="card"><h3>Echte pushmeldingen</h3><p class="muted small">Ontvang nieuwe websiteaanvragen en meldingen uit de ingeschakelde categorieën op je iPhone, ook wanneer de app gesloten is. Actieherinneringen gebruiken de laatst gesynchroniseerde cloudgegevens.</p><div class="button-row"><button type="button" class="secondary" id="enableRealPush">Push inschakelen</button><button type="button" class="secondary" id="disableRealPush">Push uitschakelen</button><button type="button" class="secondary" id="testRealPush">Test pushmelding versturen</button></div><p class="muted small">De testmelding wordt na ongeveer 30 seconden naar je eigen geregistreerde apparaten verstuurd. Na bevestiging kun je de app sluiten en je iPhone vergrendelen.</p><p id="realPushStatus" class="muted small" role="status" aria-live="polite"></p></div><div class="card"><h3>Categorieën</h3>${row('hours','Uren invoeren / controleren','Na de geplande eindtijd van een klus.')}${row('photos','Foto’s maken','Bij verplichte voor-, tijdens- en na-foto’s.')}${row('quoteCreate','Offerte opmaken','Alleen als bij de klus “Offerte nodig” is aangevinkt.')}${row('quoteSend','Offerte versturen','Als een gekoppelde offerte nog niet als Verstuurd staat.')}${row('invoiceCreate','Factuur opmaken','Na een factuurklus als nog geen factuur is gemaakt.')}${row('invoiceSend','Factuur versturen','Als een gekoppelde factuur nog niet als Verstuurd staat.')}${row('paymentReminder','Betaalherinnering','Als een verstuurde factuur na de vervaldatum nog niet betaald is.')}</div>${snoozedItems.length?`<div class="card"><h3>Uitgestelde acties (${snoozedItems.length})</h3><p class="muted small">Deze acties tellen voorlopig niet mee voor de rode badge.</p>${snoozedItems.map(([key,due],n)=>`<div class="action-row"><div class="action-open"><span class="action-main"><strong>${esc(snoozedActionDescription(key).title)}</strong><small>${esc(snoozedActionDescription(key).detail)}</small><small>Herinnering: ${new Date(due).toLocaleString('nl-NL')}</small></span></div><button type="button" class="action-snooze" data-unsnooze="${n}">↩<span>Herstellen</span></button></div>`).join('')}</div>`:''}${dismissedCount?`<div class="card"><div class="section-inline"><h3>Weggeklikte meldingen</h3><span class="pill">${dismissedCount}</span></div><p class="muted small">Meldingen die je met ‘Niet nodig’ hebt weggeklikt blijven verborgen. Herstel ze hier als je ze opnieuw wilt laten verschijnen.</p><button type="button" class="secondary" id="restoreDismissed" style="width:100%">Alle weggeklikte meldingen herstellen</button></div>`:''}<button class="primary" style="width:100%">Instellingen opslaan</button></form>`);
     document.querySelectorAll('[data-unsnooze]').forEach(b=>b.addEventListener('click',async()=>{const key=snoozedItems[Number(b.dataset.unsnooze)]?.[0];if(!key)return;try{await cancelSnooze(key);showNotificationSettings();}catch(error){alert(error.message||error);}}));
     $('#enableRealPush')?.addEventListener('click',async()=>{const el=$('#realPushStatus');el.textContent='Aanmelden...';try{await JKPush.subscribe();el.textContent='Pushmeldingen zijn ingeschakeld op dit apparaat.';}catch(e){el.textContent='Inschakelen mislukt: '+(e.message||e);}});
     $('#disableRealPush')?.addEventListener('click',async()=>{const el=$('#realPushStatus');try{await JKPush.unsubscribe();el.textContent='Pushmeldingen zijn uitgeschakeld op dit apparaat.';}catch(e){el.textContent='Uitschakelen mislukt: '+(e.message||e);}});

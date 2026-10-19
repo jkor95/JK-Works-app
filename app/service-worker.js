@@ -1,4 +1,4 @@
-const CACHE='jkworks-action-snooze-v7190';
+const CACHE='jkworks-action-labels-v7191';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./push.js','./app.js','./backup.js','./website-editor.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',

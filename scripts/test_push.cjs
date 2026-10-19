@@ -99,7 +99,13 @@ async function browserTests(browser,origin){
   await page.evaluate(()=>{
    window.fixtureToken='fixture-session';window.JKCloud={getAccessToken:async()=>window.fixtureToken};
    window.$=selector=>document.querySelector(selector);window.modal=html=>{$('#modalRoot').innerHTML=html;};window.modalHead=title=>'<h2>'+title+'</h2>';
-   window.getNotificationPrefs=async()=>({});window.getDismissedActions=async()=>({});window.getActionSnoozes=async()=>({});window.notificationPermissionLabel=()=>['Test',''];window.esc=x=>x;
+   window.getNotificationPrefs=async()=>({});window.getDismissedActions=async()=>({});
+   const due=new Date(Date.now()+2*86400000).toISOString();
+   window.getActionSnoozes=async()=>({'quoteCreate:job-fixture':due,'invoiceSend:doc-fixture':due});
+   window.JKDB={all:async store=>store==='jobs'?[{id:'job-fixture',title:'Keuken monteren',clientName:'Voorbeeldbedrijf',date:'2026-10-18'}]:store==='documents'?[{id:'doc-fixture',meta:{number:'F2026-044'}}]:[]};
+   window.collectActionItems=async opts=>opts.includeSnoozed?[{key:'quoteCreate:job-fixture',type:'quoteCreate',jobId:'job-fixture',title:'Offerte opmaken',detail:'Voorbeeldbedrijf'}]:[];
+   window.nlDate=date=>date.split('-').reverse().join('-');
+   window.notificationPermissionLabel=()=>['Test',''];window.esc=x=>x;
    window.requestNotificationAccess=()=>{};window.testSystemNotification=()=>{};window.refreshActionBadges=()=>{};
   });
   await page.addScriptTag({url:origin+'/app/push.js'});
@@ -107,6 +113,16 @@ async function browserTests(browser,origin){
   const app=fs.readFileSync(path.join(root,'app/app.js'),'utf8'),start=app.indexOf('  async function showNotificationSettings(){'),end=app.indexOf('  async function ensureJobTimeEntry',start);
   assert.ok(start>=0&&end>start);
   await page.addScriptTag({content:app.slice(start,end)});await page.evaluate(()=>showNotificationSettings());
+  // Herinneringen tonen de actie, klus en klant en geen interne sleutel.
+  const snoozedRows=page.locator('[data-unsnooze]').locator('xpath=..');
+  assert.equal(await snoozedRows.count(),2);
+  const rowTexts=await snoozedRows.allTextContents();
+  assert.match(rowTexts[0],/Offerte opmaken/);
+  assert.match(rowTexts[0],/Keuken monteren/);
+  assert.match(rowTexts[0],/Voorbeeldbedrijf/);
+  assert.match(rowTexts[1],/Factuur versturen/);
+  assert.match(rowTexts[1],/F2026-044/);
+  assert.ok(rowTexts.every(t=>!t.includes('quoteCreate')&&!t.includes('invoiceSend')));
   assert.equal(await page.locator('#testRealPush').textContent(),'Test pushmelding versturen');
   await page.locator('#testRealPush').click();await page.waitForFunction(()=>document.querySelector('#testRealPush').disabled);
   while(!release)await new Promise(resolve=>setTimeout(resolve,10));
