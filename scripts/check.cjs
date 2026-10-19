@@ -146,6 +146,7 @@ async function files(dir) {
     assert.deepEqual(failures, [], 'Browser- of resourcefouten');
     await require('./test_manual_backup.cjs')(browser, origin);
     await require('./test_push.cjs').browserTests(browser, origin);
+    await require('./test_workdays.cjs')(browser, origin);
     console.log('Backend: uitsluitend fixtures; echte productie-Supabase en apparaatdeelkaart niet getest.');
   } finally {
     if (browser) await browser.close();

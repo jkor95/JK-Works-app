@@ -18,10 +18,6 @@ on:
         description: 'Exacte beoordeelde commit met geslaagde GitGuardian-controle'
         type: string
         required: true
-      approved_test_table:
-        description: 'Afzonderlijke eigenaarstoestemming voor alleen jk_push_test_requests is vastgelegd'
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -52,7 +48,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.repository == 'jkor95/JK-Works-app' &&
-      (github.ref == 'refs/heads/codex/test-push-v71-8-1' || github.ref == 'refs/heads/main') &&
+      (github.ref == 'refs/heads/codex/multiday-jobs' || github.ref == 'refs/heads/main') &&
       github.sha == inputs.expected_sha
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -90,14 +86,13 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           NODE_PATH: ${{ runner.temp }}/jk-deploy/node_modules
           DEPLOY_MODE: ${{ inputs.mode }}
-          APPROVED_TEST_TABLE: ${{ inputs.approved_test_table }}
         run: |
-          if [[ "$DEPLOY_MODE" == deploy && "$APPROVED_TEST_TABLE" == true ]]; then
-            python3 scripts/deploy_push.py --mode deploy --approved-test-table
+          if [[ "$DEPLOY_MODE" == deploy ]]; then
+            python3 scripts/deploy_push.py --mode deploy
           elif [[ "$DEPLOY_MODE" == inspect ]]; then
             python3 scripts/deploy_push.py --mode inspect
           else
-            echo 'Afzonderlijke toestemming voor de nieuwe tabel is vereist; geen deployment.'
+            echo 'Ongeldige deploymentmodus; geen wijzigingen.'
             exit 1
           fi
       - name: 'Backendcontrole geslaagd: jk-push versie ${{ steps.deploy.outputs.version }} (${{ steps.deploy.outputs.source_state }})'

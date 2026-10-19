@@ -72,6 +72,14 @@ class DeploymentGuards(unittest.TestCase):
         with patch.object(deploy.subprocess,'check_output',return_value=b'baseline fixture'),patch.object(deploy,'live_source',return_value=b'new unknown live code'),patch.object(deploy,'canonical_hash',side_effect=['different','baseline','proposed']):
             with self.assertRaises(RuntimeError):deploy.deploy(api,'deploy',True)
         self.assertEqual(api.calls,['/functions/jk-push'])
+    def test_current_release_cannot_create_missing_table(self):
+        class Api:
+            def json(self,path,body=None):
+                return {'id':'fixture','slug':'jk-push','name':'jk-push','status':'ACTIVE','version':1,'verify_jwt':False}
+        api=Api()
+        with patch.object(deploy.subprocess,'check_output',return_value=b'baseline fixture'),patch.object(deploy,'live_source',return_value=b'baseline fixture'),patch.object(deploy,'canonical_hash',side_effect=['baseline','baseline','proposed']),patch.object(deploy,'ensure_table',side_effect=RuntimeError('Fixture stop before deployment')) as table:
+            with self.assertRaises(RuntimeError):deploy.deploy(api,'deploy',True)
+            table.assert_called_once_with(api,False)
     def test_canonicaliser_receives_no_credentials(self):
         class Result:
             returncode=0

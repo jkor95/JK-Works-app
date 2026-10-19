@@ -242,3 +242,6 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 .snooze-options button{min-height:47px;font-weight:850}
 .snooze-options button:last-child:nth-child(odd){grid-column:1/-1}
 @media(max-width:390px){.action-snooze,.action-dismiss{min-width:60px;padding:7px 5px}.action-snooze span,.action-dismiss span{font-size:9px}.action-open{padding:10px 6px}}
+
+/* Compact day planning and actual hours; no horizontal scrolling on iPhone. */
+.workday-fields{grid-column:1/-1;min-width:0;width:100%}.workday-row{min-width:0;margin:0 0 12px;padding:12px;border:1px solid #ddd;border-radius:12px}.workday-row legend{font-weight:700}.workday-row input{width:100%;min-width:0}.workday-summary{padding:12px 0;border-bottom:1px solid #ddd;overflow-wrap:anywhere}.workday-summary>div{margin:6px 0}.workday-summary .button-row{flex-wrap:wrap}.workday-list{min-width:0}@media(max-width:480px){.workday-row .form-grid{grid-template-columns:1fr}.workday-summary .button-row button{flex:1 1 100%}}

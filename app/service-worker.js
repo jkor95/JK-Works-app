@@ -1,4 +1,4 @@
-const CACHE='jkworks-action-labels-v7191';
+const CACHE='jkworks-multiday-v71-10-0';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./push.js','./app.js','./backup.js','./website-editor.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',

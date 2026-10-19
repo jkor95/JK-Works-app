@@ -1,3 +1,14 @@
+## v71.10.0 — meerdaagse klussen en werkelijke totaaluren
+- Eén klus met meerdere zelfgekozen, niet-aaneengesloten werkdagen. Planning toevoegen, wijzigen en verwijderen; bestaande eendaagse klussen blijven leesbaar zonder migratie.
+- Werkdagen & uren toont planning en de bestaande urenregistratie naast elkaar: werkelijke begin-/eindtijd, pauze, notitie en netto uren. Beide schermen bewerken dezelfde records; stabiele dag-ID’s voorkomen dubbele nieuwe registraties. Verwijderen van planning wist geen werkelijke uren.
+- Planning maakt geen gewerkte uren meer aan en overschrijft handmatige uren niet. Eerder automatisch uit planning aangemaakte uren blijven bewaard en zichtbaar als ‘nog te bevestigen’; ze tellen pas mee na expliciet opslaan van de werkelijke uren.
+- Totaal geplande en werkelijke uren, arbeid tegen klustarief en extra bedrag/materiaal blijven apart zichtbaar. Gekoppelde bonnetjes blijven een apart inkoopoverzicht zodat materiaal niet dubbel wordt opgeteld.
+- Factuur krijgt standaard één samengevoegde regel met werkelijke netto uren en klustarief; ook bij omzetten van een offerte. Offertes gebruiken duidelijk benoemde geplande uren. Omschrijving, uren en tarief blijven aanpasbaar; werkzaamhedenherkenning, KOR en gewone btw blijven behouden.
+- Dashboard houdt rekening met iedere plandag; klussenoverzicht blijft één rij per klus. Google Agenda per werkdag en ICS voor alle werkdagen. Urenactie na iedere nog niet geregistreerde werkdag; definitieve afronding van moderne klussen uitsluitend via de handmatige status.
+- Bestaande jk-push-controle aangepast voor werkdagen; geen nieuwe tabellen, schema, toegangsrechten, secrets of Edge Functions. Handmatige deployment stopt bij afwijkende live bron en kan voor deze release geen ontbrekende tabel aanmaken. Bestaande automatische back-upplanning blijft ongemoeid.
+- Nieuwe fictieve browser-/IndexedDB-tests voor CRUD, vijf losse dagen, bestaande klussen, pauzes/nachtwerk, beide bewerkingsroutes, totalen, factuur/offerte/btw, ICS, herinneringen, statistieken en het syncformaat tussen geïsoleerde browserprofielen. Ook alle bestaande regressietests worden uitgevoerd. Echte gebruikerssessies, apparaat-sync en iPhone-agenda/push niet met productiegegevens getest.
+- Serviceworker-cache/appversie vernieuwd. Herstelpunt vóór wijzigingen: recovery-2026-10-19-v71.9.1 op 570bd738e2fe57df6b246dbd1ad17d71b1c9a4b7, bevestigd als succesvolle Pages-versie.
+
 ## v71.9.1 — uitgestelde acties tonen herkenbare klus of document
 - Onder Meldingen → Uitgestelde acties verschijnen voortaan Nederlandse actietitels zoals 'Offerte opmaken' of 'Factuur versturen' in plaats van interne codes zoals 'quoteCreate'.
 - Bij een klus toont het overzicht waar mogelijk zowel de werknaam als de klant en de datum. Bij een offerte, factuur of betaalherinnering wordt het documentnummer of de bestandsnaam getoond.
