@@ -1,3 +1,10 @@
+## v71.9.1 — uitgestelde acties tonen herkenbare klus of document
+- Onder Meldingen → Uitgestelde acties verschijnen voortaan Nederlandse actietitels zoals 'Offerte opmaken' of 'Factuur versturen' in plaats van interne codes zoals 'quoteCreate'.
+- Bij een klus toont het overzicht waar mogelijk zowel de werknaam als de klant en de datum. Bij een offerte, factuur of betaalherinnering wordt het documentnummer of de bestandsnaam getoond.
+- Ook wanneer een actie niet meer actief is, verschijnt een begrijpelijke omschrijving in plaats van de technische sleutel.
+- Alleen presentatie van het overzicht is gewijzigd. Bestaande snoozes, uitsteltijden, pushmeldingen, rode badges, klantgegevens en Supabase blijven ongewijzigd.
+- Browserregressietest voor een uitgestelde klus en een document, plus een nieuwe app-cacheversie.
+
 ## v71.9.0 — alle actieherinneringen uitstellen en offerte-na-edit melden
 - Elke actie in Acties heeft nu een Uitstellen-knop met 1 uur, 12 uur, 7 dagen, 14 dagen en 1 kalendermaand.
 - Tijdens het uitstel verdwijnen actie en appicoon-badge; bij verlopen uitstel wordt de actie opnieuw zichtbaar. Onder Meldingsinstellingen kun je uitgestelde acties eerder herstellen.
