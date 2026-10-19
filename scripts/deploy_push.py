@@ -16,7 +16,7 @@ import uuid
 
 PROJECT = 'ercqiavruotoclhvfzud'
 ROOT = Path(__file__).resolve().parent.parent
-BASELINE = '07793fedac41427abd70f747a21df17c50261ad3'
+BASELINE = '570bd738e2fe57df6b246dbd1ad17d71b1c9a4b7'
 FUNCTION = 'supabase/functions/jk-push/index.ts'
 MIGRATION = 'supabase/migrations/20261014_jk_push_test_requests.sql'
 APPROVED_SQL_SHA = '0acf0d2a1d8393225df2f23486699d2b537c881c43f75bd4fd22ff3b8b34af23'
@@ -157,7 +157,8 @@ def deploy(api, mode, approved=False):
         record_version(metadata['version'],'proposed' if current_hash==proposed_hash else 'baseline')
         print('Inspectie geslaagd; geen database- of functiewijzigingen uitgevoerd.')
         return
-    ensure_table(api, approved)
+    # This release changes no schema: require the previously installed private table.
+    ensure_table(api, False)
     if current_hash != proposed_hash:
         body, content_type = multipart(proposed, metadata)
         api.request('/functions/deploy?slug=jk-push', body, content_type)

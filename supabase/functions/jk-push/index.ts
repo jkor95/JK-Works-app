@@ -56,7 +56,7 @@ const folder=(d:any)=>{const x=String(d?.folder||d?.kind||'').toLowerCase();retu
 const amsterdamNow=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ','T');
 function actionsFor(records:any[]):Action[]{
  const byStore=(store:string)=>records.filter(r=>r.store===store).map(r=>r.data||{});
- const jobs=byStore('jobs'),docs=byStore('documents'),photos=byStore('jobPhotos');
+ const jobs=byStore('jobs'),docs=byStore('documents'),photos=byStore('jobPhotos'),entries=byStore('timeEntries');
  const settings=byStore('settings');
  const prefs=settings.find(x=>x.id==='notificationPrefs')||{};
  const dismissed=settings.find(x=>x.id==='dismissedActions')?.items||{};
@@ -69,12 +69,18 @@ function actionsFor(records:any[]):Action[]{
   const end=String(j.endTime||j.to||j.end||j.timeTo||j.finishTime||j.finish||j.end_time||'').slice(0,5);
   const date=String(j.date||'').slice(0,10);
   const endDay=date&&start&&end&&end<=start?new Date(Date.parse(date+'T12:00:00Z')+86400000).toISOString().slice(0,10):date;
-  const ended=j.status==='afgerond'||!!date&&(end?(endDay+'T'+end<=now):(date<day));
+  const multi=Array.isArray(j.workDays);
+  const ended=j.status==='afgerond'||!multi&&!!date&&(end?(endDay+'T'+end<=now):(date<day));
+  const dueWorkDay=multi&&j.workDays.some((d:any)=>{
+   const endDate=d.startTime&&d.endTime&&d.endTime<=d.startTime?new Date(Date.parse(d.date+'T12:00:00Z')+86400000).toISOString().slice(0,10):d.date;
+   const due=d.endTime?endDate+'T'+d.endTime<=now:d.date<day;
+   return due&&!entries.some((e:any)=>e.jobId===j.id&&(e.date||String(e.start||'').slice(0,10))===d.date&&(!e.autoFromJobSchedule||e.actualConfirmed));
+  });
   const started=ended||!!date&&(date+'T'+(start||'08:00')<=now);
   const linked=docs.filter(d=>d?.meta?.jobId===j.id||(!d?.meta?.jobId&&date&&d?.meta?.workDate===date&&j.clientName&&String(d?.meta?.client?.name||'').trim().toLowerCase()===String(j.clientName).trim().toLowerCase()));
   const quotes=linked.filter(d=>folder(d)==='offerte'),invoices=linked.filter(d=>folder(d)==='factuur');
   const label='klus'; // Geen bedrijfs- of klantinformatie in een pushmelding.
-  if(ended&&!j.completionPromptHandledAt)add('hours:'+j.id,'hours','Uren controleren: '+label);
+  if(multi?dueWorkDay:ended&&!j.completionPromptHandledAt)add('hours:'+j.id,'hours','Uren controleren: '+label);
   if((j.photoPolicy||'optional')==='required'){
    const has=(phase:string)=>photos.some(p=>p.jobId===j.id&&p.phase===phase);
    if(date&&date<=day&&!has('before'))add('photo:before:'+j.id,'photos','Foto vóór de klus: '+label);
