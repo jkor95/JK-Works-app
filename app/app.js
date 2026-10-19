@@ -325,9 +325,14 @@ const App = (() => {
     const sourceByKey=new Map(sourceActions.map(a=>[a.key,a]));
     const jobsById=new Map(jobs.map(j=>[j.id,j]));
     const docsById=new Map(documents.map(d=>[d.id,d]));
+    const describeJob=job=>[job.title,job.clientName,job.date?nlDate(job.date):'']
+      .map(value=>String(value||'').trim()).filter((value,index,values)=>value&&values.indexOf(value)===index).join(' · ')||'Klus';
     function snoozedActionDescription(key){
       const active=sourceByKey.get(key);
-      if(active)return {title:active.title,detail:active.detail||''};
+      if(active){
+        const job=jobsById.get(active.jobId);
+        return {title:active.title,detail:job?describeJob(job):active.detail||''};
+      }
       const type=key.split(':')[0],phase=key.split(':')[1],ref=key.slice(type==='photo'?('photo:'+phase+':').length:(type+':').length);
       const titles={
         hours:'Uren invoeren of controleren',
@@ -339,7 +344,7 @@ const App = (() => {
         paymentReminder:'Betaalherinnering nodig'
       };
       const job=jobsById.get(ref),doc=docsById.get(ref);
-      const related=job?(job.clientName||job.title||'Klus')+(job.date?' · '+nlDate(job.date):'')
+      const related=job?describeJob(job)
         :doc?(doc.meta?.number||doc.filename||'Document'):'De oorspronkelijke klus of het document is niet meer beschikbaar';
       return {title:titles[type]||'Uitgestelde actie',detail:related};
     }
