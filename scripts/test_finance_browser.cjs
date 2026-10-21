@@ -302,7 +302,7 @@ module.exports=async(browser,origin)=>{
   await page.locator('#jobOpenFilter').click();await page.locator('[data-jpf=open].active').waitFor();
   assert.equal(await page.locator('[data-job=issue35]').count(),1);
   assert.equal(await page.locator('[data-job="settlement-cash"]').count(),0,'Open filter hides unfinished jobs');
-  await page.locator('[data-job=issue35]').click();
+  await page.locator('[data-job=issue35]').click();await page.locator('#paymentsThisJob').waitFor();
   const issueCard=await page.locator('#modalRoot').innerText();
   assert.match(issueCard,/Afgesproken/);assert.match(issueCard,/Ontvangen/);
   assert.doesNotMatch(issueCard,/Berekende urenwaarde|Gefactureerd incl. btw|Effectief ontvangen/);
