@@ -497,11 +497,15 @@ module.exports=async(browser,origin)=>{
   assert.equal(roundedStats.rounded.financeOpen,0,'Klus is niet langer openstaand');
   assert.equal(roundedStats.rounded.financeWaived,37.5,'Afronding volgens het financiële register');
   assert.deepEqual(roundedStats.rounded.totals,{amount:150,received:112.5,open:0,waived:37.5},'Statistieken kennen eigen afgeronde bedrag');
-  assert.match(roundedStats.rounded.client,/37,50 afgerond/,'Afronding wordt afzonderlijk benoemd');
-  assert.match(roundedStats.rounded.client,/stats-client-chart-waived/,'Afgerond bedrag grijs in dezelfde staaf');
+  assert.match(roundedStats.rounded.client,/112,50 ontvangen/,'Werkelijk ontvangen bedrag blijft zichtbaar');
+  assert.match(roundedStats.rounded.client,/150,00 afgesproken/,'Afspraak blijft als context zichtbaar');
+  assert.doesNotMatch(roundedStats.rounded.client,/37,50|afgerond|afgeboekt|kwijtgescholden|stats-client-chart-waived|stats-chart-dot-waived|stats-comparison-writtenoff/i,
+    'In klantstatistieken nergens een afgeboekt bedrag, tekst of grijs segment');
   assert.doesNotMatch(roundedStats.rounded.client,/class="stats-client-chart-open"/,'Geen rode restschuld voor afgeronde klant');
   assert.doesNotMatch(roundedStats.rounded.client,/37,50 nog te ontvangen/,'Niet opnieuw als schuld presenteren');
-  assert.match(roundedStats.rounded.period,/stats-period-chart-waived/,'Per maand ook afgeronde deel grijs');
+  assert.match(roundedStats.rounded.period,/112,50/,'Maand behoudt werkelijk ontvangen bedrag');
+  assert.doesNotMatch(roundedStats.rounded.period,/37,50|afgerond|afgeboekt|kwijtgescholden|stats-period-chart-waived|stats-chart-dot-waived/i,
+    'In periodegrafiek nergens een afgeboekt bedrag, tekst of grijs segment');
   assert.doesNotMatch(roundedStats.rounded.period,/stats-period-chart-open/,'Per maand geen rode restschuld');
   assert.equal(roundedStats.unrounded.financeOpen,37.5,'Zonder afronding is er wel restschuld');
   assert.equal(roundedStats.unrounded.totals.open,37.5,'Restschuld uit Klussen overgenomen');
@@ -509,7 +513,7 @@ module.exports=async(browser,origin)=>{
   assert.match(roundedStats.unrounded.client,/class="stats-client-chart-open"/);
   assert.equal(roundedStats.reversed.totals.waived,0,'Geannuleerde afboeking wordt niet meer weergegeven');
   assert.equal(roundedStats.reversed.totals.open,37.5,'Schuld komt terug als de afboeking is geannuleerd');
-  console.log('PASS: afgeronde €37,50 niet meer openstaand, niet-afgerond blijft rood en beide klantbalken even dik');
+  console.log('PASS: afgeboekt bedrag volledig verborgen bij klant en periode, alleen werkelijk openstaande schulden rood, klantbalken 14 px');
   console.log('PASS: alleen eigen verdiensten en transparant rood openstaand per laatste uitvoerdag, ook meerdaags, over jaargrens, los, ongedateerd en kwijtschelding');
   console.log('PASS: alleen eigen verdiensten zonder voorgeschoten bonnetjes/extra kosten, incl. KOR, factuurregels, deelbetaling, losse factuur en ongewijzigde betaalrecords');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
