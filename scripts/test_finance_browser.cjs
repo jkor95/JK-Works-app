@@ -103,7 +103,7 @@ module.exports=async(browser,origin)=>{
   await page.locator('[data-stat-metric="received"].active').waitFor();
   assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/100,00/);
   assert.equal(await page.locator('#modalRoot .stats-simple-row').count(),1,'Alleen maanden met ontvangsten tonen');
-  assert.match(await page.locator('#modalRoot .stats-simple-row').first().innerText(),/feb.*100,00/i);
+  assert.match(await page.locator('#modalRoot .stats-simple-row').first().innerText(),/feb[\s\S]*100,00/i);
   assert.equal(await page.locator('#modalRoot .finance-kpis').count(),0,'Geen zesdelige financiële kaarten');
   assert.equal(await page.locator('#modalRoot .dual-stats-chart').count(),0,'Geen dubbele uren/geldgrafieken');
   assert.doesNotMatch(await page.locator('#modalRoot').innerText(),/Berekende urenwaarde|Gefactureerd incl\\. btw|Effectief afgesproken|Effectief ontvangen|Afgesproken omzet/);
