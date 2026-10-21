@@ -558,7 +558,7 @@ module.exports=async(browser,origin)=>{
   });
   assert.deepEqual(executionStored,{job:{street:'Klusstraat 25',postal:'2991 BB',city:'Barendrecht'},jobClientStreet:'Klantstraat 10',client:{street:'Klantstraat 10',postal:'3331 AA',city:'Zwijndrecht'}},'Alleen klus krijgt het uitvoeringsadres, niet de klant');
   await page.evaluate(()=>App.showJob('address-job'));
-  assert.match(await page.locator('#modalRoot .job-execution-summary').innerText(),/Klusstraat 25[\\s\\S]*2991 BB Barendrecht/,'Uitvoeringsadres staat op klusdetail');
+  assert.match(await page.locator('#modalRoot .job-execution-summary').innerText(),/Klusstraat 25[\s\S]*2991 BB Barendrecht/,'Uitvoeringsadres staat op klusdetail');
   assert.match(await page.locator('#modalRoot').innerText(),/Klantstraat 10/,'Klantgegevens blijven zichtbaar');
   await page.evaluate(()=>App.createBusinessDoc('Offerte',{jobId:'address-job'}));
   assert.equal(await page.locator('[name=address]').inputValue(),'Klantstraat 10','Offerte gebruikt klantadres');
@@ -578,7 +578,7 @@ module.exports=async(browser,origin)=>{
   const cleared=await page.evaluate(async()=>({job:await JKDB.get('jobs','address-job'),client:await JKDB.get('clients','address-client')}));
   assert.equal(cleared.job.executionAddress,null,'Uitvinken wist het afwijkende uitvoeringsadres');
   assert.equal(cleared.client.street,'Klantstraat 10','Klantadres blijft na uitvinken intact');
-  await page.evaluate(async()=>{await JKDB.removeLocal('jobs','address-job');await JKDB.removeLocal('clients','address-client');}).catch(()=>{});
+  await page.evaluate(async()=>{await JKDB.remove('jobs','address-job');await JKDB.remove('clients','address-client');});
   console.log('PASS: optioneel uitvoeringsadres klapt uit, bewaart los op klus, toont op detail en blijft weg van offerte/factuur');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');
