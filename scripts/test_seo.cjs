@@ -178,7 +178,7 @@ assert.match(appStyles, /\.website-editor-overlay\.we-pwa-safe-area\s*\{/);
 assert.match(appStyles, /padding-top:env\(safe-area-inset-top,0px\)/);
 assert.match(appStyles, /\.we-v714\.we-pwa-safe-area \.we-shell\{height:100%;min-height:0\}/);
 assert.doesNotMatch(read('site.css'), /we-pwa-safe-area/);
-assert.match(appHtml, /styles\.css\?v=71\.13\.8/);
+assert.match(appHtml, /styles\.css\?v=71\.13\.9/);
 assert.match(appHtml, /website-editor\.js\?v=71\.8\.9/);
 assert.match(pwaWorker, /jkworks-pricing-v71-13-9/);
 
