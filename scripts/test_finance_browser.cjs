@@ -248,7 +248,7 @@ module.exports=async(browser,origin)=>{
     await JKDB.putLocal('jobs',{id:'settlement-cash',title:'Contante afspraak',pricingType:'fixed',agreedAmount:200,paymentType:'cash',status:'open',date:'2026-10-01'});
     await App.renderJobs();
   });
-  assert.equal(await numeric('#jobOpenTotal'),baseline.open);assert.equal(await numeric('#jobCashTotal'),baseline.cash+200);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice+150);
+  assert.equal(await numeric('#jobOpenTotal'),baseline.open);assert.equal(await numeric('#jobCashTotal'),baseline.cash);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice);
   const setSettlement=async changes=>page.evaluate(async changes=>{const j=await JKDB.get('jobs','settlement');await JKDB.putLocal('jobs',{...j,...changes});await App.renderJobs();},changes);
   const settlementMetrics=()=>page.evaluate(()=>App.state.finance.job(App.state.finance.jobs.find(j=>j.id==='settlement')));
   await setSettlement({status:'afgerond'});assert.equal((await settlementMetrics()).open,0,'Completed alone is insufficient with a future workday');assert.equal((await settlementMetrics()).agreed,150);assert.equal((await settlementMetrics()).paid,false);
@@ -259,10 +259,14 @@ module.exports=async(browser,origin)=>{
   assert.equal((await settlementMetrics()).open,150);assert.equal(await numeric('#jobOpenTotal'),baseline.open+150);
   await page.evaluate(()=>App.renderDashboard());assert.equal(await numeric('#dashOpenPayments strong'),baseline.open+150);
   await page.evaluate(()=>App.renderJobs());
-  for(const filter of ['cash','invoice','all']){await page.locator(`[data-jpf="${filter}"]`).click();await page.waitForFunction(value=>document.querySelector(`[data-jpf="${value}"]`).classList.contains('active'),filter);assert.equal(await numeric('#jobOpenTotal'),baseline.open+150);assert.equal(await numeric('#jobCashTotal'),baseline.cash+200);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice+150);}
-  for(const width of [390,1024]){await page.setViewportSize({width,height:844});assert.equal(await page.locator('.job-totals').evaluate(e=>e.scrollWidth<=e.clientWidth),true);}await page.setViewportSize({width:390,height:844});
+  for(const filter of ['cash','invoice','all']){await page.locator(`[data-jpf="${filter}"]`).click();await page.waitForFunction(value=>document.querySelector(`[data-jpf="${value}"]`).classList.contains('active'),filter);assert.equal(await numeric('#jobOpenTotal'),baseline.open+150);assert.equal(await numeric('#jobCashTotal'),baseline.cash);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice);}
+  for(const width of [390,1024]){
+    await page.setViewportSize({width,height:844});
+    const layout=await page.locator('.job-totals').evaluate(e=>{const cards=[...e.querySelectorAll('.kpi')],boxes=cards.map(c=>c.getBoundingClientRect()),style=getComputedStyle(cards[0]);return {fits:e.scrollWidth<=e.clientWidth,center:style.textAlign,color:style.color,bg:style.backgroundColor,others:cards.slice(1).map(c=>getComputedStyle(c).backgroundColor),fullWidth:boxes[0].width>boxes[1].width*1.9,below:boxes.slice(1).every(b=>b.top>=boxes[0].bottom),note:e.querySelectorAll('p').length};});
+    assert.ok(layout.fits&&layout.fullWidth&&layout.below);assert.equal(layout.center,'center');assert.equal(layout.bg,'rgb(254, 228, 226)');assert.equal(layout.color,'rgb(180, 35, 24)');assert.deepEqual(layout.others,['rgb(255, 255, 255)','rgb(255, 255, 255)']);assert.equal(layout.note,0);
+  }await page.setViewportSize({width:390,height:844});
   const preserved=await page.evaluate(async()=>JSON.stringify({hours:await JKDB.all('timeEntries'),docs:await JKDB.all('documents'),payments:(await JKDB.all('settings')).filter(r=>r.kind==='jkPayment')}));assert.equal(preserved,recordsBefore,'Changing settlement status never rewrites hours, invoices or payments');
-  await page.evaluate(async()=>{await JKDB.putLocal('settings',{id:'settlement-payment',kind:'jkPayment',jobId:'settlement',amount:100,date:'2026-10-21',method:'bank'});await App.renderJobs();});assert.equal((await settlementMetrics()).open,50);assert.equal((await settlementMetrics()).received,100);assert.equal((await settlementMetrics()).paid,false);assert.equal(await numeric('#jobOpenTotal'),baseline.open+50);
+  await page.evaluate(async()=>{await JKDB.putLocal('settings',{id:'settlement-payment',kind:'jkPayment',jobId:'settlement',amount:100,date:'2026-10-21',method:'bank'});await App.renderJobs();});assert.equal((await settlementMetrics()).open,50);assert.equal((await settlementMetrics()).received,100);assert.equal((await settlementMetrics()).paid,false);assert.equal(await numeric('#jobOpenTotal'),baseline.open+50);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice+100);
   await page.evaluate(()=>App.editJob('settlement'));await page.locator('#addWorkDay').click();await page.locator('[name=dayDate]').last().fill('2026-10-27');await saveJob();await page.evaluate(()=>App.renderJobs());assert.equal((await settlementMetrics()).open,0);assert.equal((await settlementMetrics()).balance,50);assert.equal((await settlementMetrics()).received,100);assert.equal(await numeric('#jobOpenTotal'),baseline.open);
   // Exact end boundary and overnight work use Europe/Amsterdam, including an untimed date.
   await setSettlement({status:'afgerond',workDays:[{date:'2026-10-20',startTime:'20:00',endTime:'02:00'}]});
@@ -272,6 +276,19 @@ module.exports=async(browser,origin)=>{
   await page.clock.setFixedTime(new Date('2026-10-21T22:00:00Z'));await page.evaluate(()=>App.renderJobs());assert.equal((await settlementMetrics()).open,50,'Untimed workday becomes past at Dutch midnight');
   await setSettlement({status:'gepland'});assert.equal((await settlementMetrics()).open,0,'Reopening removes it even after all dates');
   await page.clock.setFixedTime(new Date('2026-10-21T10:00:00Z'));
+  // Received totals exclude unpaid agreements and count linked invoice payments only once.
+  await page.evaluate(async()=>{
+    await JKDB.putLocal('settings',{id:'received-cash',kind:'jkPayment',jobId:'settlement-cash',amount:50,date:'2026-10-21',method:'cash'});
+    await JKDB.putLocal('documents',{id:'received-linked',folder:'factuur',meta:{jobId:'settlement',total:150},blob:new Blob(['%PDF fixture'],{type:'application/pdf'})});
+    await JKDB.putLocal('documents',{id:'received-orphan',folder:'factuur',meta:{total:80},blob:new Blob(['%PDF fixture'],{type:'application/pdf'})});
+    await JKDB.putLocal('settings',{id:'received-orphan-payment',kind:'jkPayment',invoiceId:'received-orphan',amount:30,date:'2026-10-21',method:'bank'});
+    await App.renderJobs();
+  });
+  assert.equal(await numeric('#jobCashTotal'),baseline.cash+50);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice+130);assert.equal(await numeric('#jobOpenTotal'),baseline.open+50,'Only orphan invoice remainder is newly outstanding');
+  await page.evaluate(async()=>{const p=await JKDB.get('settings','settlement-payment');await JKDB.putLocal('settings',{...p,invoiceId:'received-linked',amount:150});await App.renderJobs();});
+  assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice+180,'Moving and editing the same payment through its linked invoice never duplicates received totals');assert.equal(await numeric('#jobCashTotal'),baseline.cash+50);
+  await page.evaluate(async()=>{const p=await JKDB.get('settings','received-cash');await JKDB.putLocal('settings',{...p,voided:true});await App.renderJobs();});assert.equal(await numeric('#jobCashTotal'),baseline.cash);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice+180);
+  console.log('PASS: uitsluitend ontvangen contant/factuur, deelbetalingen, onbetaalde afspraken uitgesloten, gekoppelde/losse facturen, wijzigen en verwijderen; gecentreerd rood openstaand en witte totalen zonder toelichting');
   console.log('PASS: compacte drie klustotalen; openstaand uitsluitend afgerond én laatste einde voorbij; dashboard, filters, toekomst/heropenen, deelbetaling, nachtwerk/middernacht en bytegelijk behoud uren/facturen/betalingen');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');
