@@ -7,6 +7,7 @@ module.exports=async(browser,origin)=>{
  const source=(await fs.readFile(path.join(root,'app/app.js'),'utf8')).replace('return {init,go};','return {init,go,state,editJob,showJob,showDocument,showPayments,renderJobs,renderDashboard,refreshFinance,jobMinutes,jobFinancial,periodBuckets,customerStatBuckets,showClientHistory,showTimeStats,generateAnnualInvoiceReport,createBusinessDoc,setInvoiceJobLink};').replace("document.addEventListener('DOMContentLoaded',()=>App.init());",'');
  const context=await browser.newContext({serviceWorkers:'block',viewport:{width:390,height:844}}),page=await context.newPage(),errors=[],writes=[];
  page.setDefaultTimeout(15000);
+ await page.clock.setFixedTime(new Date('2026-10-21T10:00:00Z'));
  page.on('pageerror',e=>errors.push(e.message));
  await context.route('**/*',route=>{
   const r=route.request(),u=new URL(r.url());
@@ -42,7 +43,7 @@ module.exports=async(browser,origin)=>{
   assert.equal(await page.evaluate(()=>document.querySelector('.modal').scrollWidth<=document.querySelector('.modal').clientWidth+1),true);
   await page.locator('#paymentsThisJob').click();await page.locator('#addPayment').click();
   await page.locator('[name=amount]').fill('100');await page.locator('[name=date]').fill(`${await page.evaluate(()=>fixtureYear)}-02-10`);await page.locator('[name=method]').selectOption('bank');
-  await page.locator('#paymentForm button.primary').click();await page.waitForFunction(()=>!document.querySelector('#paymentForm'));
+  await page.evaluate(()=>{const f=document.querySelector('#paymentForm');f.requestSubmit();f.requestSubmit();});await page.waitForFunction(()=>!document.querySelector('#paymentForm'));
   m=await metrics();assert.equal(m.received,100);assert.equal(m.open,50);assert.equal(m.paid,false);
   await page.evaluate(()=>App.renderDashboard());assert.match(await page.locator('#dashOpenPayments').innerText(),/50,00/);assert.match(await page.locator('#view').innerText(),/Ontvangen/);
   await page.evaluate(()=>App.createBusinessDoc('Factuur',{jobId:'fixed'}));
@@ -83,8 +84,9 @@ module.exports=async(browser,origin)=>{
   await page.evaluate(()=>App.createBusinessDoc('Factuur',{jobId:'fixed'}));assert.equal(await page.locator('[name=qty0]').inputValue(),'20');assert.equal(await page.locator('[name=price0]').inputValue(),'10');
   // Restore fixed agreement for independent January / February / year / customer amounts.
   await page.evaluate(()=>App.editJob('fixed'));await page.locator('[name=pricingType]').selectOption('fixed');await page.locator('[name=agreedAmount]').fill('150');await saveJob();
-  const stats=await page.evaluate(async()=>{await App.refreshFinance();const es=await JKDB.all('timeEntries'),js=await JKDB.all('jobs'),cs=await JKDB.all('clients');return {month:App.periodBuckets(es,js,{},'month'),year:App.periodBuckets(es,js,{},'year'),clients:App.customerStatBuckets(es,js,cs,{},fixtureYear)};});
-  assert.equal(stats.month.find(b=>b.key.endsWith('-01')).amount,270);assert.equal(stats.month.find(b=>b.key.endsWith('-02')).received,100);assert.equal(stats.year.find(b=>b.key===String(new Date().getFullYear())).received,100);
+  const stats=await page.evaluate(async()=>{await App.refreshFinance();const es=await JKDB.all('timeEntries'),js=await JKDB.all('jobs'),cs=await JKDB.all('clients');return {fixtureYear,week:App.periodBuckets(es,js,{},'week'),quarter:App.periodBuckets(es,js,{},'quarter'),month:App.periodBuckets(es,js,{},'month'),year:App.periodBuckets(es,js,{},'year'),clients:App.customerStatBuckets(es,js,cs,{},fixtureYear)};});
+  assert.equal(stats.month.find(b=>b.key.endsWith('-01')).amount,270);assert.equal(stats.month.find(b=>b.key.endsWith('-02')).received,100);assert.equal(stats.year.find(b=>b.key===String(stats.fixtureYear)).received,100);
+  assert.equal(stats.quarter.find(b=>b.key===`${stats.fixtureYear}-Q1`).received,100);assert.equal(stats.quarter.find(b=>b.key===`${stats.fixtureYear}-Q1`).amount,270);assert.equal(stats.week.reduce((n,b)=>n+(b.received||0),0),0,'February payment never leaks into recent weeks');
   assert.equal(stats.clients[0].received,100);assert.equal(stats.clients[0].amount,270);
   await page.evaluate(()=>App.showClientHistory('client'));assert.match(await page.locator('#modalRoot').innerText(),/Ontvangen/);
   await page.evaluate(()=>App.showTimeStats());assert.match(await page.locator('#modalRoot').innerText(),/betaaldatum/);
