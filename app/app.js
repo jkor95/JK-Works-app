@@ -2089,7 +2089,7 @@ const App = (() => {
   function addMetrics(target,event){for(const key of Object.keys(emptyMetrics()))target[key]=(target[key]||0)+(event[key]||0);}
   function periodBuckets(entries,jobs,company,mode){
     const now=new Date(), map=new Map();
-    const ensure=info=>{let b=map.get(info.key);if(!b){b={...info,minutes:0,amount:0,invoiceAmount:0,cashAmount:0};map.set(info.key,b)}return b};
+    const ensure=info=>{let b=map.get(info.key);if(!b){b={...info,...emptyMetrics()};map.set(info.key,b)}return b};
     for(const event of financialEvents(entries,jobs,company)){
       const info=statPeriodInfo(event.date,mode);if(!info)continue;
       addMetrics(ensure(info),event);
@@ -2102,17 +2102,17 @@ const App = (() => {
         const d=new Date(monday);d.setDate(d.getDate()-(i*7));
         const ymd=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         const w=isoWeekInfo(ymd);if(!w)continue;
-        arr.push(map.get(w.key)||{key:w.key,label:w.label,sort:w.key,minutes:0,amount:0,invoiceAmount:0,cashAmount:0});
+        arr.push(map.get(w.key)||{key:w.key,label:w.label,sort:w.key,...emptyMetrics()});
       }
       return arr;
     }
     if(mode==='month'){
-      const arr=[];for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1),key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;arr.push(map.get(key)||{key,label:`${monthName(d.getMonth())} '${String(d.getFullYear()).slice(-2)}`,sort:key,minutes:0,amount:0,invoiceAmount:0,cashAmount:0})}return arr;
+      const arr=[];for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1),key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;arr.push(map.get(key)||{key,label:`${monthName(d.getMonth())} '${String(d.getFullYear()).slice(-2)}`,sort:key,...emptyMetrics()})}return arr;
     }
     if(mode==='quarter'){
-      const arr=[];const cq=Math.floor(now.getMonth()/3)+1;for(let i=7;i>=0;i--){let q=cq-i,y=now.getFullYear();while(q<=0){q+=4;y--}while(q>4){q-=4;y++}const key=`${y}-Q${q}`;arr.push(map.get(key)||{key,label:`Q${q} '${String(y).slice(-2)}`,sort:`${y}-${q}`,minutes:0,amount:0,invoiceAmount:0,cashAmount:0})}return arr;
+      const arr=[];const cq=Math.floor(now.getMonth()/3)+1;for(let i=7;i>=0;i--){let q=cq-i,y=now.getFullYear();while(q<=0){q+=4;y--}while(q>4){q-=4;y++}const key=`${y}-Q${q}`;arr.push(map.get(key)||{key,label:`Q${q} '${String(y).slice(-2)}`,sort:`${y}-${q}`,...emptyMetrics()})}return arr;
     }
-    const years=[...map.values()].sort((a,b)=>a.sort.localeCompare(b.sort));if(!years.length)years.push({key:String(now.getFullYear()),label:String(now.getFullYear()),sort:String(now.getFullYear()),minutes:0,amount:0,invoiceAmount:0,cashAmount:0});return years;
+    const years=[...map.values()].sort((a,b)=>a.sort.localeCompare(b.sort));if(!years.length)years.push({key:String(now.getFullYear()),label:String(now.getFullYear()),sort:String(now.getFullYear()),...emptyMetrics()});return years;
   }
   // Eén getal tegelijk: de berekeningen veranderen niet, alleen de presentatie.
   function statMetricValue(bucket,metric){
