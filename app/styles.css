@@ -280,3 +280,17 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
     max-height:calc(100dvh - max(112px,calc(env(safe-area-inset-top,0px) + 50px)));
   }
 }
+
+/* v71.13.5 — statistieken: één overzichtelijk bedrag per periode of klant. */
+.stats-metric-tabs{gap:8px;margin:3px 0 14px;padding-bottom:2px}
+.stats-metric-tabs .tab{flex:1 1 0;min-width:0;text-align:center;font-size:13px;padding:10px 7px}
+.stats-simple-total{padding:17px 18px;margin-bottom:12px}
+.stats-simple-total .muted{display:block;font-size:13px;font-weight:750}
+.stats-simple-total strong{display:block;font-size:30px;line-height:1.25;margin-top:6px;letter-spacing:-.025em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.stats-simple-list{gap:8px}
+.stats-simple-row{padding:13px 16px;align-items:center}
+.stats-simple-row .main{flex:1 1 auto;min-width:0}
+.stats-simple-row .title{font-size:15px;overflow-wrap:anywhere}
+.stats-simple-value{font-size:18px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.stats-undated{margin:12px 2px 2px}
+@media(max-width:430px){.stats-simple-row{padding:12px 13px}.stats-simple-value{font-size:17px}}

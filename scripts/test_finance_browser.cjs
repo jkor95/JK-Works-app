@@ -98,7 +98,34 @@ module.exports=async(browser,origin)=>{
   assert.equal(stats.quarter.find(b=>b.key===`${stats.fixtureYear}-Q1`).received,100);assert.equal(stats.quarter.find(b=>b.key===`${stats.fixtureYear}-Q1`).amount,270);assert.equal(stats.week.reduce((n,b)=>n+(b.received||0),0),0,'February payment never leaks into recent weeks');
   assert.equal(stats.clients[0].received,100);assert.equal(stats.clients[0].amount,270);
   await page.evaluate(()=>App.showClientHistory('client'));assert.match(await page.locator('#modalRoot').innerText(),/Ontvangen/);
-  await page.evaluate(()=>App.showTimeStats());assert.match(await page.locator('#modalRoot').innerText(),/betaaldatum/);for(const label of detailLabels)assert.ok((await page.locator('#modalRoot').innerText()).includes(label),label+' beschikbaar in Urenstatistieken');
+  // Compacte weergave: precies één geselecteerd getal per maand/klant en één totaal.
+  await page.evaluate(()=>App.showTimeStats());
+  await page.locator('[data-stat-metric="received"].active').waitFor();
+  assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/100,00/);
+  assert.equal(await page.locator('#modalRoot .stats-simple-row').count(),1,'Alleen maanden met ontvangsten tonen');
+  assert.match(await page.locator('#modalRoot .stats-simple-row').first().innerText(),/feb[\s\S]*100,00/i);
+  assert.equal(await page.locator('#modalRoot .finance-kpis').count(),0,'Geen zesdelige financiële kaarten');
+  assert.equal(await page.locator('#modalRoot .dual-stats-chart').count(),0,'Geen dubbele uren/geldgrafieken');
+  assert.doesNotMatch(await page.locator('#modalRoot').innerText(),/Berekende urenwaarde|Gefactureerd incl\\. btw|Effectief afgesproken|Effectief ontvangen|Afgesproken omzet/);
+  assert.match(await page.locator('#modalRoot').innerText(),/Zonder betaaldatum/,'Ongedateerde ontvangst niet stilzwijgend bij periode optellen');
+  await page.locator('[data-stat-metric="agreed"]').click();
+  assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/270,00/,'Afspraken blijven gebaseerd op bestaande bedragen');
+  assert.equal(await page.locator('#modalRoot .stats-simple-row').count(),1);
+  await page.locator('[data-stat-mode="client"]').click();
+  assert.equal(await page.locator('#modalRoot .stats-simple-row').count(),1);
+  assert.match(await page.locator('#modalRoot .stats-simple-row').first().innerText(),/Fictieve klant.*270,00/s);
+  await page.locator('[data-stat-metric="received"]').click();
+  assert.match(await page.locator('#modalRoot .stats-simple-row').first().innerText(),/Fictieve klant.*100,00/s);
+  await page.locator('[data-stat-mode="quarter"]').click();
+  assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/100,00/);
+  await page.locator('[data-stat-mode="year"]').click();
+  assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/100,00/);
+  await page.locator('[data-stat-metric="hours"]').click();
+  assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/u/);
+  assert.equal(await page.locator('#modalRoot .finance-kpis').count(),0);
+  await page.locator('[data-stat-mode="week"]').click();
+  assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/0 u/);
+  console.log('PASS: compacte statistieken ontvangen/afgesproken/uren per maand, kwartaal, jaar en klant zonder KPI-overvloed');
   await page.evaluate(()=>App.generateAnnualInvoiceReport(fixtureYear));
   // Financial records use the unchanged existing cloud format and backup schema.
   const encoded=await page.evaluate(async()=>{const rs=(await JKDB.all('settings')).filter(r=>r.kind==='jkPayment');return {records:await Promise.all(rs.map(r=>JKCloud.encodeRecord('settings',r))),jobs:await JKDB.all('jobs'),hours:await JKDB.all('timeEntries')};});
