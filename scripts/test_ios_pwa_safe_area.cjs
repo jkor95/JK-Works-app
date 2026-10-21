@@ -38,16 +38,16 @@ module.exports=async(browser,origin)=>{
   }
   const pwa=await inspect({ua:iphone,installed:true});
   assert.equal(pwa.installedClass,true,'De geïnstalleerde iOS-app moet herkend worden');
-  assert.ok(pwa.before.padding>=100,'Extra ruimte boven de knoppen bij iOS-statusbalk');
-  assert.ok(pwa.before.brandTop>=100,'Logo en knoppen staan onder de wazige systeemstrook');
+  assert.ok(pwa.before.padding>=72&&pwa.before.padding<100,'Compacte maar veilige bovenruimte in iOS-PWA');
+  assert.ok(pwa.before.brandTop>=72&&pwa.before.brandTop<100,'Logo en knoppen staan hoger maar onder het systeemgebied');
   assert.equal(pwa.before.blur,'none','Geen extra vervaging achter iOS-bovenbalk');
-  assert.ok(pwa.scrolled.brandTop>=100,'Ook bij scrollen blijven de bovenste knoppen bereikbaar');
-  assert.ok(pwa.modalTop>=108,'Grote dialogen beginnen onder de iOS-statusbalk');
+  assert.ok(pwa.scrolled.brandTop>=72,'Ook bij scrollen blijven de bovenste knoppen bereikbaar');
+  assert.ok(pwa.modalTop>=92&&pwa.modalTop<112,'Grote dialogen beginnen onder iOS-statusgebied maar gebruiken meer hoogte');
   const safari=await inspect({ua:iphone,installed:false});
   assert.equal(safari.installedClass,false,'Gewone Safari-weergave niet aanpassen');
   assert.ok(safari.before.padding<100,'Safari behoudt bestaande hoogte');
   const mac=await inspect({ua:desktop,installed:true});
   assert.equal(mac.installedClass,false,'Desktop/Mac niet aanpassen');
   assert.ok(mac.before.padding<100,'Desktop behoudt bestaande header');
-  console.log('PASS: iPhone-beginschermapp bovenbalk en modals buiten statusbalk; Safari en desktop ongewijzigd');
+  console.log('PASS: compacte iPhone-PWA bovenbalk (72–99px), geen blur, grote modals, Safari/desktop ongewijzigd');
 };

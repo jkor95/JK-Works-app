@@ -1,3 +1,11 @@
+## v71.13.3 — iPhone-webapp bovenbalk compacter zonder wazigheid
+- De bovenbalk van alleen de geïnstalleerde iPhone-webapp staat circa 25–30 CSS-pixels hoger dan in v71.13.2, zodat meer dashboard, klussen en documenten direct zichtbaar zijn. De minimale ruimte past zich aan de daadwerkelijke iOS-safe-area aan.
+- De vaste, niet-transparante achtergrond en uitgeschakelde backdrop blur blijven behouden, zodat logo, titel, Sync en knoppen scherp en bereikbaar zijn, ook tijdens scrollen.
+- Hoge modalvensters mogen iets meer schermhoogte gebruiken, maar blijven onder de iOS-statuszone.
+- Geen wijziging aan normale Safari-weergave of openbare website. Geen wijzigingen aan Supabase, betaalgegevens, gebruikers, klussen of opslag.
+- Bijgewerkte geautomatiseerde iPhone-standalone, Safari, desktop, scroll- en modaltests in de bestaande GitHub Actions-suite. Fysieke iOS-27-vervaging blijft visueel op het toestel te verifiëren.
+- Laatst bevestigde werkende release: v71.13.2, herstelbranch `recovery/2026-10-21-v71-13-2` op commit `ae061246f6b8e7b09d459f47774681cb07fc8761`.
+
 ## v71.13.2 — iPhone-standalone app bovenbalk buiten wazige statuszone
 - In de geïnstalleerde iPhone-webapp wordt de gedeelde sticky bovenbalk (logo, paginatitel, Sync, meldingen, knoppen) circa 25–35 px verder onder het iOS-statusgebied gezet. Ook bij scrollen blijven die knoppen onder het systeemgebied; de PWA-bovenbalk krijgt geen eigen blurfilter meer.
 - Hoge modalvensters krijgen in de iOS-webapp een veilige maximale hoogte, zodat de titel en sluitknop niet onder de wazige statusbalk vallen.
