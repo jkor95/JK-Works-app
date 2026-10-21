@@ -32,7 +32,7 @@ const JKBackup = (() => {
   async function make({localOnly=false,progress=()=>{},purpose='manual'}={}){
     progress('Lokale gegevens lezen…');
     const before=await JKDB.snapshot();
-    const payload={format:FORMAT,appVersion:'v71.10.0',createdAt:new Date().toISOString(),purpose,
+    const payload={format:FORMAT,appVersion:'v71.11.0',createdAt:new Date().toISOString(),purpose,
       scope:{cloudChecked:false,description:'Lokale kopie; cloudgegevens niet volledig gecontroleerd.'},stores:{},files:{},cloud:null};
     const downloads=new Map();let totalBytes=0;
     async function addFile(blob){

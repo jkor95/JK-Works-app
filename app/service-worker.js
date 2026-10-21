@@ -1,6 +1,6 @@
-const CACHE='jkworks-multiday-v71-10-0';
+const CACHE='jkworks-pricing-v71-11-0';
 const LOCAL=[
-  './','./index.html','./styles.css','./db.js','./cloud.js','./push.js','./app.js','./backup.js','./website-editor.js','./manifest.webmanifest',
+  './','./index.html','./styles.css','./db.js','./cloud.js','./push.js','./app.js','./finance.js','./backup.js','./website-editor.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
   './templates/factuur-kor.pdf','./templates/offerte-kor.pdf','./templates/factuur-normaal.pdf','./templates/offerte-normaal.pdf',
   './icons/icon-192.png','./icons/icon-512.png','./icons/icon-maskable-512.png','./icons/apple-touch-icon.png'
