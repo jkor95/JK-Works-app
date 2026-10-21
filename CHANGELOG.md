@@ -1,3 +1,10 @@
+## v71.13.13 — statistieken alleen ontvangen en nog te ontvangen
+- **Meer → Statistieken** toont geen kopje, bedrag, tekst of toegankelijkheidsomschrijving **Afgesproken** meer in de klant-, maand-, kwartaal- en jaaroverzichten.
+- De samenvatting toont alleen **Ontvangen** en **Nog te ontvangen** (plus de gevraagde gewerkte uren bij **Per klant**). De horizontale klantbalk en de maand-/kwartaal-/jaarstaven geven alleen deze twee geldbedragen weer, met exacte getallen.
+- **Nog te ontvangen** gebruikt de bestaande echte openstaande bedragen na afronding/afboeking; afgeronde bedragen en doorgeschoven bonnetjes worden niet zichtbaar of als omzet geteld.
+- Geen wijziging van interne prijsafspraken, facturen, betalingen, administratie, Supabase of opslagformaat; alleen statistiekweergave en tests.
+- Browserregressies controleren alle vier tabbladen, bedragen, toegankelijkheidslabels, de verhouding van balken, en afgeronde bedragen die verborgen moeten blijven.
+
 ## v71.13.12 — betaalwijze Betaalverzoek in plaats van Pin
 - Bij **Klussen → Betalingen → Betaling registreren/bewerken** heet de betaalwijze voortaan **Betaalverzoek** in plaats van **Pin**.
 - De betalingshistorie toont dezelfde Nederlandse naam. De interne bestaande opslagwaarde `card` blijft behouden zodat opgeslagen registraties, synchronisatie, betalingen en back-ups niet veranderen.
