@@ -1073,11 +1073,7 @@ const App = (() => {
     const checkHtml=check?check.items.map((item,i)=>`<label class="checkline"><input type="checkbox" data-jobcheck="${i}" ${j.checklistState?.[i]?'checked':''}><span>${esc(item)}</span></label>`).join(''):'<span class="muted small">Geen checklist gekoppeld.</span>';
     const c=client||j,contact=[c.attention?`t.a.v. ${esc(c.attention)}`:'',c.street||j.address?esc(c.street||j.address):'',([c.postal,c.city].filter(Boolean).join(' ')?esc([c.postal,c.city].filter(Boolean).join(' ')):''),c.phone?esc(c.phone):'',c.email?esc(c.email):''].filter(Boolean).join('<br>');
     const policy=j.photoPolicy||'optional';
-    const photoCards=Object.entries(photoPhaseMeta).map(([phase,meta])=>{
-      const list=photos.filter(p=>p.phase===phase),missing=policy==='required'&&!list.length;
-      const thumbs=list.map(p=>{const url=URL.createObjectURL(p.blob);return `<div class="job-photo-thumb"><img src="${url}" alt="${esc(meta.label)} foto"><button type="button" class="photo-delete" data-del-photo="${p.id}" aria-label="Foto verwijderen">×</button></div>`}).join('');
-      return `<div class="job-photo-phase ${missing?'photo-missing':''}"><div class="job-photo-head"><strong>${meta.icon} ${meta.label}</strong><span>${list.length} foto${list.length===1?'':'\'s'}${missing?' · nog nodig':''}</span></div><div class="job-photo-grid">${thumbs||'<div class="job-photo-empty">Nog geen foto</div>'}</div><div class="button-row photo-actions"><button type="button" class="secondary" data-camera="${phase}">📷 Foto maken</button><button type="button" class="secondary" data-upload="${phase}">⬆ Uploaden</button></div><input type="file" accept="image/*" capture="environment" data-camera-input="${phase}" hidden><input type="file" accept="image/*" multiple data-upload-input="${phase}" hidden></div>`;
-    }).join('');
+    const photoCards=`<div class="card job-photo-folder"><div class="button-row photo-actions"><button type="button" class="primary" data-upload="general">Foto’s toevoegen</button><button type="button" class="secondary" data-camera="general">📷 Foto maken</button></div><input type="file" accept="image/*" capture="environment" data-camera-input="general" hidden><input type="file" accept="image/*" multiple data-upload-input="general" hidden><p class="muted small">Kies meerdere foto’s tegelijk uit je fotorol. Alle foto’s staan in deze klusmap. Je kunt ze daarna hieronder indelen; een categorie kiezen is optioneel.</p><div class="job-photo-grid">${photos.map(p=>`<div class="job-photo-item"><div class="job-photo-thumb"><button type="button" class="photo-open" data-job-photo="${esc(p.id)}" aria-label="Foto bekijken"><img src="${URL.createObjectURL(p.blob)}" alt="${esc(p.name||'Klusfoto')}"></button><button type="button" class="photo-delete" data-del-photo="${esc(p.id)}" aria-label="Foto verwijderen">×</button></div>${photoCategorySelect(p)}</div>`).join('')||'<div class="job-photo-empty">Nog geen foto’s</div>'}</div></div>`;
     const localPhotoInfo='<div class="successbox"><strong>Foto’s op al je apparaten</strong><br><span class="small">Dezelfde foto wordt bij de klus én onder Documenten → Klusfoto’s getoond. Er is maar één cloudbestand. Foto’s worden vóór upload verkleind tot ongeveer maximaal 250 KB per foto en gaan mee bij handmatige Sync.</span></div>';
     const photoNotice=(policy==='required'?'<div class="warning"><strong>Foto’s verplicht bij deze klus</strong><br><span class="small">Maak minimaal één foto vóór, tijdens en na de werkzaamheden.</span></div>':policy==='none'?'<div class="successbox"><strong>Foto’s niet nodig</strong><br><span class="small">Je kunt hieronder alsnog foto’s toevoegen als je dat wilt.</span></div>':'<div class="successbox"><strong>Foto’s optioneel</strong><br><span class="small">Je kunt voor, tijdens en na foto’s toevoegen zonder dat dit verplicht is.</span></div>')+localPhotoInfo;
 
@@ -1106,6 +1102,8 @@ const App = (() => {
     const handleFiles=async(input,phase)=>{const files=[...(input.files||[])];if(!files.length)return;input.disabled=true;try{for(const file of files)await saveJobPhoto(j.id,phase,file);toast(files.length===1?'Foto opgeslagen':`${files.length} foto’s opgeslagen`);await showJob(j.id);}catch(e){console.error(e);alert('Foto opslaan lukte niet: '+(e.message||e));}finally{input.disabled=false;}};
     $$('[data-camera-input]').forEach(i=>i.addEventListener('change',()=>handleFiles(i,i.dataset.cameraInput)));
     $$('[data-upload-input]').forEach(i=>i.addEventListener('change',()=>handleFiles(i,i.dataset.uploadInput)));
+    bindPhotoCategories();
+    $$('[data-job-photo]').forEach(b=>b.addEventListener('click',()=>showPhotoDocument(b.dataset.jobPhoto,j.id)));
     $$('[data-del-photo]').forEach(b=>b.addEventListener('click',async()=>{if(!confirm('Deze foto verwijderen?'))return;await JKDB.remove('jobPhotos',b.dataset.delPhoto);toast('Foto verwijderd');showJob(j.id)}));
   }
 
@@ -1373,15 +1371,9 @@ const App = (() => {
     for(const p of photos.sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))){
       const key=p.jobId||'zonder-klus';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(p);
     }
-    const phaseOrder=['before','during','after'];
     const html=[...groups.entries()].map(([jobId,list])=>{
       const job=jobMap.get(jobId),title=job?.title||'Klus niet meer aanwezig',sub=[job?.clientName,nlDate(job?.date)].filter(Boolean).join(' · ');
-      const phases=phaseOrder.map(phase=>{
-        const items=list.filter(p=>p.phase===phase);if(!items.length)return '';
-        const meta=photoPhaseMeta[phase]||{label:phase,icon:'📷'};
-        return `<div class="photo-doc-phase"><div class="job-photo-head"><strong>${meta.icon} ${esc(meta.label)}</strong><span>${items.length} foto${items.length===1?'':'’s'}</span></div><div class="job-photo-grid">${items.map(p=>{const url=URL.createObjectURL(p.blob);return `<button class="job-photo-thumb photo-doc-thumb" type="button" data-photo-doc="${p.id}"><img src="${url}" alt="${esc(meta.label)} foto"></button>`}).join('')}</div></div>`;
-      }).join('');
-      return `<div class="card photo-doc-job"><h3>${esc(title)}</h3>${sub?`<div class="muted small">${esc(sub)}</div>`:''}<div class="photo-doc-phases">${phases}</div></div>`;
+      return `<div class="card photo-doc-job"><h3>${esc(title)}</h3>${sub?`<div class="muted small">${esc(sub)}</div>`:''}<div class="job-photo-grid">${list.map(p=>`<button class="job-photo-thumb photo-doc-thumb" type="button" data-photo-doc="${esc(p.id)}"><img src="${URL.createObjectURL(p.blob)}" alt="${esc(p.name||'Klusfoto')}"></button>`).join('')}</div></div>`;
     }).join('');
     $('#view').innerHTML=`<div class="button-row"><button class="secondary" id="backToFolders">← Mappen</button></div><div class="section-title"><h2>Klusfoto’s</h2><span class="muted small">${photos.length} totaal</span></div><div class="successbox"><strong>Cloudfoto’s zonder dubbele opslag</strong><br><span class="small">Deze map toont exact dezelfde foto’s als bij de klus. Foto’s worden gecomprimeerd naar ongeveer maximaal 250 KB en bij handmatige Sync via Supabase beschikbaar op je andere apparaten.</span></div>${html||'<div class="empty">Nog geen klusfoto’s. Voeg ze toe vanuit een klus.</div>'}`;
     $('#backToFolders').addEventListener('click',()=>{state.docFolder=null;renderDocuments()});
@@ -1424,13 +1416,28 @@ const App = (() => {
     $('#editExpense').addEventListener('click',()=>editExpense(id,{returnJobId}));$('#shareExpense')?.addEventListener('click',()=>shareBlob(e.receiptBlob,e.receiptName||'bon'));$('#backExpenseJob')?.addEventListener('click',()=>showJob(returnJobId));
   }
 
-  async function showPhotoDocument(id){
+  function photoCategorySelect(p){
+    return `<label class="photo-category">Categorie<select data-photo-category="${esc(p.id)}" aria-label="Categorie voor ${esc(p.name||'foto')}"><option value="general" ${!photoPhaseMeta[p.phase]?'selected':''}>Niet ingedeeld</option>${Object.entries(photoPhaseMeta).map(([key,meta])=>`<option value="${key}" ${p.phase===key?'selected':''}>${meta.label}</option>`).join('')}</select></label>`;
+  }
+  function bindPhotoCategories(){
+    $$('[data-photo-category]').forEach(select=>select.addEventListener('change',async()=>{
+      select.disabled=true;
+      try{
+        const p=await JKDB.get('jobPhotos',select.dataset.photoCategory);if(!p)throw new Error('Deze foto is inmiddels verwijderd.');
+        if(p.phase!==select.value){p.phase=select.value;await JKDB.put('jobPhotos',p);}
+        toast('Categorie opgeslagen');
+      }catch(error){alert('Categorie opslaan lukte niet: '+error.message);}finally{select.disabled=false;}
+    }));
+  }
+  async function showPhotoDocument(id,returnJobId=''){
     const p=await JKDB.get('jobPhotos',id);if(!p)return;
     const j=p.jobId?await JKDB.get('jobs',p.jobId):null,meta=photoPhaseMeta[p.phase]||{label:'Foto',icon:'📷'},url=URL.createObjectURL(p.blob);
-    modal(`${modalHead(`${meta.icon} ${meta.label}`)}<div class="card"><img src="${url}" alt="Klusfoto" style="width:100%;max-height:62vh;object-fit:contain;border-radius:14px;background:#f2eee7"><h3 style="margin-top:12px">${esc(j?.title||'Klusfoto')}</h3><div class="muted small">${esc(p.name||'foto.jpg')} · ${fmtDateTime(p.createdAt)}${j?.clientName?' · '+esc(j.clientName):''}${p.compressedSize||p.blob?.size?' · '+humanBytes(p.compressedSize||p.blob?.size):''}</div><div class="button-row" style="margin-top:14px"><button class="primary" id="sharePhotoDoc">Delen / bewaar</button><button class="secondary" id="downloadPhotoDoc">Download</button><button class="danger-btn" id="deletePhotoDoc">Verwijderen</button></div></div>`);
+    modal(`${modalHead(`${meta.icon} ${meta.label}`)}<div class="card"><img src="${url}" alt="Klusfoto" style="width:100%;max-height:62vh;object-fit:contain;border-radius:14px;background:#f2eee7"><h3 style="margin-top:12px">${esc(j?.title||'Klusfoto')}</h3><div class="muted small">${esc(p.name||'foto.jpg')} · ${fmtDateTime(p.createdAt)}${j?.clientName?' · '+esc(j.clientName):''}${p.compressedSize||p.blob?.size?' · '+humanBytes(p.compressedSize||p.blob?.size):''}</div>${photoCategorySelect(p)}<div class="button-row" style="margin-top:14px">${returnJobId?'<button class="secondary" id="backPhotoJob">Terug naar klus</button>':''}<button class="primary" id="sharePhotoDoc">Delen / bewaar</button><button class="secondary" id="downloadPhotoDoc">Download</button><button class="danger-btn" id="deletePhotoDoc">Verwijderen</button></div></div>`);
+    bindPhotoCategories();
+    $('#backPhotoJob')?.addEventListener('click',()=>showJob(returnJobId));
     $('#sharePhotoDoc').addEventListener('click',()=>shareBlob(p.blob,p.name||'klusfoto.jpg'));
     $('#downloadPhotoDoc').addEventListener('click',()=>downloadBlob(p.blob,p.name||'klusfoto.jpg'));
-    $('#deletePhotoDoc').addEventListener('click',async()=>{if(!confirm('Deze foto verwijderen? De foto verdwijnt ook bij de gekoppelde klus.'))return;await JKDB.remove('jobPhotos',p.id);closeModal();toast('Foto verwijderd');if(state.route==='documents')renderDocuments();});
+    $('#deletePhotoDoc').addEventListener('click',async()=>{if(!confirm('Deze foto verwijderen? De foto verdwijnt ook bij de gekoppelde klus.'))return;await JKDB.remove('jobPhotos',p.id);closeModal();toast('Foto verwijderd');if(returnJobId)await showJob(returnJobId);else if(state.route==='documents')renderDocuments();});
   }
   function chooseImportFolder(){
     if(['offerte','factuur','diversen'].includes(state.docFolder)){state.importFolderTarget=state.docFolder;$('#hiddenExistingPdfInput').click();return;}

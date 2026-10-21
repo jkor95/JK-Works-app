@@ -122,7 +122,7 @@ module.exports=async(browser,origin)=>{
   assert.equal(await page.evaluate(async id=>{try{await App.setInvoiceJobLink(await JKDB.get('documents',id),'missing');return false;}catch{return true;}},invoice.id),true);
   await page.evaluate(()=>App.showPayments('fixed'));await page.locator('[data-edit-payment]').click();await page.locator('#voidPayment').click();await page.waitForFunction(()=>!document.querySelector('#paymentForm'));
   assert.equal((await metrics()).received,0);assert.equal(await page.evaluate(()=>JKDB.all('settings').then(rs=>rs.filter(r=>r.kind==='jkPayment'&&r.voided).length)),1);
-  await page.evaluate(async()=>JKDB.putLocal('documents',{id:'unassigned',folder:'factuur',filename:'Losse factuur.pdf',meta:{total:50,sent:true,paid:false}}));
+  await page.evaluate(async()=>JKDB.putLocal('documents',{id:'unassigned',folder:'factuur',filename:'Losse factuur.pdf',blob:new Blob(['%PDF fixture'],{type:'application/pdf'}),meta:{total:50,sent:true,paid:false}}));
   await page.locator('[data-close]').click();await page.evaluate(()=>App.renderJobs());await page.locator('[data-unassigned-invoice=unassigned]').waitFor();await page.locator('[data-unassigned-invoice=unassigned]').click();await page.locator('#documentPayments').waitFor();
   // Simple multi-day workflow: actual hours -> hourly/fixed -> extra -> live total.
   await page.evaluate(async()=>{
@@ -145,7 +145,7 @@ module.exports=async(browser,origin)=>{
   assert.equal(await page.evaluate(()=>workflowQueued.filter(x=>x.store==='timeEntries').length),2,'One synced record per actual day despite double submission');
   await page.evaluate(async()=>{
     await JKDB.putLocal('timeEntries',{id:'simple-unconfirmed',jobId:'simple',date:'2026-03-03',from:'08:00',to:'17:00',autoFromJobSchedule:true,actualConfirmed:false,note:'Niet automatisch bevestigen'});
-    await JKDB.putLocal('documents',{id:'simple-invoice',folder:'factuur',filename:'bestaand.pdf',meta:{jobId:'simple',total:150,lines:[{qty:1,price:150,description:'Bestaande factuur'}],paid:false}});
+    await JKDB.putLocal('documents',{id:'simple-invoice',folder:'factuur',filename:'bestaand.pdf',blob:new Blob(['%PDF fixture'],{type:'application/pdf'}),meta:{jobId:'simple',total:150,lines:[{qty:1,price:150,description:'Bestaande factuur'}],paid:false}});
     window.workflowOriginal=JSON.stringify((await JKDB.all('timeEntries')).filter(e=>e.jobId==='simple'));window.workflowQueued=[];
   });
   await page.locator('[data-close]').click();await page.evaluate(()=>App.renderDashboard());await page.locator('#addHours').click();await page.locator('[name=calculationJob]').selectOption('simple');await page.locator('#chooseCalculationJob button.primary').click();await page.locator('[name=calculationType]').selectOption('hourly');await page.locator('[name=calculationExtra]').fill('25');
@@ -175,6 +175,40 @@ module.exports=async(browser,origin)=>{
   assert.equal((await simpleData()).entries.length,3);assert.equal((await simpleData()).entries.find(e=>e.id==='simple-unconfirmed').actualConfirmed,true,'Only explicitly confirmed old hours become actual');
   const deletedJobProtected=await page.evaluate(async()=>{const j=await JKDB.get('jobs','simple'),es=(await JKDB.all('timeEntries')).filter(e=>e.jobId==='simple');await JKDB.markDeleteLocal('jobs','simple');try{await JKDB.saveJobWork({...j,extraAmount:999},[],j,es);return false;}catch{return (await JKDB.get('jobs','simple')).extraAmount===25;}});assert.equal(deletedJobProtected,true,'A pending job deletion cannot be undone by a stale form');
   console.log('PASS: eenvoudige meerdaagse invoer, uren/vast bedrag, extra/inbegrepen kosten, direct totaal, dubbele submit, ongewijzigde bevestigde uren, oude onbevestigde uren en atomaire conflictafhandeling');
+  // One upload from the camera roll, optional categorization afterwards, same records everywhere.
+  await page.evaluate(async()=>{
+    await JKDB.putLocal('jobPhotos',{id:'old-photo',jobId:'fixed',phase:'before',name:'bestaand.jpg',blob:new Blob(['old photo'],{type:'image/jpeg'}),createdAt:'2025-01-01T10:00:00Z'});
+    window.oldPhoto=await JKDB.get('jobPhotos','old-photo');
+    await App.showJob('fixed');
+  });
+  assert.equal(await page.locator('[data-upload-input]').count(),1);assert.equal(await page.locator('[data-upload-input]').getAttribute('multiple'),'');
+  assert.equal(await page.locator('[data-photo-category="old-photo"]').inputValue(),'before');
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aDVkAAAAASUVORK5CYII=','base64');
+  await page.locator('[data-upload-input]').setInputFiles([{name:'dag-1.png',mimeType:'image/png',buffer:png},{name:'dag-2.png',mimeType:'image/png',buffer:png},{name:'dag-3.png',mimeType:'image/png',buffer:png}]);
+  await page.waitForFunction(()=>document.querySelectorAll('[data-photo-category]').length===4);
+  const photoIds=await page.evaluate(async()=>(await JKDB.all('jobPhotos')).filter(p=>p.id!=='old-photo').map(p=>p.id));
+  assert.equal(photoIds.length,3);assert.equal(new Set(photoIds).size,3);
+  for(const id of photoIds)assert.equal(await page.locator(`[data-photo-category="${id}"]`).inputValue(),'general');
+  for(const [i,phase] of ['before','during','after'].entries()){
+    await page.locator(`[data-photo-category="${photoIds[i]}"]`).selectOption(phase);
+    await page.waitForFunction(async([id,phase])=>(await JKDB.get('jobPhotos',id)).phase===phase,[photoIds[i],phase]);
+  }
+  assert.equal(await page.evaluate(()=>document.querySelector('.modal').scrollWidth<=document.querySelector('.modal').clientWidth+1),true,'Photo folder fits mobile screen');
+  const preservedPhoto=await page.evaluate(async()=>{const p=await JKDB.get('jobPhotos','old-photo');return p.phase===oldPhoto.phase&&p.createdAt===oldPhoto.createdAt&&await p.blob.text()===await oldPhoto.blob.text();});assert.equal(preservedPhoto,true);
+  await page.locator(`[data-job-photo="${photoIds[0]}"]`).click();await page.locator('#backPhotoJob').waitFor();await page.locator('[data-photo-category]').selectOption('general');
+  await page.waitForFunction(async id=>(await JKDB.get('jobPhotos',id)).phase==='general',photoIds[0]);
+  await page.locator('#backPhotoJob').click();await page.locator(`[data-photo-category="${photoIds[0]}"]`).waitFor();
+  assert.equal(await page.locator(`[data-photo-category="${photoIds[0]}"]`).inputValue(),'general');
+  await page.locator('[data-close]').click();await page.evaluate(()=>App.go('documents'));await page.locator('[data-folder="klusfotos"]').click();
+  await page.locator('[data-photo-doc]').first().waitFor();assert.equal(await page.locator('.photo-doc-job').count(),1);assert.equal(await page.locator('[data-photo-doc]').count(),4,'Uncategorized and old photos appear together in one job folder');
+  assert.equal(await page.locator('.photo-doc-phase').count(),0);
+  await page.locator(`[data-photo-doc="${photoIds[0]}"]`).click();await page.locator('#deletePhotoDoc').click();
+  await page.waitForFunction(()=>document.querySelectorAll('[data-photo-doc]').length===3);
+  await page.evaluate(()=>App.showJob('fixed'));assert.equal(await page.locator('[data-job-photo]').count(),3,'Deleting a document photo removes the same job record');
+  const photoBackup=await page.evaluate(async()=>{const b=await JKBackup.make({localOnly:true}),p=await JKBackup.validate(b);return p.stores.jobPhotos.map(r=>({id:r.id,phase:r.phase,size:r.blob.size,jobId:r.jobId}));});
+  assert.equal(photoBackup.length,3);assert.ok(photoBackup.every(p=>p.jobId==='fixed'&&p.size>0));assert.ok(photoBackup.some(p=>p.id==='old-photo'&&p.phase==='before'));
+  assert.equal(await page.evaluate(ids=>ids.every(id=>workflowQueued.filter(r=>r.store==='jobPhotos'&&r.id===id).length===2),photoIds.slice(1)),true,'Upload and recategorization synchronize the same photo IDs');
+  console.log('PASS: één multi-upload/fotomap per klus, categorie achteraf/optioneel, behoud oude foto’s, mobiele weergave, gedeelde Documenten-verwijdering, sync-ID en back-upformaat');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');
  }finally{await context.close();}
