@@ -370,3 +370,12 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 /* v71.13.11 — beide klantbalken gelijk (14 px). */
 .stats-client-hours-track,.stats-client-money-track{height:14px;min-height:14px}
 .stats-comparison-outstanding{color:#b43635}
+
+
+/* Optioneel privé-uitvoeringsadres per klus (niet voor klant- of PDF-adressen). */
+.job-execution-address{margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface)}
+.job-execution-address>.checkline{margin:0;align-items:center}
+.job-execution-address #jobExecutionAddressFields{padding-top:12px}
+.job-execution-address #jobExecutionAddressFields[hidden]{display:none}
+.job-execution-summary{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
+.job-execution-summary strong{display:block;font-size:13px;margin-bottom:3px}
