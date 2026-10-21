@@ -1,3 +1,11 @@
+## v71.13.1 — overbodige gele uitlegkaarten verwijderd
+- Grote gele uitlegblokken verwijderd uit klusfoto’s, Documenten → Klusfoto’s, materiaal-inpaklijsten, kluschecklists en gereedschapsregister. Ook het gele succesbericht bij uitgelezen PDF’s verdwijnt. Lege toestanden worden compact en neutraal getoond.
+- Overbodige begeleidende teksten onder klusfoto’s en bonnetjes weggehaald; knoppen voor foto’s, bonnetjes, checklists en register blijven werken.
+- Echte meldingen over verplichte klusfoto’s, achterstallige facturen, back-upherinneringen, herstelbeveiliging en PDF-leesfouten blijven beschikbaar, zonder de oude gele uitlegstijl.
+- Geen wijzigingen aan klussen, betalingen, uren, Supabase of opgeslagen gegevens. App-cacheversie bijgewerkt. Nieuwe regressiecontrole voorkomt dat vaste uitlegkaarten ongemerkt terugkeren.
+- Controles: `node scripts/check.cjs` (inclusief browserfixtures, PDF-/PWA-tests en regressies) en GitGuardian op de PR-commit vereist. Fysieke iPhone, ingelogde productie-Supabase en live UI alleen beperkt controleerbaar.
+- Herstelpunt: branch `recovery/2026-10-21-v71-13-0` op laatst succesvol gepubliceerde commit `727418b23df6c00e5bc6aaa42b0c708de048fd95` (er was nog geen geannoteerde v71.13.0-tag beschikbaar); oudere tag `v71.12.3` behouden.
+
 ## v71.13.0 — compact betalingenoverzicht en afronden van betaalverschillen
 - Klusdetail toont gewerkt, afgesproken, daadwerkelijk ontvangen en nog te ontvangen; overige financiële afgeleiden blijven in statistieken. Geen btw-uitleg in het compacte KOR-klusscherm.
 - Bij een deelbetaling kan een restbedrag expliciet en omkeerbaar als afrondingsverschil worden afgeboekt. Het openstaande saldo kan dan nul zijn zonder fictieve ontvangst; ontvangen blijft het echte ontvangen bedrag. Gekoppelde facturen en losse facturen delen deze logica.
