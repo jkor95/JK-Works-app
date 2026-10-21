@@ -1,3 +1,10 @@
+## v71.11.1 — compact dashboard en klussenoverzicht
+- De zes financiële statistiekkaarten zijn van het dashboard verwijderd. De bestaande snelle acties, aankomende klus en compacte melding met openstaand bedrag blijven zichtbaar.
+- Klussenoverzicht toont per klus alleen de omschrijving, klant, datum/tijden en compacte statusmeldingen. De uitgebreide financiële samenvatting en financiële detailkaarten zijn uit het overzicht verwijderd.
+- Alle financiële details blijven beschikbaar na openen van een klus en onder Urenstatistieken. Berekeningen, uren, prijsafspraken, facturen, betalingen en synchronisatie zijn niet gewijzigd.
+- Gerichte browserregressie controleert het compacte dashboard, de compacte klusrij, openen van klusdetails en de volledige Urenstatistieken; de bestaande volledige controlesuite wordt uitgevoerd. Geen productieschrijfacties of databasewijzigingen.
+- App-/cacheversie vernieuwd. Herstelpunt: geannoteerde tag v71.11.0 op 3afe3f9e3c2dee071a1a62375c569f693c1677b7, bevestigd als succesvolle Pages-publicatie op jkworks.nl. Fysieke iPhone/Mac-test niet uitgevoerd.
+
 ## v71.11.0 — flexibele prijsafspraken en gekoppelde financiële statistieken
 - Klussen ondersteunen uurbasis, vaste prijs en een later handmatig definitief bedrag. Werkelijke uren, referentietarief, berekende urenwaarde en afgesproken bedrag blijven onafhankelijk; extra kosten kunnen inbegrepen zijn of erbovenop komen.
 - Gedeelde betalingsregistratie vanuit klus en gekoppelde factuur met deelbetalingen, betaaldatum en betaalwijze. Eén record per betaling voorkomt dubbele ontvangst; betaald-status volgt de bedragen. Algemene klusbetalingen worden eenmaal over open gekoppelde facturen verdeeld.

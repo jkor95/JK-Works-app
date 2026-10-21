@@ -45,7 +45,15 @@ module.exports=async(browser,origin)=>{
   await page.locator('[name=amount]').fill('100');await page.locator('[name=date]').fill(`${await page.evaluate(()=>fixtureYear)}-02-10`);await page.locator('[name=method]').selectOption('bank');
   await page.evaluate(()=>{const f=document.querySelector('#paymentForm');f.requestSubmit();f.requestSubmit();});await page.waitForFunction(()=>!document.querySelector('#paymentForm'));
   m=await metrics();assert.equal(m.received,100);assert.equal(m.open,50);assert.equal(m.paid,false);
-  await page.evaluate(()=>App.renderDashboard());assert.match(await page.locator('#dashOpenPayments').innerText(),/50,00/);assert.match(await page.locator('#view').innerText(),/Ontvangen/);
+  await page.evaluate(()=>App.renderDashboard());assert.match(await page.locator('#dashOpenPayments').innerText(),/50,00/);assert.equal(await page.locator('#view .finance-kpis').count(),0,'Dashboard toont geen financiële statistiekkaarten');
+  const detailLabels=['Berekende urenwaarde','Afgesproken omzet','Gefactureerd incl. btw','Ontvangen','Effectief afgesproken / uur','Effectief ontvangen / uur'];
+  for(const label of detailLabels)assert.ok(!(await page.locator('#view').innerText()).includes(label),label+' niet op dashboard');
+  await page.locator('[data-close]').click();await page.evaluate(()=>App.renderJobs());
+  assert.equal(await page.locator('#view .finance-kpis').count(),0,'Klussenoverzicht heeft geen detailkaarten');
+  assert.equal(await page.locator('#view .jobs-summary-card').count(),0,'Klussenoverzicht heeft geen uitgebreide samenvatting');
+  const row=page.locator('[data-job=fixed]');assert.match(await row.innerText(),/Montage kast/);assert.match(await row.innerText(),/Fictieve klant/);assert.doesNotMatch(await row.innerText(),/€|Berekende urenwaarde|Referentie-uurtarief|Effectief/);
+  await row.click();await page.locator('#paymentsThisJob').waitFor();
+  for(const label of ['Berekende urenwaarde','Afgesproken totaal','Gefactureerd incl. btw','Ontvangen','Effectief afgesproken / uur','Effectief ontvangen / uur'])assert.ok((await page.locator('#modalRoot').innerText()).includes(label),label+' beschikbaar na openen van klus');
   await page.evaluate(()=>App.createBusinessDoc('Factuur',{jobId:'fixed'}));
   assert.equal(await page.locator('[name=qty0]').inputValue(),'1');assert.equal(await page.locator('[name=price0]').inputValue(),'150');assert.equal(await page.locator('[name=desc0]').inputValue(),'Montagewerkzaamheden');
   await page.locator('#businessDocForm button.primary').last().click();await page.waitForFunction(()=>document.querySelector('#documentPayments'));
@@ -89,7 +97,7 @@ module.exports=async(browser,origin)=>{
   assert.equal(stats.quarter.find(b=>b.key===`${stats.fixtureYear}-Q1`).received,100);assert.equal(stats.quarter.find(b=>b.key===`${stats.fixtureYear}-Q1`).amount,270);assert.equal(stats.week.reduce((n,b)=>n+(b.received||0),0),0,'February payment never leaks into recent weeks');
   assert.equal(stats.clients[0].received,100);assert.equal(stats.clients[0].amount,270);
   await page.evaluate(()=>App.showClientHistory('client'));assert.match(await page.locator('#modalRoot').innerText(),/Ontvangen/);
-  await page.evaluate(()=>App.showTimeStats());assert.match(await page.locator('#modalRoot').innerText(),/betaaldatum/);
+  await page.evaluate(()=>App.showTimeStats());assert.match(await page.locator('#modalRoot').innerText(),/betaaldatum/);for(const label of detailLabels)assert.ok((await page.locator('#modalRoot').innerText()).includes(label),label+' beschikbaar in Urenstatistieken');
   await page.evaluate(()=>App.generateAnnualInvoiceReport(fixtureYear));
   // Financial records use the unchanged existing cloud format and backup schema.
   const encoded=await page.evaluate(async()=>{const rs=(await JKDB.all('settings')).filter(r=>r.kind==='jkPayment');return {records:await Promise.all(rs.map(r=>JKCloud.encodeRecord('settings',r))),jobs:await JKDB.all('jobs'),hours:await JKDB.all('timeEntries')};});
