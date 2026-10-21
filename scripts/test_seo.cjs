@@ -180,7 +180,7 @@ assert.match(appStyles, /\.we-v714\.we-pwa-safe-area \.we-shell\{height:100%;min
 assert.doesNotMatch(read('site.css'), /we-pwa-safe-area/);
 assert.match(appHtml, /styles\.css\?v=71\.13\.4/);
 assert.match(appHtml, /website-editor\.js\?v=71\.8\.9/);
-assert.match(pwaWorker, /jkworks-pricing-v71-13-3/);
+assert.match(pwaWorker, /jkworks-pricing-v71-13-4/);
 
 
 // Actieuitstel en direct offerteverzoek, onafhankelijk van browser-cache.
@@ -214,7 +214,7 @@ assert.match(edgeSource,/duration==='1m'/);
 assert.match(read('app/index.html'),/push\.js\?v=71\.9\.0/);
 assert.match(read('app/index.html'),/app\.js\?v=71\.13\.4/);
 assert.match(read('app/styles.css'),/\.action-snooze\{/);
-assert.match(read('app/service-worker.js'),/jkworks-pricing-v71-13-3/);
+assert.match(read('app/service-worker.js'),/jkworks-pricing-v71-13-4/);
 assert.match(read('supabase/migrations/20261018_action_snoozes.sql'),/enable row level security/);
 
 console.log('PASS: SEO-pagina\'s, unieke metadata, interne links, schema, sitemap en robots');
