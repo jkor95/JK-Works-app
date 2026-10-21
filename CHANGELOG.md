@@ -1,3 +1,9 @@
+## v71.13.12 — betaalwijze Betaalverzoek in plaats van Pin
+- Bij **Klussen → Betalingen → Betaling registreren/bewerken** heet de betaalwijze voortaan **Betaalverzoek** in plaats van **Pin**.
+- De betalingshistorie toont dezelfde Nederlandse naam. De interne bestaande opslagwaarde `card` blijft behouden zodat opgeslagen registraties, synchronisatie, betalingen en back-ups niet veranderen.
+- Browserregressie controleert het keuzemenu, de naam in het betalingsoverzicht en de ongewijzigde opgeslagen betaalwijze.
+- Alleen UI, tests en PWA-cache-/assetversies aangepast; geen aanpassing aan financiële berekeningen of Supabase.
+
 ## v71.13.11 — afgeronde bedragen volledig onzichtbaar in Statistieken
 - In **Meer → Statistieken** is geen grijs afgeboekt segment, bedrag of toelichting meer zichtbaar, ook niet in toegankelijkheidslabels of de legenda.
 - De grafieken tonen uitsluitend **ontvangen** en **werkelijk nog te ontvangen** verdiensten; afgeboekte bedragen blijven administratief verwerkt maar vormen geen grafiekdeel. Afgesproken bedragen blijven apart als context behouden.
