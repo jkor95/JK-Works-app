@@ -1,3 +1,10 @@
+## v71.13.11 — afgeronde bedragen volledig onzichtbaar in Statistieken
+- In **Meer → Statistieken** is geen grijs afgeboekt segment, bedrag of toelichting meer zichtbaar, ook niet in toegankelijkheidslabels of de legenda.
+- De grafieken tonen uitsluitend **ontvangen** en **werkelijk nog te ontvangen** verdiensten; afgeboekte bedragen blijven administratief verwerkt maar vormen geen grafiekdeel. Afgesproken bedragen blijven apart als context behouden.
+- De bestaande 14 px hoge horizontale uren- en verdienstenbalken blijven gelijk.
+- Geen wijzigingen aan betalingen, afboekingsregistraties, klanten, facturen, Supabase of het live datamodel.
+- Browserregressie: fictieve € 37,50 afronding is nergens in de statistieken te zien, terwijl een niet-afgerond bedrag terecht rood verschijnt.
+
 ## v71.13.10 — juiste resterende schuld na afronding en gelijke balkdikte
 - Meer → Statistieken gebruikt voor **Nog te ontvangen** exact de bestaande openstaande eigen verdiensten uit Klussen/Facturen. Het verschil tussen afgesproken en ontvangen wordt niet meer automatisch als schuld gezien.
 - Expliciete afrondingen/afboekingen (bijvoorbeeld € 37,50) zijn geen openstaande schuld en krijgen indien relevant een **grijs segment 'Afgerond'**, met eigen bedrag, naast ontvangen (gevuld) en werkelijk openstaand (rood). Het oorspronkelijk afgesproken bedrag blijft zichtbaar.
