@@ -8,10 +8,18 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="JK Works" />
+  <script>
+    // iOS-statusbalk vrijhouden in de geïnstalleerde webapp; Safari blijft ongewijzigd.
+    (()=>{
+      const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);
+      const installed=navigator.standalone===true||window.matchMedia?.('(display-mode: standalone)')?.matches===true;
+      if(ios&&installed)document.documentElement.classList.add('ios-standalone');
+    })();
+  </script>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=71.13.1" />
+  <link rel="stylesheet" href="styles.css?v=71.13.2" />
   <title>JK Works Bedrijfsapp</title>
 </head>
 <body class="auth-locked">
@@ -54,7 +62,7 @@
   <script src="website-editor.js?v=71.8.9"></script>
   <script src="backup.js"></script>
   <script src="push.js?v=71.9.0"></script>
-  <script src="finance.js?v=71.13.1"></script>
-  <script src="app.js?v=71.13.1"></script>
+  <script src="finance.js?v=71.13.2"></script>
+  <script src="app.js?v=71.13.2"></script>
 </body>
 </html>

@@ -1,3 +1,10 @@
+## v71.13.2 — iPhone-standalone app bovenbalk buiten wazige statuszone
+- In de geïnstalleerde iPhone-webapp wordt de gedeelde sticky bovenbalk (logo, paginatitel, Sync, meldingen, knoppen) circa 25–35 px verder onder het iOS-statusgebied gezet. Ook bij scrollen blijven die knoppen onder het systeemgebied; de PWA-bovenbalk krijgt geen eigen blurfilter meer.
+- Hoge modalvensters krijgen in de iOS-webapp een veilige maximale hoogte, zodat de titel en sluitknop niet onder de wazige statusbalk vallen.
+- Detectie uitsluitend voor geïnstalleerde iOS-webapp; normale Safari-versie, openbare website, Mac/desktop en andere platformen blijven gelijk. Geen database-, gebruikers-, betalings-, notificatie- of Supabase-wijzigingen.
+- Nieuwe Playwright-regressies simuleren iPhone-standalone én gewone Safari en desktop, met scroll- en modalcontrole. `node scripts/check.cjs`, GitGuardian en Pages op de actuele commit te verifiëren voordat als gepubliceerd wordt gemeld.
+- Herstelbranch van laatst succesvol gepubliceerde v71.13.1: `recovery/2026-10-21-v71-13-1` op `6acb0151dbae5f649a4841ec9d8d318173772c5e`. Fysieke iPhone/iOS 27-weergave is niet rechtstreeks te simuleren; laatste visuele controle op het toestel blijft gewenst.
+
 ## v71.13.1 — overbodige gele uitlegkaarten verwijderd
 - Grote gele uitlegblokken verwijderd uit klusfoto’s, Documenten → Klusfoto’s, materiaal-inpaklijsten, kluschecklists en gereedschapsregister. Ook het gele succesbericht bij uitgelezen PDF’s verdwijnt. Lege toestanden worden compact en neutraal getoond.
 - Overbodige begeleidende teksten onder klusfoto’s en bonnetjes weggehaald; knoppen voor foto’s, bonnetjes, checklists en register blijven werken.

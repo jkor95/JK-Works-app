@@ -148,6 +148,7 @@ async function files(dir) {
     await require('./test_manual_backup.cjs')(browser, origin);
     await require('./test_push.cjs').browserTests(browser, origin);
     await require('./test_workdays.cjs')(browser, origin);
+    await require('./test_ios_pwa_safe_area.cjs')(browser, origin);
     await require('./test_finance_browser.cjs')(browser, origin);
     console.log('Backend: uitsluitend fixtures; echte productie-Supabase en apparaatdeelkaart niet getest.');
   } finally {
