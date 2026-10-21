@@ -1,3 +1,10 @@
+## v71.13.0 — compact betalingenoverzicht en afronden van betaalverschillen
+- Klusdetail toont gewerkt, afgesproken, daadwerkelijk ontvangen en nog te ontvangen; overige financiële afgeleiden blijven in statistieken. Geen btw-uitleg in het compacte KOR-klusscherm.
+- Bij een deelbetaling kan een restbedrag expliciet en omkeerbaar als afrondingsverschil worden afgeboekt. Het openstaande saldo kan dan nul zijn zonder fictieve ontvangst; ontvangen blijft het echte ontvangen bedrag. Gekoppelde facturen en losse facturen delen deze logica.
+- Rode tegel Openstaand bedrag is een aanklikbaar filter op afgeronde klussen met openstaande bedragen, met het exacte restant in de kluslijst; open losse facturen blijven zichtbaar. Alles tonen herstelt de volledige lijst.
+- Geen database-/schemawijziging, geen herschrijving van bestaande uren, documenten of betalingen. Afboekingen staan als afzonderlijke gesynchroniseerde settings-records. Gerichte pure en browserfixture-regressies toegevoegd voor betalen/afronden/terugdraaien en het filter.
+- **Beperking:** fysieke iPhone-/Mac-tests, echte ingelogde sync, GitGuardian en Pages-publicatiestatus moeten nog apart worden gecontroleerd vóór samenvoegen. Dit is een voorbereidende PR, nog niet gepubliceerd.
+
 ## v71.12.3 — gecentreerd openstaand en totalen van ontvangen betalingen
 - Openstaand bedrag staat gecentreerd op een eigen rij met rode tekst en lichtrode achtergrond. Totaal contant en Totaal factuur blijven wit op de rij eronder, op mobiel en desktop.
 - De kleine toelichting onder de drie totalen is verwijderd. Totaal contant en Totaal factuur bevatten uitsluitend werkelijk ontvangen bedragen, verdeeld naar de klusafhandeling. Onbetaalde prijsafspraken tellen niet mee, deelbetalingen alleen voor de ontvangen som. Gekoppelde facturen tellen niet dubbel; losse factuurontvangsten tellen bij factuur. Bestaande gegevens blijven behouden.

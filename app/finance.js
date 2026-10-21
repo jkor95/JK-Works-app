@@ -17,6 +17,8 @@ const JKFinance = (() => {
   }
   function snapshot(jobs,documents,settings,priceForJob,readyForSettlement=()=>true){
     const js=unique(jobs),docs=unique(documents).filter(invoice),stored=unique(settings).filter(r=>r.kind==='jkPayment');
+    // A write-off is explicitly approved rounding, never an incoming payment.
+    const writeoffs=unique(settings).filter(r=>r.kind==='jkWriteoff'&&!r.voided&&cents(r.amount)>0);
     const byId=new Map(stored.map(p=>[p.id,p]));
     // Paid invoices take precedence over the historical job flag: never add both.
     for(const d of docs)if(d.meta?.paid&&!d.meta?.paymentLedger){
@@ -37,9 +39,41 @@ const JKFinance = (() => {
         invoiceReceived.set(d.id,(invoiceReceived.get(d.id)||0)+allocated);pool-=allocated;
       }
     }
-    const document=d=>{const received=euro(invoiceReceived.get(d.id)||0),total=euro(cents(d.meta?.total));return {total,received,open:euro(Math.max(0,cents(total)-cents(received))),paid:(total>0&&cents(received)>=cents(total))||(d.meta?.total==null&&receipts.some(p=>p.invoiceId===d.id&&p.unknownAmount))};};
-    const job=j=>{const p=priceForJob(j),linked=docs.filter(d=>jobId(d)===j.id),invoiced=euro(linked.reduce((s,d)=>s+cents(d.meta?.total),0)),received=euro(receipts.filter(r=>r.resolvedJobId===j.id).reduce((s,r)=>s+cents(r.amount),0));const balance=euro(Math.max(0,Math.max(cents(p.agreed),cents(invoiced))-cents(received))),settlementReady=readyForSettlement(j);return {...p,invoiced,received,balance,settlementReady,open:settlementReady?balance:0,paid:!p.pending&&Math.max(cents(p.agreed),cents(invoiced))>0&&cents(received)>=Math.max(cents(p.agreed),cents(invoiced))};};
-    return {jobs:js,documents:docs,stored,receipts,job,document};
+    // Each job has one effective write-off. It is capped at the unpaid amount,
+    // so later payments or edits never create a negative balance or fictitious turnover.
+    const invoiceWaived=new Map(docs.map(d=>[d.id,0])),jobWaived=new Map();
+    for(const j of js){
+      const linked=docs.filter(d=>jobId(d)===j.id).sort((a,b)=>String(a.meta?.docDate||a.createdAt||'').localeCompare(String(b.meta?.docDate||b.createdAt||''))||a.id.localeCompare(b.id));
+      const invoiced=linked.reduce((s,d)=>s+cents(d.meta?.total),0);
+      const received=receipts.filter(r=>r.resolvedJobId===j.id).reduce((s,r)=>s+cents(r.amount),0);
+      const total=Math.max(cents(priceForJob(j).agreed),invoiced);
+      const requested=writeoffs.filter(w=>w.jobId===j.id&&!w.invoiceId).reduce((s,w)=>s+cents(w.amount),0);
+      let remaining=Math.min(requested,Math.max(0,total-received));
+      jobWaived.set(j.id,remaining);
+      for(const d of linked){
+        const available=Math.max(0,cents(d.meta?.total)-(invoiceReceived.get(d.id)||0));
+        const applied=Math.min(available,remaining);
+        invoiceWaived.set(d.id,applied);remaining-=applied;
+      }
+    }
+    for(const d of docs.filter(d=>!js.some(j=>j.id===jobId(d)))){
+      const requested=writeoffs.filter(w=>w.invoiceId===d.id&&!w.jobId).reduce((s,w)=>s+cents(w.amount),0);
+      invoiceWaived.set(d.id,Math.min(requested,Math.max(0,cents(d.meta?.total)-(invoiceReceived.get(d.id)||0))));
+    }
+    const document=d=>{
+      const received=euro(invoiceReceived.get(d.id)||0),waived=euro(invoiceWaived.get(d.id)||0),total=euro(cents(d.meta?.total));
+      const open=euro(Math.max(0,cents(total)-cents(received)-cents(waived)));
+      return {total,received,waived,open,paid:(total>0&&open===0&&(received>0||waived>0))||(d.meta?.total==null&&receipts.some(p=>p.invoiceId===d.id&&p.unknownAmount))};
+    };
+    const job=j=>{
+      const p=priceForJob(j),linked=docs.filter(d=>jobId(d)===j.id);
+      const invoiced=euro(linked.reduce((s,d)=>s+cents(d.meta?.total),0));
+      const received=euro(receipts.filter(r=>r.resolvedJobId===j.id).reduce((s,r)=>s+cents(r.amount),0));
+      const waived=euro(jobWaived.get(j.id)||0),total=Math.max(cents(p.agreed),cents(invoiced));
+      const balance=euro(Math.max(0,total-cents(received)-cents(waived))),settlementReady=readyForSettlement(j);
+      return {...p,invoiced,received,waived,balance,settlementReady,open:settlementReady?balance:0,paid:!p.pending&&total>0&&cents(received)>0&&cents(balance)===0};
+    };
+    return {jobs:js,documents:docs,stored,writeoffs,receipts,job,document};
   }
   return {number,cents,euro,type,invoice,jobId,price,snapshot};
 })();
