@@ -1,3 +1,11 @@
+## v71.12.2 — drie klustotalen en openstaand pas na afronding
+- Compacte totalen Openstaand bedrag, Totaal contant en Totaal factuur terug boven Klussen. Contant/factuur volgen de afgesproken klusbedragen; de rest van de uitgebreide statistieken blijft in details.
+- Een klus telt pas mee als openstaand na expliciete status afgerond én na alle werkdagen/eindtijden. Zelfde berekening voor dashboard, klustotaal, betaalbadge, klusdetails en klantgeschiedenis. Een toekomstige dag toevoegen of de klus heropenen sluit het bedrag opnieuw uit.
+- Prijsafspraak, referentie-urenwaarde, ontvangen betalingen en facturen blijven behouden. Nog af te rekenen na afronding blijft afzonderlijk zichtbaar; nul openstaand betekent niet automatisch betaald. Gekoppelde facturen tellen niet dubbel mee; facturen zonder klus behouden hun eigen saldo.
+- Tijdgrenzen in Europe/Amsterdam, inclusief nachtwerk en datumloze bestaande klussen. Zonder geplande tijden telt een werkdag pas na middernacht als voorbij. Geen gegevensmigratie of herschrijving van bestaande uren/betalingen.
+- Volledige lokale browsersuite met fictieve gegevens en gerichte regressies voor status-/tijdvoorwaarden, meerdere dagen, nachtwerk, herplannen, deelbetalingen, de drie totalen, filters en behoud van gegevens. Geen fysieke iPhone/Mac-test of echte productiesynchronisatie.
+- Versie/cache vernieuwd. Herstelpunt v71.12.1 op 8a367c79e6951d971bd1bce4b484713f281e9229, bevestigd als succesvolle Pages-publicatie via main / en jkworks.nl.
+
 ## v71.12.1 — betaalbadge bij toekomstige werkdagen en duidelijke uitlijning
 - Klussen met nog geplande toekomstige/lopende werkdagen krijgen geen rode rij of ‘Nog te ontvangen’-badge, ook als een extra werkdag later is toegevoegd. Alle werkdagen worden gecontroleerd, inclusief nachtwerk; het financiële saldo en de gekozen klusstatus blijven behouden.
 - De statusbadge open/gepland/afgerond staat rechts naast de klusomschrijving, ook op mobiel. Een eventuele betaalbadge staat eronder.

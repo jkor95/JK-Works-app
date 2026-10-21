@@ -15,7 +15,7 @@ const JKFinance = (() => {
     const added=j?.extraIncluded&&pricing!=='hourly'?0:extra;
     return {type:pricing,hoursValue:euro(hoursValue),extra:euro(extra),base:base===null?null:euro(base),agreed:base===null?null:euro(base+added),pending};
   }
-  function snapshot(jobs,documents,settings,priceForJob){
+  function snapshot(jobs,documents,settings,priceForJob,readyForSettlement=()=>true){
     const js=unique(jobs),docs=unique(documents).filter(invoice),stored=unique(settings).filter(r=>r.kind==='jkPayment');
     const byId=new Map(stored.map(p=>[p.id,p]));
     // Paid invoices take precedence over the historical job flag: never add both.
@@ -38,7 +38,7 @@ const JKFinance = (() => {
       }
     }
     const document=d=>{const received=euro(invoiceReceived.get(d.id)||0),total=euro(cents(d.meta?.total));return {total,received,open:euro(Math.max(0,cents(total)-cents(received))),paid:(total>0&&cents(received)>=cents(total))||(d.meta?.total==null&&receipts.some(p=>p.invoiceId===d.id&&p.unknownAmount))};};
-    const job=j=>{const p=priceForJob(j),linked=docs.filter(d=>jobId(d)===j.id),invoiced=euro(linked.reduce((s,d)=>s+cents(d.meta?.total),0)),received=euro(receipts.filter(r=>r.resolvedJobId===j.id).reduce((s,r)=>s+cents(r.amount),0));return {...p,invoiced,received,open:euro(Math.max(0,Math.max(cents(p.agreed),cents(invoiced))-cents(received))),paid:!p.pending&&Math.max(cents(p.agreed),cents(invoiced))>0&&cents(received)>=Math.max(cents(p.agreed),cents(invoiced))};};
+    const job=j=>{const p=priceForJob(j),linked=docs.filter(d=>jobId(d)===j.id),invoiced=euro(linked.reduce((s,d)=>s+cents(d.meta?.total),0)),received=euro(receipts.filter(r=>r.resolvedJobId===j.id).reduce((s,r)=>s+cents(r.amount),0));const balance=euro(Math.max(0,Math.max(cents(p.agreed),cents(invoiced))-cents(received))),settlementReady=readyForSettlement(j);return {...p,invoiced,received,balance,settlementReady,open:settlementReady?balance:0,paid:!p.pending&&Math.max(cents(p.agreed),cents(invoiced))>0&&cents(received)>=Math.max(cents(p.agreed),cents(invoiced))};};
     return {jobs:js,documents:docs,stored,receipts,job,document};
   }
   return {number,cents,euro,type,invoice,jobId,price,snapshot};

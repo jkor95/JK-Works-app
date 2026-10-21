@@ -260,3 +260,5 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 .job-photo-item{min-width:0}.job-photo-item .job-photo-thumb{margin-bottom:6px}.photo-open{padding:0;border:0;width:100%;height:100%;background:transparent}.photo-category{display:block;font-size:12px}.photo-category select{display:block;width:100%;min-width:0;padding:7px;margin:4px 0 10px;font-size:14px}
 
 .job-payment-row .main{width:100%}.job-row-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.job-row-heading .title{min-width:0;overflow-wrap:anywhere}.job-row-heading .job-status{flex-shrink:0;white-space:nowrap}.job-payment-badge{margin-top:8px}
+
+.job-totals{margin-top:12px}.job-totals .kpi-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.job-totals .kpi{min-width:0}.job-totals p{margin-bottom:0}@media(max-width:430px){.job-totals .kpi-row{grid-template-columns:repeat(2,minmax(0,1fr))}.job-totals .kpi:first-child{grid-column:1/-1}}
