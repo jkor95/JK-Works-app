@@ -313,3 +313,24 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 .stats-client-chart-track{height:13px;background:var(--card2,#eeeae3);border-radius:999px;overflow:hidden}
 .stats-client-chart-fill{display:block;height:100%;background:var(--accent,#a98750);border-radius:999px}
 @media(max-width:430px){.stats-chart-card{padding:14px 11px 16px}.stats-period-chart{gap:7px}.stats-period-chart-col{width:79px;grid-template-rows:27px 136px 32px}.stats-period-chart-track{height:136px;width:43px}.stats-period-chart-label{max-width:79px}.stats-period-chart-value{font-size:10.5px}}
+
+/* v71.13.8 — eigen verdiensten: openstaande bedragen als transparant rood deel boven de ontvangen staaf. */
+.stats-period-chart-col{grid-template-rows:45px 143px 32px}
+.stats-period-chart-value{display:flex;flex-direction:column;align-items:center;justify-content:end;white-space:nowrap;min-height:40px}
+.stats-chart-open-value{display:block;color:#b43635;font-size:10.5px;font-weight:750;line-height:1.35;white-space:nowrap}
+.stats-period-chart-stack{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;width:100%;overflow:hidden;border-radius:6px 6px 2px 2px}
+.stats-period-chart-stack>.stats-period-chart-fill{flex:none;width:100%;border-radius:0;min-height:0}
+.stats-period-chart-open{display:block;flex:none;width:100%;background:rgba(199,55,55,.38);border-top:1px solid rgba(180,40,40,.48);min-height:0}
+.stats-chart-legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:-7px 0 13px;font-size:12px;font-weight:650;color:var(--muted)}
+.stats-chart-legend>span{display:inline-flex;align-items:center;gap:6px}
+.stats-chart-dot{display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--accent,#a98750)}
+.stats-chart-dot-open{background:rgba(199,55,55,.38);border:1px solid rgba(180,40,40,.48)}
+.stats-client-chart-track{display:flex;align-items:stretch}
+.stats-client-chart-fill{flex:none}
+.stats-client-chart-open{display:block;flex:none;height:100%;background:rgba(199,55,55,.38);border-left:1px solid rgba(180,40,40,.48)}
+.stats-client-chart-caption strong{display:flex;flex-direction:column;align-items:flex-end}
+.stats-simple-figures{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.stats-total-open,.stats-row-open{display:block;color:#b43635;font-weight:700}
+.stats-total-open{font-size:14px;margin-top:4px}
+.stats-row-open{font-size:11px;white-space:nowrap}
+@media(max-width:430px){.stats-period-chart-col{grid-template-rows:45px 136px 32px}.stats-period-chart-value{min-height:40px}}
