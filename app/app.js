@@ -2056,8 +2056,10 @@ const App = (() => {
       const earned=incomeByJob.get(String(j.id))||0;
       const grossOpen=Math.round(num(finance?.job?.(j)?.open)*100);
       const ownOpen=Math.max(0,Math.min(grossOpen,profile.agreed-earned));
+      // Alleen expliciet in Klussen afgeronde bedragen; geen kosten of open werk raden.
+      const ownWaived=Math.max(0,Math.min(Math.round(num(finance?.job?.(j)?.waived)*100),profile.agreed-earned-ownOpen));
       const amount=profile.agreed/100;
-      events.push({date,job:j,amount,open:ownOpen/100,invoiceAmount:jobPaymentType(j)==='invoice'?amount:0,cashAmount:jobPaymentType(j)==='cash'?amount:0});
+      events.push({date,job:j,amount,open:ownOpen/100,waived:ownWaived/100,invoiceAmount:jobPaymentType(j)==='invoice'?amount:0,cashAmount:jobPaymentType(j)==='cash'?amount:0});
     }
     // Factuurbedrag blijft voor bestaande metrics beschikbaar, maar hoort niet
     // bij eigen verdiensten en beïnvloedt de nieuwe grafiek niet.
@@ -2081,11 +2083,12 @@ const App = (() => {
       const earned=payments.reduce((sum,p)=>sum+Math.round((ownPaid.get(p.id)||0)*100),0);
       const financeOpen=Math.max(0,Math.round(num(finance?.document?.(d)?.open)*100));
       const open=Math.max(0,Math.min(financeOpen,ownInvoice-earned));
-      events.push({date,job:null,client:d.meta?.client,clientId:d.meta?.clientId,amount:ownInvoice/100,open:open/100});
+      const waived=Math.max(0,Math.min(Math.round(num(finance?.document?.(d)?.waived)*100),ownInvoice-earned-open));
+      events.push({date,job:null,client:d.meta?.client,clientId:d.meta?.clientId,amount:ownInvoice/100,open:open/100,waived:waived/100});
     }
     return events;
   }
-    const emptyMetrics=()=>({minutes:0,amount:0,invoiceAmount:0,cashAmount:0,hoursValue:0,invoiced:0,received:0,open:0,undatedReceived:0});
+    const emptyMetrics=()=>({minutes:0,amount:0,invoiceAmount:0,cashAmount:0,hoursValue:0,invoiced:0,received:0,open:0,waived:0,undatedReceived:0});
   function addMetrics(target,event){for(const key of Object.keys(emptyMetrics()))target[key]=(target[key]||0)+(event[key]||0);}
   function periodBuckets(entries,jobs,company,mode){
     const now=new Date(), map=new Map();
@@ -2187,40 +2190,42 @@ const App = (() => {
     const agreed=b=>Math.max(0,num(b.amount));
     const received=b=>Math.max(0,num(b.received));
     const hours=b=>Math.max(0,num(b.minutes));
-    const remaining=b=>Math.max(0,agreed(b)-received(b));
-    const total=b=>Math.max(agreed(b),received(b));
+    // De echte openstaande waarde uit Klussen/Facturen, na expliciete afboeking.
+    const remaining=b=>Math.max(0,num(b.open));
+    const waived=b=>Math.max(0,num(b.waived));
+    const total=b=>Math.max(agreed(b),received(b)+remaining(b)+waived(b));
     const relevant=b=>total(b)>0.00001||hours(b)>0.00001;
     const list=buckets.filter(relevant);
     if(!list.length)return '<div class="empty">Nog geen werkzaamheden of verdiensten voor deze selectie.</div>';
     const percentage=(part,whole)=>whole>0?Math.min(100,Math.round(part/whole*1000)/10):0;
-    const legend=`<div class="stats-chart-legend"><span><i class="stats-chart-dot"></i> Ontvangen</span><span><i class="stats-chart-dot stats-chart-dot-open"></i> Nog niet ontvangen</span></div>`;
+    const legend=`<div class="stats-chart-legend"><span><i class="stats-chart-dot"></i> Ontvangen</span><span><i class="stats-chart-dot stats-chart-dot-open"></i> Nog te ontvangen</span>${list.some(b=>waived(b)>0.005)?'<span><i class="stats-chart-dot stats-chart-dot-waived"></i> Afgerond (niet openstaand)</span>':''}</div>`;
     if(customerMode){
       const maxHours=Math.max(1,...list.map(hours));
       const maxMoney=Math.max(0.01,...list.map(total));
       const sorted=[...list].sort((a,b)=>total(b)-total(a)||hours(b)-hours(a)||a.label.localeCompare(b.label,'nl'));
       return `<section class="card stats-chart-card stats-comparison-chart" aria-label="Uren en verdiensten per klant"><h3>Uren en verdiensten per klant</h3>${legend}
       <div class="stats-client-chart">${sorted.map(b=>{
-        const ownTotal=total(b),paid=percentage(received(b),ownTotal),unpaid=percentage(remaining(b),ownTotal);
+        const ownTotal=total(b),paid=percentage(received(b),ownTotal),unpaid=percentage(remaining(b),ownTotal),settled=percentage(waived(b),ownTotal);
         const financeScale=percentage(ownTotal,maxMoney),hourScale=percentage(hours(b),maxHours);
-        const desc=`${b.label}: ${hoursLabel(hours(b))} gewerkt, ${money(agreed(b))} afgesproken, ${money(received(b))} ontvangen, ${money(remaining(b))} nog niet ontvangen`;
+        const desc=`${b.label}: ${hoursLabel(hours(b))} gewerkt, ${money(agreed(b))} afgesproken, ${money(received(b))} ontvangen, ${money(remaining(b))} nog te ontvangen${waived(b)>0?`, ${money(waived(b))} afgerond (niet openstaand)`:''}`;
         return `<div class="stats-client-combined" role="group" aria-label="${esc(desc)}">
           <div class="stats-client-name">${esc(b.label)}</div>
           <div class="stats-comparison-label"><span>Uren</span><strong>${hoursLabel(hours(b))}</strong></div>
           <div class="stats-client-chart-track stats-client-hours-track" role="img" aria-label="${esc(hoursLabel(hours(b)))} gewerkt"><span class="stats-client-hours-fill" style="width:${hourScale}%"></span></div>
           <div class="stats-comparison-label"><span>Verdiensten</span><strong>${money(agreed(b))} afgesproken</strong></div>
-          <div class="stats-client-chart-track stats-client-money-track" role="img" aria-label="${esc(money(received(b))+' ontvangen van '+money(agreed(b))+' afgesproken')}"><div class="stats-client-money-width" style="width:${financeScale}%"><span class="stats-client-chart-fill" style="width:${paid}%"></span>${unpaid>0?`<span class="stats-client-chart-open" style="width:${unpaid}%"></span>`:''}</div></div>
-          <div class="stats-comparison-detail"><span>${money(received(b))} ontvangen</span>${remaining(b)>0.005?`<span>${money(remaining(b))} nog niet ontvangen</span>`:''}</div>
+          <div class="stats-client-chart-track stats-client-money-track" role="img" aria-label="${esc(desc)}"><div class="stats-client-money-width" style="width:${financeScale}%"><span class="stats-client-chart-fill" style="width:${paid}%"></span>${unpaid>0?`<span class="stats-client-chart-open" style="width:${unpaid}%"></span>`:'' }${settled>0?`<span class="stats-client-chart-waived" style="width:${settled}%"></span>`:''}</div></div>
+          <div class="stats-comparison-detail"><span>${money(received(b))} ontvangen</span>${remaining(b)>0.005?`<span class="stats-comparison-outstanding">${money(remaining(b))} nog te ontvangen</span>`:'' }${waived(b)>0.005?`<span class="stats-comparison-writtenoff">${money(waived(b))} afgerond</span>`:''}</div>
         </div>`;
       }).join('')}</div></section>`;
     }
     const maxMoney=Math.max(0.01,...list.map(total));
     return `<section class="card stats-chart-card stats-comparison-chart" aria-label="Afgesproken en ontvangen per periode"><h3>Afgesproken en ontvangen</h3>${legend}
     <div class="stats-period-chart-scroll"><div class="stats-period-chart">${buckets.map(b=>{
-      const ownTotal=total(b),barHeight=percentage(ownTotal,maxMoney),paid=percentage(received(b),ownTotal),unpaid=percentage(remaining(b),ownTotal);
-      const desc=`${b.label}: ${money(agreed(b))} afgesproken, ${money(received(b))} ontvangen, ${money(remaining(b))} nog niet ontvangen`;
+      const ownTotal=total(b),barHeight=percentage(ownTotal,maxMoney),paid=percentage(received(b),ownTotal),unpaid=percentage(remaining(b),ownTotal),settled=percentage(waived(b),ownTotal);
+      const desc=`${b.label}: ${money(agreed(b))} afgesproken, ${money(received(b))} ontvangen, ${money(remaining(b))} nog te ontvangen${waived(b)>0?`, ${money(waived(b))} afgerond (niet openstaand)`:''}`;
       return `<div class="stats-period-chart-col" role="img" aria-label="${esc(desc)}">
         <span class="stats-period-chart-value">${ownTotal>0?`<strong>${money(received(b))}</strong><small>van ${money(agreed(b))}</small>`:'–'}</span>
-        <div class="stats-period-chart-track">${ownTotal>0?`<span class="stats-period-chart-stack" style="height:${barHeight}%">${unpaid>0?`<span class="stats-period-chart-open" style="height:${unpaid}%"></span>`:''}<span class="stats-period-chart-fill" style="height:${paid}%"></span></span>`:''}</div>
+        <div class="stats-period-chart-track">${ownTotal>0?`<span class="stats-period-chart-stack" style="height:${barHeight}%">${settled>0?`<span class="stats-period-chart-waived" style="height:${settled}%"></span>`:'' }${unpaid>0?`<span class="stats-period-chart-open" style="height:${unpaid}%"></span>`:''}<span class="stats-period-chart-fill" style="height:${paid}%"></span></span>`:''}</div>
         <span class="stats-period-chart-label">${esc(b.label)}</span>
       </div>`;
     }).join('')}</div></div></section>`;
@@ -2246,7 +2251,7 @@ const App = (() => {
         <button type="button" class="tab ${mode==='year'?'active':''}" data-stat-mode="year">Per jaar</button>
       </div>
       ${customerMode?`<div class="field stat-year-field"><label for="customerStatsYear">Kalenderjaar</label><select id="customerStatsYear">${years.map(y=>`<option value="${y}" ${y===customerYear?'selected':''}>${y}</option>`).join('')}</select></div>`:''}
-      ${content}<p class="muted small stats-comparison-note">Rood is het verschil tussen het afgesproken bedrag en wat je hebt ontvangen; dit kan ook nog niet gefactureerd werk zijn.</p>
+      ${content}<p class="muted small stats-comparison-note">Rood toont alleen wat bij Klussen of Facturen nog openstaat. Afgeronde bedragen zijn geen schuld en worden apart in grijs getoond.</p>
       ${undated>0?`<p class="muted small stats-undated">Zonder uitvoerdatum (niet ingedeeld): ${money(undated)}</p>`:''}`);
       $$('[data-stat-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.statMode;draw()}));
       $('#customerStatsYear')?.addEventListener('change',e=>{customerYear=Number(e.target.value);draw()});
