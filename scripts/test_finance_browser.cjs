@@ -4,7 +4,7 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 module.exports=async(browser,origin)=>{
  const root=path.join(__dirname,'..'),cloudSource=(await fs.readFile(path.join(root,'app/cloud.js'),'utf8')).replace('return {readBackupSnapshot,','return {encodeRecord,decodeRecord,readBackupSnapshot,');
- const source=(await fs.readFile(path.join(root,'app/app.js'),'utf8')).replace('return {init,go};','return {init,go,state,editJob,showJob,showDocument,showPayments,renderJobs,renderDashboard,refreshFinance,jobMinutes,jobFinancial,periodBuckets,customerStatBuckets,showClientHistory,showTimeStats,generateAnnualInvoiceReport,createBusinessDoc,setInvoiceJobLink};').replace("document.addEventListener('DOMContentLoaded',()=>App.init());",'');
+ const source=(await fs.readFile(path.join(root,'app/app.js'),'utf8')).replace('return {init,go};','return {init,go,state,editJob,showJob,showDocument,showPayments,renderJobs,renderDashboard,refreshFinance,jobMinutes,jobFinancial,financialEvents,periodBuckets,customerStatBuckets,showClientHistory,showTimeStats,generateAnnualInvoiceReport,createBusinessDoc,setInvoiceJobLink};').replace("document.addEventListener('DOMContentLoaded',()=>App.init());",'');
  const context=await browser.newContext({serviceWorkers:'block',viewport:{width:390,height:844}}),page=await context.newPage(),errors=[],writes=[];
  page.setDefaultTimeout(15000);
  await page.clock.setFixedTime(new Date('2026-10-21T10:00:00Z'));
@@ -366,6 +366,66 @@ module.exports=async(browser,origin)=>{
   await page.locator('[data-job="settlement-cash"]').waitFor();
   assert.equal(await page.locator('[data-job="settlement-cash"]').count(),1,'All jobs restored');
   console.log('PASS: issue #35 - open filter, compact price card, partial vs rounded paid, actual receipts and reversal');
+
+  // Alle uitsluitend fictieve registraties: materiaalvergoedingen zijn geen eigen inkomsten.
+  const earnings=await page.evaluate(async()=>{
+    const year=fixtureYear;
+    const mkJob=(id,agreedAmount,extraAmount=0,extraIncluded=false)=>({
+      id,clientId:'client',clientName:'Fictieve klant',date:year+'-01-15',
+      pricingType:'fixed',agreedAmount,extraAmount,extraIncluded
+    });
+    const mkDoc=(id,jobId,total,lines)=>({
+      id,folder:'factuur',meta:{jobId,docDate:year+'-01-15',total,korApplied:true,lines}
+    });
+    const mkPay=(id,amount,jobId,invoiceId,date)=>({
+      id,kind:'jkPayment',amount,jobId:invoiceId?'':jobId,invoiceId,date,method:'bank'
+    });
+    const run=(jobs,documents,settings)=>{
+      const snapshot=JKFinance.snapshot(jobs,documents,settings,j=>JKFinance.price(j,0,35));
+      const before=JSON.stringify({jobs,documents,settings});
+      const events=App.financialEvents([],jobs,{},snapshot);
+      return {ownAgreed:events.reduce((n,e)=>n+(e.amount||0),0),
+        ownReceived:events.reduce((n,e)=>n+(e.received||0),0),
+        receipts:events.filter(e=>e.received||e.undatedReceived).map(e=>({date:e.date,received:e.received})),
+        oldGrossReceived:snapshot.receipts.reduce((n,p)=>n+p.amount,0),
+        unchanged:before===JSON.stringify({jobs,documents,settings})};
+    };
+    const job=mkJob('profit',150,40);
+    const doc=mkDoc('invoice-profit','profit',190,[{qty:1,price:150,description:'Montage'},{qty:1,price:40,description:'Bon',expenseId:'bon-1'}]);
+    const full=run([job],[doc],[mkPay('profit-p1',100,'profit','',year+'-01-20'),mkPay('profit-p2',90,'profit','invoice-profit',year+'-02-20')]);
+    const included=run([mkJob('included',150,40,true)],[],[mkPay('inc-pay',150,'included','',year+'-02-20')]);
+    const receiptOnly=run([mkJob('receipt',150)],[mkDoc('receipt-doc','receipt',190,[{qty:1,price:150,description:'Montage'},{qty:1,price:40,description:'Bon',expenseId:'bon-2'}])],
+      [mkPay('receipt-pay',190,'receipt','receipt-doc',year+'-02-20')]);
+    const allIn=run([mkJob('all-in',190)],[mkDoc('all-in-doc','all-in',190,[{qty:1,price:150,description:'Montage'},{qty:1,price:40,description:'Bon',expenseId:'bon-3'}])],
+      [mkPay('all-in-pay',190,'all-in','all-in-doc',year+'-02-20')]);
+    const extraLine=run([mkJob('extra-line',150,40)],[mkDoc('extra-line-doc','extra-line',210,[
+      {qty:1,price:150,description:'Montage'},
+      {qty:1,price:40,description:'Bon',expenseId:'bon-4'},
+      {qty:1,price:20,description:'Extra kosten / materiaal'}
+    ])],[mkPay('extra-line-pay',210,'extra-line','extra-line-doc',year+'-02-20')]);
+    const orphan=run([],[mkDoc('orphan-profit','',190,[{qty:1,price:150,description:'Montage'},{qty:1,price:40,description:'Bon',expenseId:'bon-orphan'}])],
+      [mkPay('orphan-p',190,'','orphan-profit',year+'-02-20')]);
+    const partial=run([job],[doc],[mkPay('partial-p',100,'profit','invoice-profit',year+'-01-20')]);
+    const tip=run([job],[doc],[mkPay('tip-p',200,'profit','invoice-profit',year+'-02-20')]);
+    const noCost=run([mkJob('labor',150)],[],[mkPay('labor-p',150,'labor','',year+'-02-20')]);
+    return {year,full,included,receiptOnly,allIn,extraLine,orphan,partial,tip,noCost};
+  });
+  assert.equal(earnings.full.ownAgreed,150);
+  assert.equal(earnings.full.oldGrossReceived,190,'Betalingsregister bevat nog steeds de volledige ontvangst');
+  assert.equal(earnings.full.ownReceived,150,'Eigen verdiensten tellen geen €40 bonvergoeding');
+  assert.deepEqual(earnings.full.receipts,[{date:earnings.year+'-01-20',received:100},{date:earnings.year+'-02-20',received:50}],
+    'Twee betalingen verdeeld over maanden, zonder dubbel tellen');
+  for(const [key,agreed,received] of [
+    ['included',110,110],['receiptOnly',150,150],['allIn',150,150],['extraLine',150,150],['noCost',150,150]
+  ]){
+    assert.equal(earnings[key].ownAgreed,agreed,key+' Afgesproken zonder materiaal');
+    assert.equal(earnings[key].ownReceived,received,key+' Ontvangen zonder materiaal');
+    assert.equal(earnings[key].unchanged,true,key+' registraties niet gemuteerd');
+  }
+  assert.equal(earnings.orphan.ownReceived,150,'Losse factuur: ook bonvergoeding uitsluiten');
+  assert.equal(earnings.partial.ownReceived,100,'Deelbetaling niet verlagen met nog niet ontvangen materiaalvergoeding');
+  assert.equal(earnings.tip.ownReceived,160,'Meerbetaling boven klussom hoort bij eigen inkomsten');
+  console.log('PASS: alleen eigen verdiensten zonder voorgeschoten bonnetjes/extra kosten, incl. KOR, factuurregels, deelbetaling, losse factuur en ongewijzigde betaalrecords');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');
  }finally{await context.close();}
