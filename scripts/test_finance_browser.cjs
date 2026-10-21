@@ -119,9 +119,11 @@ module.exports=async(browser,origin)=>{
   const combined=page.locator('#modalRoot .stats-client-combined').first();
   assert.match(await combined.innerText(),/Fictieve klant/);
   assert.match(await combined.innerText(),/u/,'De uren staan bij dezelfde klant');
-  assert.match(await combined.innerText(),/270,00/,'Afgesproken bedrag vermeld');
   assert.match(await combined.innerText(),/200,00/,'Ontvangen bedrag vermeld');
-  assert.match(await combined.innerText(),/70,00/,'Nog niet ontvangen zichtbaar in dezelfde grafiek');
+  assert.match(await combined.innerText(),/50,00/,'Werkelijk openstaand zichtbaar in dezelfde grafiek');
+  assert.doesNotMatch(await combined.innerText(),/270,00|afgesproken/i,'Afgesproken bedrag niet getoond bij klant');
+  assert.match(await page.locator('#modalRoot .stats-comparison-summary').innerText(),/Ontvangen[\s\S]*200,00[\s\S]*Nog te ontvangen[\s\S]*50,00/);
+  assert.doesNotMatch(await page.locator('#modalRoot').innerText(),/afgesproken|270,00/i,'Alleen ontvangen en nog te ontvangen zichtbaar in klantstatistieken');
   assert.equal(await combined.locator('.stats-client-hours-fill').count(),1);
   assert.equal(await combined.locator('.stats-client-chart-fill').count(),1);
   assert.equal(await combined.locator('.stats-client-chart-open').count(),1);
@@ -139,20 +141,24 @@ module.exports=async(browser,origin)=>{
   await page.locator('[data-stat-mode="month"]').click();
   assert.equal(await page.locator('#modalRoot .stats-period-chart-col').count(),12,'12 maanden in een gecombineerde grafiek');
   const jan=page.locator('#modalRoot .stats-period-chart-col[aria-label*="jan"]');
-  assert.match(await jan.getAttribute('aria-label'),/270,00.*200,00/);
+  assert.match(await jan.getAttribute('aria-label'),/200,00.*50,00/);
+  assert.doesNotMatch(await page.locator('#modalRoot').innerText(),/afgesproken|270,00/i,'Maandstatistieken bevatten geen afgesproken bedragen');
+  assert.match(await jan.innerText(),/200,00[\s\S]*50,00/,'Ontvangen en nog te ontvangen beide zichtbaar boven staaf');
   assert.equal(await jan.locator('.stats-period-chart-open').count(),1,'Nog niet ontvangen als deel van dezelfde staaf');
   assert.equal(await page.evaluate(()=>{const c=document.querySelector('.stats-period-chart-scroll');return c.scrollWidth>c.clientWidth}),true,'Grafiek schuift horizontaal op mobiel');
   assert.equal(await page.locator('#modalRoot .stats-client-combined').count(),0);
   assert.doesNotMatch(await page.locator('#modalRoot').innerText(),/Zonder betaaldatum/,'Betaaldatum stuurt maand niet meer');
   await page.locator('[data-stat-mode="quarter"]').click();
   assert.equal(await page.locator('#modalRoot .stats-period-chart-col').count(),8,'8 kwartalen met gecombineerde balken');
-  assert.match(await page.locator('#modalRoot .stats-period-chart-col[aria-label*="Q1"]').last().getAttribute('aria-label'),/270,00.*200,00/);
+  assert.match(await page.locator('#modalRoot .stats-period-chart-col[aria-label*="Q1"]').last().getAttribute('aria-label'),/200,00.*50,00/);
+  assert.doesNotMatch(await page.locator('#modalRoot').innerText(),/afgesproken|270,00/i,'Kwartaal zonder afgesproken');
   await page.locator('[data-stat-mode="year"]').click();
   assert.equal(await page.locator('#modalRoot .stats-period-chart-col').count(),1,'Jaarweergave met beide bedragen');
-  assert.match(await page.locator('#modalRoot .stats-period-chart-value').innerText(),/200,00/);
+  assert.match(await page.locator('#modalRoot .stats-period-chart-value').innerText(),/200,00[\s\S]*50,00/);
+  assert.doesNotMatch(await page.locator('#modalRoot').innerText(),/afgesproken|270,00/i,'Jaar zonder afgesproken');
   await page.locator('[data-stat-mode="client"]').click();
   assert.match(await page.locator('#modalRoot .stats-client-combined').innerText(),/Fictieve klant/);
-  console.log('PASS: per klant uren en gecombineerde geldstaaf, ontvangen/afgesproken, per week verwijderd en tabvolgorde');
+  console.log('PASS: uren per klant en uitsluitend ontvangen/openstaande verdiensten in klanten-, maand-, kwartaal- en jaaroverzichten');
   await page.evaluate(()=>App.generateAnnualInvoiceReport(fixtureYear));
   // Financial records use the unchanged existing cloud format and backup schema.
   const encoded=await page.evaluate(async()=>{const rs=(await JKDB.all('settings')).filter(r=>r.kind==='jkPayment');return {records:await Promise.all(rs.map(r=>JKCloud.encodeRecord('settings',r))),jobs:await JKDB.all('jobs'),hours:await JKDB.all('timeEntries')};});
@@ -510,12 +516,13 @@ module.exports=async(browser,origin)=>{
   assert.equal(roundedStats.rounded.financeWaived,37.5,'Afronding volgens het financiële register');
   assert.deepEqual(roundedStats.rounded.totals,{amount:150,received:112.5,open:0,waived:37.5},'Statistieken kennen eigen afgeronde bedrag');
   assert.match(roundedStats.rounded.client,/112,50 ontvangen/,'Werkelijk ontvangen bedrag blijft zichtbaar');
-  assert.match(roundedStats.rounded.client,/150,00 afgesproken/,'Afspraak blijft als context zichtbaar');
+  assert.doesNotMatch(roundedStats.rounded.client,/150,00|afgesproken/i,'Afspraak verschijnt nergens in klantgrafiek');
   assert.doesNotMatch(roundedStats.rounded.client,/37,50|afgerond|afgeboekt|kwijtgescholden|stats-client-chart-waived|stats-chart-dot-waived|stats-comparison-writtenoff/i,
     'In klantstatistieken nergens een afgeboekt bedrag, tekst of grijs segment');
   assert.doesNotMatch(roundedStats.rounded.client,/class="stats-client-chart-open"/,'Geen rode restschuld voor afgeronde klant');
   assert.doesNotMatch(roundedStats.rounded.client,/37,50 nog te ontvangen/,'Niet opnieuw als schuld presenteren');
   assert.match(roundedStats.rounded.period,/112,50/,'Maand behoudt werkelijk ontvangen bedrag');
+  assert.doesNotMatch(roundedStats.rounded.period,/150,00|afgesproken/i,'Maand toont geen afgesproken bedrag');
   assert.doesNotMatch(roundedStats.rounded.period,/37,50|afgerond|afgeboekt|kwijtgescholden|stats-period-chart-waived|stats-chart-dot-waived/i,
     'In periodegrafiek nergens een afgeboekt bedrag, tekst of grijs segment');
   assert.doesNotMatch(roundedStats.rounded.period,/stats-period-chart-open/,'Per maand geen rode restschuld');
