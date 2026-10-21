@@ -1,3 +1,11 @@
+## v71.13.5 — overzichtelijke statistieken per klant en periode
+- Meer → Statistieken toont voortaan één duidelijk bedrag per klant, week, maand, kwartaal of jaar, met één totaal erboven. Het standaardoverzicht toont werkelijk **ontvangen** bedragen op betaaldatum.
+- Via een eenvoudige keuze **Ontvangen / Afgesproken / Uren** kun je ook de afgesproken klussom of gewerkte uren bekijken, zonder alle cijfers naast elkaar. Alleen periodes of klanten met activiteit binnen de gekozen maatstaf worden getoond; klanten sorteren op het geselecteerde bedrag.
+- Overbodige zesdelige financiële kaarten, dubbele samenvattingen, extra grafieken, effectieve uurtarieven en btw-cijfers verdwijnen uit dit statistiekenscherm. Maand-, kwartaal- en klantberekeningen worden niet aangepast; bedragen met een ontbrekende betaaldatum worden indien aanwezig apart vermeld.
+- Geen financiële berekeningen, betalingsregistraties, uren, documenten, klanten, IndexedDB of Supabase aangepast. Mobiele app-layout en andere schermen blijven intact.
+- Playwright-regressies controleren de compacte standaardweergave, wisselen tussen klanten/perioden/maatstaven en bestaande inkomstenbedragen. GitHub Actions, GitGuardian en Pages-publicatie volgen de bestaande werkwijze.
+- Herstelbranch van laatst bevestigde productieversie v71.13.4: `recovery/2026-10-21-v71-13-4` op `d952578d98adf0493eb315b2740d4945d4d26a4f`. Fysieke iPhone/browserprofiel en productiegegevens zijn niet rechtstreeks getest.
+
 ## v71.13.4 — iOS 27-systeemvervaging boven logo en knoppen
 - iOS 27 kan in geïnstalleerde webapps zelf de bovenste schermzone vervagen wanneer `black-translucent` is ingeschakeld. Het extra CSS-blurfilter stond al uit; de compacte v71.13.3-bovenbalk kwam opnieuw in deze systeemzone.
 - Alleen in de geïnstalleerde iPhone-webapp wordt de eerder op het echte toestel scherpe veilige bovenruimte uit v71.13.2 hersteld: `max(100px, safe-area-top + 44px)`; iOS-PWA modals behouden ook hun veilige marge (`max(112px, safe-area-top + 50px)`). Geen verandering aan openbare website, gewone Safari of desktop.
