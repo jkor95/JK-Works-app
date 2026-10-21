@@ -253,7 +253,7 @@ module.exports=async(browser,origin)=>{
   const setSettlement=async changes=>page.evaluate(async changes=>{const j=await JKDB.get('jobs','settlement');await JKDB.putLocal('jobs',{...j,...changes});await App.renderJobs();},changes);
   const settlementMetrics=()=>page.evaluate(()=>App.state.finance.job(App.state.finance.jobs.find(j=>j.id==='settlement')));
   await setSettlement({status:'afgerond'});assert.equal((await settlementMetrics()).open,0,'Completed alone is insufficient with a future workday');assert.equal((await settlementMetrics()).agreed,150);assert.equal((await settlementMetrics()).paid,false);
-  await page.evaluate(()=>App.showJob('settlement'));assert.match(await page.locator('#modalRoot').innerText(),/Nog af te rekenen na afronding/);await page.locator('[data-close]').click();
+  await page.evaluate(()=>App.showJob('settlement'));assert.match(await page.locator('#modalRoot').innerText(),/Na afronding af te rekenen/);await page.locator('[data-close]').click();
   await setSettlement({status:'gepland',workDays:[{date:'2026-10-01',startTime:'08:00',endTime:'16:00'},{date:'2026-10-15',startTime:'08:00',endTime:'16:00'}]});assert.equal((await settlementMetrics()).open,0,'Past end alone is insufficient while planned');
   await setSettlement({status:'open'});assert.equal((await settlementMetrics()).open,0);
   await page.evaluate(()=>App.editJob('settlement'));await page.locator('[name=status]').selectOption('afgerond');await saveJob();await page.evaluate(()=>App.renderJobs());
