@@ -39,7 +39,7 @@ module.exports=async(browser,origin)=>{
   });
   const metrics=()=>page.evaluate(async()=>{const f=await App.refreshFinance();return {...f.job(await JKDB.get('jobs','fixed')),minutes:App.jobMinutes(await JKDB.get('jobs','fixed'),await JKDB.all('timeEntries'))};});
   let m=await metrics();assert.equal(m.minutes,1020);assert.equal(m.hoursValue,170);assert.equal(m.agreed,150);assert.equal(m.open,150);
-  await page.evaluate(()=>App.showJob('fixed'));assert.match(await page.locator('#modalRoot').innerText(),/8,82/);
+  await page.evaluate(()=>App.showJob('fixed'));assert.match(await page.locator('#modalRoot').innerText(),/150,00/);
   assert.equal(await page.evaluate(()=>document.querySelector('.modal').scrollWidth<=document.querySelector('.modal').clientWidth+1),true);
   await page.locator('#paymentsThisJob').click();await page.locator('#addPayment').click();
   await page.locator('[name=amount]').fill('100');await page.locator('[name=date]').fill(`${await page.evaluate(()=>fixtureYear)}-02-10`);await page.locator('[name=method]').selectOption('bank');
@@ -51,7 +51,7 @@ module.exports=async(browser,origin)=>{
   await page.locator('[data-close]').click();await page.evaluate(()=>App.renderJobs());
   assert.equal(await page.locator('#view .finance-kpis').count(),0,'Klussenoverzicht heeft geen detailkaarten');
   assert.equal(await page.locator('#view .jobs-summary-card').count(),0,'Klussenoverzicht heeft geen uitgebreide samenvatting');
-  const row=page.locator('[data-job=fixed]');assert.match(await row.innerText(),/Montage kast/);assert.match(await row.innerText(),/Fictieve klant/);assert.doesNotMatch(await row.innerText(),/€|Berekende urenwaarde|Referentie-uurtarief|Effectief/);
+  const row=page.locator('[data-job=fixed]');assert.match(await row.innerText(),/Montage kast/);assert.match(await row.innerText(),/Fictieve klant/);assert.doesNotMatch(await row.innerText(),/Berekende urenwaarde|Referentie-uurtarief|Effectief/);assert.match(await row.innerText(),/50,00/);
   await row.click();await page.locator('#paymentsThisJob').waitFor();
   for(const label of ['Gewerkt','Afgesproken','Ontvangen','Nog te ontvangen'])assert.ok((await page.locator('#modalRoot').innerText()).includes(label),label+' zichtbaar in compacte kluskaart');
   for(const label of ['Referentie-uurtarief','Gefactureerd incl. btw','Effectief afgesproken / uur'])assert.ok(!(await page.locator('#modalRoot').innerText()).includes(label),label+' verborgen in compacte kluskaart');
