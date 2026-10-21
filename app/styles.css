@@ -266,17 +266,17 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 .job-totals button.job-open-filter:focus-visible{outline:3px solid #111;outline-offset:2px}
 .job-totals button.job-open-filter[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--danger)}
 
-/* v71.13.3 — compactere bovenbalk voor geïnstalleerde iPhone-webapp.
-   Onder de systeemstatusbalk blijven, zonder eigen vervaging;
-   normale Safari en openbare website ongewijzigd. */
+/* v71.13.4 — iOS 27 vervaagt zelf het bovenste schermgebied.
+   Herstel de eerder op iPhone zichtbare veilige afstand van v71.13.2.
+   Houd CSS-blur uitgeschakeld; alleen geïnstalleerde iPhone-webapp. */
 @media(max-width:600px){
   .ios-standalone #appShell > .topbar{
-    padding-top:max(72px,calc(env(safe-area-inset-top,0px) + 12px));
+    padding-top:max(100px,calc(env(safe-area-inset-top,0px) + 44px));
     background:#f8f6f2;
     -webkit-backdrop-filter:none;
     backdrop-filter:none;
   }
   .ios-standalone .modal{
-    max-height:calc(100dvh - max(96px,calc(env(safe-area-inset-top,0px) + 30px)));
+    max-height:calc(100dvh - max(112px,calc(env(safe-area-inset-top,0px) + 50px)));
   }
 }

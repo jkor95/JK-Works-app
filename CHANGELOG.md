@@ -1,3 +1,10 @@
+## v71.13.4 — iOS 27-systeemvervaging boven logo en knoppen
+- iOS 27 kan in geïnstalleerde webapps zelf de bovenste schermzone vervagen wanneer `black-translucent` is ingeschakeld. Het extra CSS-blurfilter stond al uit; de compacte v71.13.3-bovenbalk kwam opnieuw in deze systeemzone.
+- Alleen in de geïnstalleerde iPhone-webapp wordt de eerder op het echte toestel scherpe veilige bovenruimte uit v71.13.2 hersteld: `max(100px, safe-area-top + 44px)`; iOS-PWA modals behouden ook hun veilige marge (`max(112px, safe-area-top + 50px)`). Geen verandering aan openbare website, gewone Safari of desktop.
+- CSS `-webkit-backdrop-filter:none` en `backdrop-filter:none` blijven ongewijzigd. De iOS statusbalkstijl blijft `black-translucent` om te voorkomen dat herinstallatie (met mogelijke lokale opslaggevolgen) noodzakelijk wordt.
+- Playwright-tests op geïsoleerde iPhone-standalone, Safari, desktop, sticky scrollen en modals bijgewerkt. GitHub Actions, GitGuardian en Pages apart te verifiëren op de nieuwe commit. De echte iOS-systeemeffecten zijn alleen op de iPhone te beoordelen.
+- Herstelbranch vorige versie: `recovery/2026-10-21-v71-13-3` op commit `975df8cae7acd50f051cb82104d428661ce53eb9`. Geen gebruikersgegevens, Supabase, betalingen of notificaties gewijzigd.
+
 ## v71.13.3 — iPhone-webapp bovenbalk compacter zonder wazigheid
 - De bovenbalk van alleen de geïnstalleerde iPhone-webapp staat circa 25–30 CSS-pixels hoger dan in v71.13.2, zodat meer dashboard, klussen en documenten direct zichtbaar zijn. De minimale ruimte past zich aan de daadwerkelijke iOS-safe-area aan.
 - De vaste, niet-transparante achtergrond en uitgeschakelde backdrop blur blijven behouden, zodat logo, titel, Sync en knoppen scherp en bereikbaar zijn, ook tijdens scrollen.
