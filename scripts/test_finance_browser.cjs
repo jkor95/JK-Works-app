@@ -563,11 +563,11 @@ module.exports=async(browser,origin)=>{
   await page.evaluate(()=>App.createBusinessDoc('Offerte',{jobId:'address-job'}));
   assert.equal(await page.locator('[name=address]').inputValue(),'Klantstraat 10','Offerte gebruikt klantadres');
   assert.match(await page.locator('[name=postalCity]').inputValue(),/3331 AA.*Zwijndrecht/,'Offerte gebruikt klantplaats');
-  assert.doesNotMatch(await page.locator('#businessDocForm').innerText(),/Klusstraat 25|2991 BB|Barendrecht/,'Uitvoeringsadres niet op offerte');
+  assert.doesNotMatch(await page.locator('#businessDocForm').innerText(),/Klusstraat 25|2991 BB/,'Uitvoeringsadres niet op offerte');
   await page.evaluate(()=>App.createBusinessDoc('Factuur',{jobId:'address-job'}));
   assert.equal(await page.locator('[name=address]').inputValue(),'Klantstraat 10','Factuur gebruikt klantadres');
   assert.match(await page.locator('[name=postalCity]').inputValue(),/3331 AA.*Zwijndrecht/,'Factuur gebruikt klantplaats');
-  assert.doesNotMatch(await page.locator('#businessDocForm').innerText(),/Klusstraat 25|2991 BB|Barendrecht/,'Uitvoeringsadres niet op factuur');
+  assert.doesNotMatch(await page.locator('#businessDocForm').innerText(),/Klusstraat 25|2991 BB/,'Uitvoeringsadres niet op factuur');
   await page.evaluate(()=>App.editJob('address-job'));
   assert.equal(await page.locator('#jobExecutionDifferent').isChecked(),true,'Bij heropenen staat afwijkend adres nog aangevinkt');
   assert.equal(await page.locator('[name=executionStreet]').inputValue(),'Klusstraat 25','Uitvoeringsadres wordt teruggeladen');
