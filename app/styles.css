@@ -367,11 +367,6 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 .stats-comparison-chart .stats-period-chart-value strong{font-size:11px}
 @media(max-width:430px){.stats-comparison-summary{gap:8px;padding:13px}.stats-comparison-summary>div strong{font-size:18px}.stats-comparison-chart .stats-period-chart-col{grid-template-rows:47px 136px 32px}}
 
-/* v71.13.10 — beide klantbalken gelijk, afgeronde bedragen apart van schulden. */
+/* v71.13.11 — beide klantbalken gelijk (14 px). */
 .stats-client-hours-track,.stats-client-money-track{height:14px;min-height:14px}
-.stats-client-chart-waived{height:100%;flex:none;background:#aaa9a3;border-radius:0 999px 999px 0}
-.stats-period-chart-waived{display:block;flex:none;width:100%;min-height:0;background:#aaa9a3}
-.stats-chart-dot-waived{background:#aaa9a3}
 .stats-comparison-outstanding{color:#b43635}
-.stats-comparison-writtenoff{color:var(--muted)}
-.stats-comparison-detail .stats-comparison-writtenoff:last-child{color:var(--muted)}
