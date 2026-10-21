@@ -209,6 +209,35 @@ module.exports=async(browser,origin)=>{
   assert.equal(photoBackup.length,3);assert.ok(photoBackup.every(p=>p.jobId==='fixed'&&p.size>0));assert.ok(photoBackup.some(p=>p.id==='old-photo'&&p.phase==='before'));
   assert.equal(await page.evaluate(ids=>ids.every(id=>workflowQueued.filter(r=>r.store==='jobPhotos'&&r.id===id).length===2),photoIds.slice(1)),true,'Upload and recategorization synchronize the same photo IDs');
   console.log('PASS: één multi-upload/fotomap per klus, categorie achteraf/optioneel, behoud oude foto’s, mobiele weergave, gedeelde Documenten-verwijdering, sync-ID en back-upformaat');
+  // Replanning hides only the premature payment highlight; financial records stay intact.
+  await page.evaluate(async()=>{
+    await JKDB.putLocal('jobs',{id:'badge',title:'Een lange omschrijving van de klus voor mobiele uitlijning',clientName:'Testklant',date:'2026-10-01',startTime:'08:00',endTime:'16:00',pricingType:'fixed',agreedAmount:150,status:'open'});
+    await App.renderJobs();
+  });
+  const badgeRow=page.locator('[data-job="badge"]');assert.equal(await badgeRow.locator('.job-payment-badge').count(),1);
+  const badgeAmount=await page.evaluate(async()=>{await App.refreshFinance();return App.jobFinancial(await JKDB.get('jobs','badge'),[],{}).open;});
+  await page.evaluate(()=>App.editJob('badge'));await page.locator('#addWorkDay').click();await page.locator('[name=dayDate]').last().fill('2026-10-25');await saveJob();
+  await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),0);assert.ok(!(await badgeRow.getAttribute('class')).includes('payment-unpaid'));assert.equal(await badgeRow.locator('.job-status').innerText(),'open');
+  assert.equal(await page.evaluate(async()=>{await App.refreshFinance();return App.jobFinancial(await JKDB.get('jobs','badge'),[],{}).open;}),badgeAmount);
+  for(const width of [390,1024]){
+    await page.setViewportSize({width,height:844});
+    const layout=await badgeRow.evaluate(row=>{const title=row.querySelector('.title').getBoundingClientRect(),status=row.querySelector('.job-status').getBoundingClientRect();return {sameTop:Math.abs(title.top-status.top)<2,right:status.left>=title.right,gap:status.left-title.right,fits:row.scrollWidth<=row.clientWidth};});
+    assert.ok(layout.sameTop&&layout.right&&layout.fits,JSON.stringify(layout));
+  }
+  await page.setViewportSize({width:390,height:844});
+  await page.evaluate(()=>App.editJob('badge'));await page.locator('[name=dayDate]').last().fill('2026-10-15');await saveJob();await page.evaluate(()=>App.renderJobs());
+  assert.equal(await badgeRow.locator('.danger').count(),1);
+  assert.equal(await badgeRow.evaluate(row=>row.querySelector('.job-payment-badge').getBoundingClientRect().top>row.querySelector('.job-row-heading').getBoundingClientRect().bottom),true,'Payment badge below title/status');
+  await page.evaluate(()=>App.editJob('badge'));await page.locator('[name=dayDate]').first().fill('2026-10-26');await page.locator('[name=status]').selectOption('gepland');await saveJob();await page.evaluate(()=>App.renderJobs());
+  assert.equal(await badgeRow.locator('.danger').count(),0);assert.equal(await badgeRow.locator('.job-status').innerText(),'gepland');
+  await page.evaluate(()=>App.renderDashboard());
+  const dashboardGap=await page.evaluate(()=>document.querySelector('.dashboard-first-title').getBoundingClientRect().top-document.querySelector('#dashboardJobOpen').getBoundingClientRect().bottom);assert.ok(dashboardGap>=24,'Dashboard gap: '+dashboardGap);
+  await page.evaluate(async()=>{const j=await JKDB.get('jobs','badge');await JKDB.putLocal('jobs',{...j,workDays:undefined,date:'2026-10-20',startTime:'20:00',endTime:'02:00',status:'gepland'});});
+  await page.clock.setFixedTime(new Date('2026-10-20T23:00:00Z'));await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),0,'Night shift still running');
+  await page.clock.setFixedTime(new Date('2026-10-21T01:00:00Z'));await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),1,'Night shift ended');
+  await page.evaluate(async()=>{await JKDB.putLocal('settings',{id:'badge-payment',kind:'jkPayment',jobId:'badge',amount:150,date:'2026-10-21',method:'bank'});});await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),0,'Paid past job stays neutral');
+  await page.clock.setFixedTime(new Date('2026-10-21T10:00:00Z'));
+  console.log('PASS: toekomstige datum toevoegen/verplaatsen verwijdert voortijdige betaalbadge; status rechts naast omschrijving mobiel/desktop, betaalbadge eronder, dashboardafstand, nachtwerk en behoud financieel saldo');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');
  }finally{await context.close();}

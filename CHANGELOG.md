@@ -1,3 +1,10 @@
+## v71.12.1 — betaalbadge bij toekomstige werkdagen en duidelijke uitlijning
+- Klussen met nog geplande toekomstige/lopende werkdagen krijgen geen rode rij of ‘Nog te ontvangen’-badge, ook als een extra werkdag later is toegevoegd. Alle werkdagen worden gecontroleerd, inclusief nachtwerk; het financiële saldo en de gekozen klusstatus blijven behouden.
+- De statusbadge open/gepland/afgerond staat rechts naast de klusomschrijving, ook op mobiel. Een eventuele betaalbadge staat eronder.
+- Meer ruimte tussen de aankomende/huidige klus en ‘Snel openen’ op het dashboard.
+- Gerichte browserregressies voor datumwijziging, extra toekomstige werkdag, tijdgrenzen/nachtwerk, betaalbehoud, mobiele/desktopuitlijning en dashboardafstand; volledige bestaande suite met fictieve gegevens. Geen productiegegevens gewijzigd tijdens tests; geen fysieke iPhone/Mac-test.
+- App-/cacheversie vernieuwd. Herstelpunt: geannoteerde tag v71.12.0 op 6a68dfefef0a8916a159df3511abc121032ce5c3, bevestigd als succesvolle Pages-publicatie via main / op jkworks.nl. Geen database-/schemawijzigingen.
+
 ## v71.12.0 — eenvoudige ureninvoer, compacte overzichten en één klusfotomap
 - Eén formulier ‘Uren & bedrag’ vanuit een klus: meerdere gewerkte dagen met tijden en pauzes invoeren, kiezen tussen gewerkte uren × uurtarief of een vast bedrag, vervolgens extra kosten en direct het totaal zien. Inbegrepen kosten bij een vaste prijs blijven ondersteund.
 - Alleen expliciet ingevoerde werkelijke uren worden opgeslagen. Planning wordt niet overgenomen. Bestaande ongewijzigde uren en bevestigingsvlaggen blijven exact behouden; oude onbevestigde registraties vereisen een expliciet vinkje. Prijswijzigingen herschrijven geen bestaande facturen of betalingen.
