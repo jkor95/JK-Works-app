@@ -4,7 +4,7 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 module.exports=async(browser,origin)=>{
  const root=path.join(__dirname,'..'),cloudSource=(await fs.readFile(path.join(root,'app/cloud.js'),'utf8')).replace('return {readBackupSnapshot,','return {encodeRecord,decodeRecord,readBackupSnapshot,');
- const source=(await fs.readFile(path.join(root,'app/app.js'),'utf8')).replace('return {init,go};','return {init,go,state,editJob,showJob,showDocument,showPayments,renderJobs,renderDashboard,refreshFinance,jobMinutes,jobFinancial,financialEvents,periodBuckets,customerStatBuckets,simpleStatsChartHtml,showClientHistory,showTimeStats,generateAnnualInvoiceReport,createBusinessDoc,setInvoiceJobLink};').replace("document.addEventListener('DOMContentLoaded',()=>App.init());",'');
+ const source=(await fs.readFile(path.join(root,'app/app.js'),'utf8')).replace('return {init,go};','return {init,go,state,editJob,showJob,showDocument,showPayments,renderJobs,renderDashboard,refreshFinance,jobMinutes,jobFinancial,financialEvents,periodBuckets,customerStatBuckets,simpleStatsChartHtml,statsComparisonChartHtml,showClientHistory,showTimeStats,generateAnnualInvoiceReport,createBusinessDoc,setInvoiceJobLink};').replace("document.addEventListener('DOMContentLoaded',()=>App.init());",'');
  const context=await browser.newContext({serviceWorkers:'block',viewport:{width:390,height:844}}),page=await context.newPage(),errors=[],writes=[];
  page.setDefaultTimeout(15000);
  await page.clock.setFixedTime(new Date('2026-10-21T10:00:00Z'));
@@ -113,7 +113,13 @@ module.exports=async(browser,origin)=>{
   assert.equal(await combined.locator('.stats-client-hours-fill').count(),1);
   assert.equal(await combined.locator('.stats-client-chart-fill').count(),1);
   assert.equal(await combined.locator('.stats-client-chart-open').count(),1);
-  assert.match(await page.locator('#modalRoot .stats-chart-legend').innerText(),/Ontvangen[\s\S]*Nog niet ontvangen/);
+  const heights=await combined.evaluate(el=>({
+    hours:getComputedStyle(el.querySelector('.stats-client-hours-track')).height,
+    money:getComputedStyle(el.querySelector('.stats-client-money-track')).height
+  }));
+  assert.equal(heights.hours,'14px','Urenbalk op 14 pixels');
+  assert.equal(heights.money,heights.hours,'Geldbalk exact even dik als urenbalk');
+  assert.match(await page.locator('#modalRoot .stats-chart-legend').innerText(),/Ontvangen[\s\S]*Nog te ontvangen/);
   assert.equal(await page.locator('#modalRoot .stats-chart-card').count(),1,'Eén gezamenlijke grafiek per klant');
   assert.equal(await page.locator('#modalRoot .finance-kpis').count(),0,'Geen uitgebreide financiële KPI-kaarten');
   assert.equal(await page.locator('#modalRoot .dual-stats-chart').count(),0,'Geen oude dubbele periodegrafieken');
@@ -471,6 +477,39 @@ module.exports=async(browser,origin)=>{
   assert.deepEqual(endDateStats.noDate,{datedTotal:0,undatedTotal:150},'Ontbrekende uitvoerdatum valt niet terug op factuur-/betaaldatum');
   assert.match(endDateStats.onlyOpenChart,/stats-period-chart-open/,'Niets betaald: toch volledig rode staaf');
   assert.doesNotMatch(endDateStats.noCostChart,/stats-period-chart-open/,'Geen rood bij volledig betaald eigen werk');
+  // Afgerond bedrag wordt niet opnieuw als openstaande schuld getoond.
+  // Voorbeeld: afgesproken 150, ontvangen 112,50, handmatig afgerond 37,50.
+  const roundedStats=await page.evaluate(()=>{
+    const job={id:'rounded-test',title:'Afgeronde klus',clientId:'client',clientName:'Testklant',date:'2026-06-02',status:'afgerond',pricingType:'fixed',agreedAmount:150};
+    const payment={id:'testpayment',kind:'jkPayment',jobId:job.id,amount:112.50,date:'2026-06-18'};
+    const writeoff={id:'writeoff:job:rounded-test',kind:'jkWriteoff',jobId:job.id,amount:37.50,date:'2026-06-19'};
+    const calc=rows=>{
+      const fin=JKFinance.snapshot([job],[],rows,j=>JKFinance.price(j,0,0),()=>true);
+      const events=App.financialEvents([], [job], {}, fin);
+      const totals=events.reduce((a,e)=>({amount:a.amount+(e.amount||0),received:a.received+(e.received||0),open:a.open+(e.open||0),waived:a.waived+(e.waived||0)}),{amount:0,received:0,open:0,waived:0});
+      const bucket={...totals,key:'2026-06',label:'jun',minutes:180};
+      return {financeOpen:fin.job(job).open,financeWaived:fin.job(job).waived,totals,
+        client:App.statsComparisonChartHtml([bucket],true),
+        period:App.statsComparisonChartHtml([bucket],false)};
+    };
+    return {rounded:calc([payment,writeoff]),unrounded:calc([payment]),reversed:calc([payment,{...writeoff,voided:true}])};
+  });
+  assert.equal(roundedStats.rounded.financeOpen,0,'Klus is niet langer openstaand');
+  assert.equal(roundedStats.rounded.financeWaived,37.5,'Afronding volgens het financiële register');
+  assert.deepEqual(roundedStats.rounded.totals,{amount:150,received:112.5,open:0,waived:37.5},'Statistieken kennen eigen afgeronde bedrag');
+  assert.match(roundedStats.rounded.client,/37,50 afgerond/,'Afronding wordt afzonderlijk benoemd');
+  assert.match(roundedStats.rounded.client,/stats-client-chart-waived/,'Afgerond bedrag grijs in dezelfde staaf');
+  assert.doesNotMatch(roundedStats.rounded.client,/class="stats-client-chart-open"/,'Geen rode restschuld voor afgeronde klant');
+  assert.doesNotMatch(roundedStats.rounded.client,/37,50 nog te ontvangen/,'Niet opnieuw als schuld presenteren');
+  assert.match(roundedStats.rounded.period,/stats-period-chart-waived/,'Per maand ook afgeronde deel grijs');
+  assert.doesNotMatch(roundedStats.rounded.period,/stats-period-chart-open/,'Per maand geen rode restschuld');
+  assert.equal(roundedStats.unrounded.financeOpen,37.5,'Zonder afronding is er wel restschuld');
+  assert.equal(roundedStats.unrounded.totals.open,37.5,'Restschuld uit Klussen overgenomen');
+  assert.match(roundedStats.unrounded.client,/37,50 nog te ontvangen/);
+  assert.match(roundedStats.unrounded.client,/class="stats-client-chart-open"/);
+  assert.equal(roundedStats.reversed.totals.waived,0,'Geannuleerde afboeking wordt niet meer weergegeven');
+  assert.equal(roundedStats.reversed.totals.open,37.5,'Schuld komt terug als de afboeking is geannuleerd');
+  console.log('PASS: afgeronde €37,50 niet meer openstaand, niet-afgerond blijft rood en beide klantbalken even dik');
   console.log('PASS: alleen eigen verdiensten en transparant rood openstaand per laatste uitvoerdag, ook meerdaags, over jaargrens, los, ongedateerd en kwijtschelding');
   console.log('PASS: alleen eigen verdiensten zonder voorgeschoten bonnetjes/extra kosten, incl. KOR, factuurregels, deelbetaling, losse factuur en ongewijzigde betaalrecords');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);

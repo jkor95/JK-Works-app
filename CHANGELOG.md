@@ -1,3 +1,10 @@
+## v71.13.10 — juiste resterende schuld na afronding en gelijke balkdikte
+- Meer → Statistieken gebruikt voor **Nog te ontvangen** exact de bestaande openstaande eigen verdiensten uit Klussen/Facturen. Het verschil tussen afgesproken en ontvangen wordt niet meer automatisch als schuld gezien.
+- Expliciete afrondingen/afboekingen (bijvoorbeeld € 37,50) zijn geen openstaande schuld en krijgen indien relevant een **grijs segment 'Afgerond'**, met eigen bedrag, naast ontvangen (gevuld) en werkelijk openstaand (rood). Het oorspronkelijk afgesproken bedrag blijft zichtbaar.
+- De horizontale uren- en verdienstenbalk onder Per klant zijn **allebei 14 px hoog**.
+- Testscenario's controleren een fictieve klus met € 150 afgesproken, € 112,50 ontvangen en € 37,50 expliciet afgerond, versus dezelfde klus zonder/met geannuleerde afronding, en de exacte balkhoogtes.
+- Alleen afgeleide statistieken, CSS, tests en PWA-cache aangepast. Geen mutatie van opgeslagen betalingen, afboekingen, facturen, klantgegevens of Supabase.
+
 ## v71.13.9 — per klant uren en afspraken/ontvangsten samen
 - **Meer → Statistieken** opent nu standaard met **Per klant**. De tab **Per week** is uit het scherm verwijderd; volgorde: **Per klant, Per maand, Per kwartaal, Per jaar**.
 - Per klant toont één compacte gezamenlijke kaart zowel een horizontale **urenbalk** als een horizontale **verdienstenbalk** met **afgesproken**, **ontvangen** en het verschil **nog niet ontvangen**, plus alle exacte cijfers. Geen wisselen tussen drie losse maatstaven of dubbele klantlijsten meer.
