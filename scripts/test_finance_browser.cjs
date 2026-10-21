@@ -84,7 +84,7 @@ module.exports=async(browser,origin)=>{
   // Frozen old paid amounts survive switching legacy jobs to a fixed price, without invented dates.
   await page.evaluate(()=>App.editJob('legacy'));await page.locator('[name=pricingType]').selectOption('fixed');await page.locator('[name=agreedAmount]').fill('120');await saveJob();
   const legacy=await page.evaluate(async()=>{const f=await App.refreshFinance();return {metrics:f.job(await JKDB.get('jobs','legacy')),payments:f.receipts.filter(p=>p.resolvedJobId==='legacy')};});
-  assert.equal(legacy.metrics.received,100);assert.equal(legacy.metrics.open,20);assert.equal(legacy.payments[0].date,'');
+  assert.equal(legacy.metrics.received,100);assert.equal(legacy.metrics.open,0);assert.equal(legacy.metrics.balance,20);assert.equal(legacy.payments[0].date,'');
   await page.evaluate(()=>App.editJob('fixed'));await page.locator('[name=pricingType]').selectOption('manual');await page.locator('[name=agreedAmount]').fill('');await saveJob();assert.equal((await metrics()).pending,true);
   await page.evaluate(()=>App.editJob('fixed'));await page.locator('[name=pricingType]').selectOption('hourly');await page.locator('[name=extraAmount]').fill('0');await saveJob();assert.equal((await metrics()).agreed,170);
   await page.evaluate(async()=>{await JKDB.putLocal('timeEntries',{id:'three-more',jobId:'fixed',date:`${fixtureYear}-01-18`,from:'08:00',to:'11:00',actualConfirmed:true});});
@@ -211,14 +211,14 @@ module.exports=async(browser,origin)=>{
   console.log('PASS: één multi-upload/fotomap per klus, categorie achteraf/optioneel, behoud oude foto’s, mobiele weergave, gedeelde Documenten-verwijdering, sync-ID en back-upformaat');
   // Replanning hides only the premature payment highlight; financial records stay intact.
   await page.evaluate(async()=>{
-    await JKDB.putLocal('jobs',{id:'badge',title:'Een lange omschrijving van de klus voor mobiele uitlijning',clientName:'Testklant',date:'2026-10-01',startTime:'08:00',endTime:'16:00',pricingType:'fixed',agreedAmount:150,status:'open'});
+    await JKDB.putLocal('jobs',{id:'badge',title:'Een lange omschrijving van de klus voor mobiele uitlijning',clientName:'Testklant',date:'2026-10-01',startTime:'08:00',endTime:'16:00',pricingType:'fixed',agreedAmount:150,status:'afgerond'});
     await App.renderJobs();
   });
   const badgeRow=page.locator('[data-job="badge"]');assert.equal(await badgeRow.locator('.job-payment-badge').count(),1);
-  const badgeAmount=await page.evaluate(async()=>{await App.refreshFinance();return App.jobFinancial(await JKDB.get('jobs','badge'),[],{}).open;});
+  const badgeAmount=await page.evaluate(async()=>{await App.refreshFinance();return App.jobFinancial(await JKDB.get('jobs','badge'),[],{}).balance;});
   await page.evaluate(()=>App.editJob('badge'));await page.locator('#addWorkDay').click();await page.locator('[name=dayDate]').last().fill('2026-10-25');await saveJob();
-  await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),0);assert.ok(!(await badgeRow.getAttribute('class')).includes('payment-unpaid'));assert.equal(await badgeRow.locator('.job-status').innerText(),'open');
-  assert.equal(await page.evaluate(async()=>{await App.refreshFinance();return App.jobFinancial(await JKDB.get('jobs','badge'),[],{}).open;}),badgeAmount);
+  await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),0);assert.ok(!(await badgeRow.getAttribute('class')).includes('payment-unpaid'));assert.equal(await badgeRow.locator('.job-status').innerText(),'afgerond');
+  assert.equal(await page.evaluate(async()=>{await App.refreshFinance();return App.jobFinancial(await JKDB.get('jobs','badge'),[],{}).balance;}),badgeAmount);
   for(const width of [390,1024]){
     await page.setViewportSize({width,height:844});
     const layout=await badgeRow.evaluate(row=>{const title=row.querySelector('.title').getBoundingClientRect(),status=row.querySelector('.job-status').getBoundingClientRect();return {sameTop:Math.abs(title.top-status.top)<2,right:status.left>=title.right,gap:status.left-title.right,fits:row.scrollWidth<=row.clientWidth};});
@@ -232,12 +232,47 @@ module.exports=async(browser,origin)=>{
   assert.equal(await badgeRow.locator('.danger').count(),0);assert.equal(await badgeRow.locator('.job-status').innerText(),'gepland');
   await page.evaluate(()=>App.renderDashboard());
   const dashboardGap=await page.evaluate(()=>document.querySelector('.dashboard-first-title').getBoundingClientRect().top-document.querySelector('#dashboardJobOpen').getBoundingClientRect().bottom);assert.ok(dashboardGap>=24,'Dashboard gap: '+dashboardGap);
-  await page.evaluate(async()=>{const j=await JKDB.get('jobs','badge');await JKDB.putLocal('jobs',{...j,workDays:undefined,date:'2026-10-20',startTime:'20:00',endTime:'02:00',status:'gepland'});});
+  await page.evaluate(async()=>{const j=await JKDB.get('jobs','badge');await JKDB.putLocal('jobs',{...j,workDays:undefined,date:'2026-10-20',startTime:'20:00',endTime:'02:00',status:'afgerond'});});
   await page.clock.setFixedTime(new Date('2026-10-20T23:00:00Z'));await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),0,'Night shift still running');
   await page.clock.setFixedTime(new Date('2026-10-21T01:00:00Z'));await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),1,'Night shift ended');
   await page.evaluate(async()=>{await JKDB.putLocal('settings',{id:'badge-payment',kind:'jkPayment',jobId:'badge',amount:150,date:'2026-10-21',method:'bank'});});await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),0,'Paid past job stays neutral');
   await page.clock.setFixedTime(new Date('2026-10-21T10:00:00Z'));
   console.log('PASS: toekomstige datum toevoegen/verplaatsen verwijdert voortijdige betaalbadge; status rechts naast omschrijving mobiel/desktop, betaalbadge eronder, dashboardafstand, nachtwerk en behoud financieel saldo');
+  // Agreement amounts only become outstanding when BOTH status and all planned end times qualify.
+  await page.evaluate(()=>App.renderJobs());
+  const numeric=async selector=>Number((await page.locator(selector).innerText()).replace(/[^0-9,-]/g,'').replace(',','.'));
+  const baseline={open:await numeric('#jobOpenTotal'),cash:await numeric('#jobCashTotal'),invoice:await numeric('#jobInvoiceTotal')};
+  const recordsBefore=await page.evaluate(async()=>JSON.stringify({hours:await JKDB.all('timeEntries'),docs:await JKDB.all('documents'),payments:(await JKDB.all('settings')).filter(r=>r.kind==='jkPayment')}));
+  await page.evaluate(async()=>{
+    await JKDB.putLocal('jobs',{id:'settlement',clientId:'client',clientName:'Fictieve klant',title:'Vaste afspraak later klaar',pricingType:'fixed',agreedAmount:150,paymentType:'invoice',status:'gepland',date:'2026-10-01',workDays:[{date:'2026-10-01',startTime:'08:00',endTime:'16:00'},{date:'2026-10-25',startTime:'08:00',endTime:'16:00'}]});
+    await JKDB.putLocal('jobs',{id:'settlement-cash',title:'Contante afspraak',pricingType:'fixed',agreedAmount:200,paymentType:'cash',status:'open',date:'2026-10-01'});
+    await App.renderJobs();
+  });
+  assert.equal(await numeric('#jobOpenTotal'),baseline.open);assert.equal(await numeric('#jobCashTotal'),baseline.cash+200);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice+150);
+  const setSettlement=async changes=>page.evaluate(async changes=>{const j=await JKDB.get('jobs','settlement');await JKDB.putLocal('jobs',{...j,...changes});await App.renderJobs();},changes);
+  const settlementMetrics=()=>page.evaluate(()=>App.state.finance.job(App.state.finance.jobs.find(j=>j.id==='settlement')));
+  await setSettlement({status:'afgerond'});assert.equal((await settlementMetrics()).open,0,'Completed alone is insufficient with a future workday');assert.equal((await settlementMetrics()).agreed,150);assert.equal((await settlementMetrics()).paid,false);
+  await page.evaluate(()=>App.showJob('settlement'));assert.match(await page.locator('#modalRoot').innerText(),/Nog af te rekenen na afronding/);await page.locator('[data-close]').click();
+  await setSettlement({status:'gepland',workDays:[{date:'2026-10-01',startTime:'08:00',endTime:'16:00'},{date:'2026-10-15',startTime:'08:00',endTime:'16:00'}]});assert.equal((await settlementMetrics()).open,0,'Past end alone is insufficient while planned');
+  await setSettlement({status:'open'});assert.equal((await settlementMetrics()).open,0);
+  await page.evaluate(()=>App.editJob('settlement'));await page.locator('[name=status]').selectOption('afgerond');await saveJob();await page.evaluate(()=>App.renderJobs());
+  assert.equal((await settlementMetrics()).open,150);assert.equal(await numeric('#jobOpenTotal'),baseline.open+150);
+  await page.evaluate(()=>App.renderDashboard());assert.equal(await numeric('#dashOpenPayments strong'),baseline.open+150);
+  await page.evaluate(()=>App.renderJobs());
+  for(const filter of ['cash','invoice','all']){await page.locator(`[data-jpf="${filter}"]`).click();await page.waitForFunction(value=>document.querySelector(`[data-jpf="${value}"]`).classList.contains('active'),filter);assert.equal(await numeric('#jobOpenTotal'),baseline.open+150);assert.equal(await numeric('#jobCashTotal'),baseline.cash+200);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice+150);}
+  for(const width of [390,1024]){await page.setViewportSize({width,height:844});assert.equal(await page.locator('.job-totals').evaluate(e=>e.scrollWidth<=e.clientWidth),true);}await page.setViewportSize({width:390,height:844});
+  const preserved=await page.evaluate(async()=>JSON.stringify({hours:await JKDB.all('timeEntries'),docs:await JKDB.all('documents'),payments:(await JKDB.all('settings')).filter(r=>r.kind==='jkPayment')}));assert.equal(preserved,recordsBefore,'Changing settlement status never rewrites hours, invoices or payments');
+  await page.evaluate(async()=>{await JKDB.putLocal('settings',{id:'settlement-payment',kind:'jkPayment',jobId:'settlement',amount:100,date:'2026-10-21',method:'bank'});await App.renderJobs();});assert.equal((await settlementMetrics()).open,50);assert.equal((await settlementMetrics()).received,100);assert.equal((await settlementMetrics()).paid,false);assert.equal(await numeric('#jobOpenTotal'),baseline.open+50);
+  await page.evaluate(()=>App.editJob('settlement'));await page.locator('#addWorkDay').click();await page.locator('[name=dayDate]').last().fill('2026-10-27');await saveJob();await page.evaluate(()=>App.renderJobs());assert.equal((await settlementMetrics()).open,0);assert.equal((await settlementMetrics()).balance,50);assert.equal((await settlementMetrics()).received,100);assert.equal(await numeric('#jobOpenTotal'),baseline.open);
+  // Exact end boundary and overnight work use Europe/Amsterdam, including an untimed date.
+  await setSettlement({status:'afgerond',workDays:[{date:'2026-10-20',startTime:'20:00',endTime:'02:00'}]});
+  await page.clock.setFixedTime(new Date('2026-10-20T23:59:59Z'));await page.evaluate(()=>App.renderJobs());assert.equal((await settlementMetrics()).open,0);
+  await page.clock.setFixedTime(new Date('2026-10-21T00:00:00Z'));await page.evaluate(()=>App.renderJobs());assert.equal((await settlementMetrics()).open,50);
+  await setSettlement({workDays:[{date:'2026-10-21'}]});assert.equal((await settlementMetrics()).open,0);
+  await page.clock.setFixedTime(new Date('2026-10-21T22:00:00Z'));await page.evaluate(()=>App.renderJobs());assert.equal((await settlementMetrics()).open,50,'Untimed workday becomes past at Dutch midnight');
+  await setSettlement({status:'gepland'});assert.equal((await settlementMetrics()).open,0,'Reopening removes it even after all dates');
+  await page.clock.setFixedTime(new Date('2026-10-21T10:00:00Z'));
+  console.log('PASS: compacte drie klustotalen; openstaand uitsluitend afgerond én laatste einde voorbij; dashboard, filters, toekomst/heropenen, deelbetaling, nachtwerk/middernacht en bytegelijk behoud uren/facturen/betalingen');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');
  }finally{await context.close();}
