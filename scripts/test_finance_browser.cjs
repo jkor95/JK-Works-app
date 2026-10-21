@@ -53,7 +53,8 @@ module.exports=async(browser,origin)=>{
   assert.equal(await page.locator('#view .jobs-summary-card').count(),0,'Klussenoverzicht heeft geen uitgebreide samenvatting');
   const row=page.locator('[data-job=fixed]');assert.match(await row.innerText(),/Montage kast/);assert.match(await row.innerText(),/Fictieve klant/);assert.doesNotMatch(await row.innerText(),/€|Berekende urenwaarde|Referentie-uurtarief|Effectief/);
   await row.click();await page.locator('#paymentsThisJob').waitFor();
-  for(const label of ['Berekende urenwaarde','Afgesproken totaal','Gefactureerd incl. btw','Ontvangen','Effectief afgesproken / uur','Effectief ontvangen / uur'])assert.ok((await page.locator('#modalRoot').innerText()).includes(label),label+' beschikbaar na openen van klus');
+  for(const label of ['Gewerkt','Afgesproken','Ontvangen','Nog te ontvangen'])assert.ok((await page.locator('#modalRoot').innerText()).includes(label),label+' zichtbaar in compacte kluskaart');
+  for(const label of ['Referentie-uurtarief','Gefactureerd incl. btw','Effectief afgesproken / uur'])assert.ok(!(await page.locator('#modalRoot').innerText()).includes(label),label+' verborgen in compacte kluskaart');
   await page.evaluate(()=>App.createBusinessDoc('Factuur',{jobId:'fixed'}));
   assert.equal(await page.locator('[name=qty0]').inputValue(),'1');assert.equal(await page.locator('[name=price0]').inputValue(),'150');assert.equal(await page.locator('[name=desc0]').inputValue(),'Montagewerkzaamheden');
   await page.locator('#businessDocForm button.primary').last().click();await page.waitForFunction(()=>document.querySelector('#documentPayments'));
@@ -290,6 +291,35 @@ module.exports=async(browser,origin)=>{
   await page.evaluate(async()=>{const p=await JKDB.get('settings','received-cash');await JKDB.putLocal('settings',{...p,voided:true});await App.renderJobs();});assert.equal(await numeric('#jobCashTotal'),baseline.cash);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice+180);
   console.log('PASS: uitsluitend ontvangen contant/factuur, deelbetalingen, onbetaalde afspraken uitgesloten, gekoppelde/losse facturen, wijzigen en verwijderen; gecentreerd rood openstaand en witte totalen zonder toelichting');
   console.log('PASS: compacte drie klustotalen; openstaand uitsluitend afgerond én laatste einde voorbij; dashboard, filters, toekomst/heropenen, deelbetaling, nachtwerk/middernacht en bytegelijk behoud uren/facturen/betalingen');
+  // Issue #35: clickable outstanding filter, rounding without creating revenue and reversible settlement.
+  await page.evaluate(async()=>{
+    await JKDB.putLocal('jobs',{id:'issue35',title:'Afronding bij montage',clientName:'Proefklant',date:'2026-10-01',status:'afgerond',pricingType:'fixed',agreedAmount:105,hourlyRate:15,paymentType:'cash'});
+    await JKDB.putLocal('settings',{id:'issue35-pay',kind:'jkPayment',jobId:'issue35',date:'2026-10-21',amount:102.5,method:'cash'});
+    await App.renderJobs();
+  });
+  assert.equal(await page.locator('[data-job=issue35] .danger').count(),1);
+  assert.match(await page.locator('[data-job=issue35]').innerText(),/2,50/);
+  await page.locator('#jobOpenFilter').click();await page.locator('[data-jpf=open].active').waitFor();
+  assert.equal(await page.locator('[data-job=issue35]').count(),1);
+  assert.equal(await page.locator('[data-job="settlement-cash"]').count(),0,'Open filter hides unfinished jobs');
+  await page.locator('[data-job=issue35]').click();
+  const issueCard=await page.locator('#modalRoot').innerText();
+  assert.match(issueCard,/Afgesproken/);assert.match(issueCard,/Ontvangen/);
+  assert.doesNotMatch(issueCard,/Berekende urenwaarde|Gefactureerd incl. btw|Effectief ontvangen/);
+  await page.locator('#paymentsThisJob').click();
+  await page.locator('#settleRounding').click();
+  await page.waitForFunction(()=>document.querySelector('#revokeRounding'));
+  let issue=await page.evaluate(async()=>{const f=await App.refreshFinance();return f.job(await JKDB.get('jobs','issue35'));});
+  assert.equal(issue.received,102.5);assert.equal(issue.waived,2.5);assert.equal(issue.open,0);assert.equal(issue.paid,true);
+  await page.locator('#revokeRounding').click();
+  await page.waitForFunction(()=>document.querySelector('#settleRounding'));
+  issue=await page.evaluate(async()=>{const f=await App.refreshFinance();return f.job(await JKDB.get('jobs','issue35'));});
+  assert.equal(issue.received,102.5);assert.equal(issue.open,2.5);assert.equal(issue.paid,false);
+  await page.locator('[data-close]').click();await page.evaluate(()=>App.renderJobs());
+  await page.locator('[data-jpf="open"]').click();
+  await page.locator('#showAllJobs').click();
+  assert.equal(await page.locator('[data-job="settlement-cash"]').count(),1,'All jobs restored');
+  console.log('PASS: issue #35 - open filter, compact price card, partial vs rounded paid, actual receipts and reversal');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');
  }finally{await context.close();}

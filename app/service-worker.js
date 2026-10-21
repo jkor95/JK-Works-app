@@ -1,4 +1,4 @@
-const CACHE='jkworks-pricing-v71-12-3';
+const CACHE='jkworks-pricing-v71-13-0';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./push.js','./app.js','./finance.js','./backup.js','./website-editor.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
