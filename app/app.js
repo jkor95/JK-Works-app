@@ -2170,31 +2170,30 @@ const App = (() => {
       const j=event.job,id=j?.clientId||event.clientId||'',c=clientMap.get(id),name=(c?.name||j?.clientName||event.client?.name||'Geen klant / algemeen').trim(),key=id||'name:'+name.toLowerCase();
       if(!map.has(key))map.set(key,{key,label:name,...emptyMetrics()});addMetrics(map.get(key),event);
     }
-    return [...map.values()].sort((a,b)=>b.amount-a.amount||b.minutes-a.minutes||a.label.localeCompare(b.label,'nl'));
+    return [...map.values()].sort((a,b)=>(b.received+b.open)-(a.received+a.open)||b.minutes-a.minutes||a.label.localeCompare(b.label,'nl'));
   }
   function statsComparisonHtml(buckets,customerMode,context){
-    const hasData=b=>Math.abs(num(b.amount))+Math.abs(num(b.received))+Math.abs(num(b.minutes))>0.00001;
+    const hasData=b=>Math.abs(num(b.received))+Math.abs(num(b.open))+(customerMode?Math.abs(num(b.minutes)):0)>0.00001;
     const shown=buckets.filter(hasData);
-    const agreed=shown.reduce((n,b)=>n+num(b.amount),0);
     const received=shown.reduce((n,b)=>n+num(b.received),0);
+    const outstanding=shown.reduce((n,b)=>n+num(b.open),0);
     const minutes=shown.reduce((n,b)=>n+num(b.minutes),0);
     const label=context?' · '+esc(context):'';
     return `<div class="card stats-comparison-summary" aria-label="Totaaloverzicht${label}">
-      <div><span>Afgesproken${label}</span><strong>${money(agreed)}</strong></div>
-      <div><span>Ontvangen</span><strong>${money(received)}</strong></div>
+      <div><span>Ontvangen${label}</span><strong>${money(received)}</strong></div>
+      <div><span>Nog te ontvangen</span><strong>${money(outstanding)}</strong></div>
       ${customerMode?`<div><span>Gewerkte uren</span><strong>${hoursLabel(minutes)}</strong></div>`:''}
     </div>`;
   }
 
   function statsComparisonChartHtml(buckets,customerMode=false){
-    const agreed=b=>Math.max(0,num(b.amount));
     const received=b=>Math.max(0,num(b.received));
     const hours=b=>Math.max(0,num(b.minutes));
     // De echte openstaande waarde uit Klussen/Facturen, na expliciete afboeking.
     const remaining=b=>Math.max(0,num(b.open));
     // Een afboeking is al verwerkt in b.open en is geen zichtbaar onderdeel van statistieken.
     const total=b=>received(b)+remaining(b);
-    const relevant=b=>agreed(b)>0.00001||total(b)>0.00001||hours(b)>0.00001;
+    const relevant=b=>total(b)>0.00001||(customerMode&&hours(b)>0.00001);
     const list=buckets.filter(relevant);
     if(!list.length)return '<div class="empty">Nog geen werkzaamheden of verdiensten voor deze selectie.</div>';
     const percentage=(part,whole)=>whole>0?Math.min(100,Math.round(part/whole*1000)/10):0;
@@ -2207,24 +2206,24 @@ const App = (() => {
       <div class="stats-client-chart">${sorted.map(b=>{
         const ownTotal=total(b),paid=percentage(received(b),ownTotal),unpaid=percentage(remaining(b),ownTotal);
         const financeScale=percentage(ownTotal,maxMoney),hourScale=percentage(hours(b),maxHours);
-        const desc=`${b.label}: ${hoursLabel(hours(b))} gewerkt, ${money(agreed(b))} afgesproken, ${money(received(b))} ontvangen, ${money(remaining(b))} nog te ontvangen`;
+        const desc=`${b.label}: ${hoursLabel(hours(b))} gewerkt, ${money(received(b))} ontvangen, ${money(remaining(b))} nog te ontvangen`;
         return `<div class="stats-client-combined" role="group" aria-label="${esc(desc)}">
           <div class="stats-client-name">${esc(b.label)}</div>
           <div class="stats-comparison-label"><span>Uren</span><strong>${hoursLabel(hours(b))}</strong></div>
           <div class="stats-client-chart-track stats-client-hours-track" role="img" aria-label="${esc(hoursLabel(hours(b)))} gewerkt"><span class="stats-client-hours-fill" style="width:${hourScale}%"></span></div>
-          <div class="stats-comparison-label"><span>Verdiensten</span><strong>${money(agreed(b))} afgesproken</strong></div>
+          <div class="stats-comparison-label"><span>Verdiensten</span><strong>${money(received(b))} ontvangen${remaining(b)>0.005?` · ${money(remaining(b))} open`:``}</strong></div>
           <div class="stats-client-chart-track stats-client-money-track" role="img" aria-label="${esc(desc)}"><div class="stats-client-money-width" style="width:${financeScale}%"><span class="stats-client-chart-fill" style="width:${paid}%"></span>${unpaid>0?`<span class="stats-client-chart-open" style="width:${unpaid}%"></span>`:'' }</div></div>
           <div class="stats-comparison-detail"><span>${money(received(b))} ontvangen</span>${remaining(b)>0.005?`<span class="stats-comparison-outstanding">${money(remaining(b))} nog te ontvangen</span>`:'' }</div>
         </div>`;
       }).join('')}</div></section>`;
     }
     const maxMoney=Math.max(0.01,...list.map(total));
-    return `<section class="card stats-chart-card stats-comparison-chart" aria-label="Afgesproken en ontvangen per periode"><h3>Afgesproken en ontvangen</h3>${legend}
+    return `<section class="card stats-chart-card stats-comparison-chart" aria-label="Ontvangen en nog te ontvangen per periode"><h3>Ontvangen en nog te ontvangen</h3>${legend}
     <div class="stats-period-chart-scroll"><div class="stats-period-chart">${buckets.map(b=>{
       const ownTotal=total(b),barHeight=percentage(ownTotal,maxMoney),paid=percentage(received(b),ownTotal),unpaid=percentage(remaining(b),ownTotal);
-      const desc=`${b.label}: ${money(agreed(b))} afgesproken, ${money(received(b))} ontvangen, ${money(remaining(b))} nog te ontvangen`;
+      const desc=`${b.label}: ${money(received(b))} ontvangen, ${money(remaining(b))} nog te ontvangen`;
       return `<div class="stats-period-chart-col" role="img" aria-label="${esc(desc)}">
-        <span class="stats-period-chart-value">${(ownTotal>0||agreed(b)>0)?`<strong>${money(received(b))}</strong><small>van ${money(agreed(b))}</small>`:'–'}</span>
+        <span class="stats-period-chart-value">${ownTotal>0?`<strong>${money(received(b))}</strong>${remaining(b)>0.005?`<small class="stats-chart-open-value">+ ${money(remaining(b))} open</small>`:''}`:'–'}</span>
         <div class="stats-period-chart-track">${ownTotal>0?`<span class="stats-period-chart-stack" style="height:${barHeight}%">${unpaid>0?`<span class="stats-period-chart-open" style="height:${unpaid}%"></span>`:''}<span class="stats-period-chart-fill" style="height:${paid}%"></span></span>`:''}</div>
         <span class="stats-period-chart-label">${esc(b.label)}</span>
       </div>`;
