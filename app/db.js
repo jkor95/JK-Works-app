@@ -36,6 +36,32 @@ const JKDB = (() => {
     if(!localOnly && !window.__JK_SEEDING && window.JKCloud?.queuePut) window.JKCloud.queuePut(store,stamped).catch(()=>{});
     return stamped;
   }
+  // Save explicitly entered workdays and their price together, or keep all original data.
+  async function saveJobWork(job, entries, expectedJob, expectedEntries){
+    const db=await open(),stamp=new Date().toISOString(),written=[{store:'jobs',record:{...job,_syncUpdatedAt:stamp}},...entries.map(e=>({store:'timeEntries',record:{...e,_syncUpdatedAt:stamp}}))];
+    const ordered=rows=>[...rows].sort((a,b)=>a.id.localeCompare(b.id));
+    await new Promise((resolve,reject)=>{
+      const t=db.transaction(['jobs','timeEntries','deleteMarkers'],'readwrite');let reason='Opslaan afgebroken; bestaande uren zijn behouden.';
+      t.oncomplete=resolve;t.onabort=()=>reject(new Error(reason));t.onerror=()=>{};
+      const jobs=t.objectStore('jobs'),times=t.objectStore('timeEntries'),a=jobs.get(job.id),b=times.getAll(),c=t.objectStore('deleteMarkers').getAll();let remaining=3;
+      const check=()=>{
+        if(--remaining)return;
+        const own=b.result.filter(e=>e.jobId===job.id);
+        if(snapshotKey(a.result)!==snapshotKey(expectedJob)||snapshotKey(ordered(own))!==snapshotKey(ordered(expectedEntries))){reason='De klus of uren zijn intussen gewijzigd. Open dit scherm opnieuw; bestaande uren zijn behouden.';t.abort();return;}
+        const ids=new Set();
+        for(const e of entries){
+          const previous=b.result.find(x=>x.id===e.id);
+          if(ids.has(e.id)||e.jobId!==job.id||(previous&&previous.jobId!==job.id)||c.result.some(m=>m.store==='timeEntries'&&m.recordId===e.id)){
+            reason='Een urenregistratie is intussen gewijzigd of verwijderd. Open dit scherm opnieuw.';t.abort();return;
+          }
+          ids.add(e.id);
+        }
+        try{for(const item of written)t.objectStore(item.store).put(item.record);}catch{t.abort();}
+      };
+      a.onsuccess=check;b.onsuccess=check;c.onsuccess=check;
+    });
+    if(!window.__JK_SEEDING&&window.JKCloud?.queuePut)for(const item of written)window.JKCloud.queuePut(item.store,item.record).catch(()=>{});
+  }
   async function markDeleteLocal(store,id,deletedAt=new Date().toISOString()){
     const marker={id:`${store}|${id}`,store,recordId:id,deletedAt};
     await putLocal('deleteMarkers',marker);
@@ -423,5 +449,5 @@ const JKDB = (() => {
     }
   }
 
-  return {stores,localOnlyStores,open,all,get,put,remove,clear,id,seed,putLocal,removeLocal,markDeleteLocal,isDeletedLocal,snapshot,snapshotKey,replaceFromBackup};
+  return {stores,localOnlyStores,open,all,get,put,saveJobWork,remove,clear,id,seed,putLocal,removeLocal,markDeleteLocal,isDeletedLocal,snapshot,snapshotKey,replaceFromBackup};
 })();

@@ -1,9 +1,10 @@
-## v71.11.1 — compact dashboard en klussenoverzicht
-- De zes financiële statistiekkaarten zijn van het dashboard verwijderd. De bestaande snelle acties, aankomende klus en compacte melding met openstaand bedrag blijven zichtbaar.
-- Klussenoverzicht toont per klus alleen de omschrijving, klant, datum/tijden en compacte statusmeldingen. De uitgebreide financiële samenvatting en financiële detailkaarten zijn uit het overzicht verwijderd.
-- Alle financiële details blijven beschikbaar na openen van een klus en onder Urenstatistieken. Berekeningen, uren, prijsafspraken, facturen, betalingen en synchronisatie zijn niet gewijzigd.
-- Gerichte browserregressie controleert het compacte dashboard, de compacte klusrij, openen van klusdetails en de volledige Urenstatistieken; de bestaande volledige controlesuite wordt uitgevoerd. Geen productieschrijfacties of databasewijzigingen.
-- App-/cacheversie vernieuwd. Herstelpunt: geannoteerde tag v71.11.0 op 3afe3f9e3c2dee071a1a62375c569f693c1677b7, bevestigd als succesvolle Pages-publicatie op jkworks.nl. Fysieke iPhone/Mac-test niet uitgevoerd.
+## v71.12.0 — eenvoudige uren- en bedraginvoer, compacte overzichten
+- Eén formulier ‘Uren & bedrag’ vanuit een klus: meerdere gewerkte dagen met tijden en pauzes invoeren, kiezen tussen gewerkte uren × uurtarief of een vast bedrag, vervolgens extra kosten en direct het totaal zien. Inbegrepen kosten bij een vaste prijs blijven ondersteund.
+- Alleen expliciet ingevoerde werkelijke uren worden opgeslagen. Planning wordt niet overgenomen. Bestaande ongewijzigde uren en bevestigingsvlaggen blijven exact behouden; oude onbevestigde registraties vereisen een expliciet vinkje. Prijswijzigingen herschrijven geen bestaande facturen of betalingen.
+- Gewijzigde uren en klusbedrag worden lokaal samen opgeslagen in één gecontroleerde IndexedDB-transactie. Gelijktijdige wijzigingen of een conflicterend uren-ID breken de hele opslag af. De bestaande synchronisatie verwerkt alleen daadwerkelijk gewijzigde records; geen schemawijziging of migratie.
+- De zes financiële statistiekkaarten zijn verwijderd van het dashboard. Klusrijen tonen alleen omschrijving, klant, datum/tijden en compacte statusmeldingen. Uitgebreide cijfers blijven in klusdetails en Urenstatistieken beschikbaar.
+- Regressies voor de volledige eenvoudige invoer, 17 uur / €170 urenwaarde / €150 vaste prijs, extra kosten, directe totalen, dubbel opslaan, behoud van bevestigde/onbevestigde uren en afbreken bij conflicten; de bestaande volledige suite inclusief PDF's, betalingen, syncformaat en back-up/herstel wordt uitgevoerd met fictieve data.
+- App-/cacheversie vernieuwd. Herstelpunt: geannoteerde tag v71.11.0 op 3afe3f9e3c2dee071a1a62375c569f693c1677b7, bevestigd als succesvolle Pages-publicatie op jkworks.nl. Geen productiegegevens gewijzigd tijdens tests; fysieke iPhone/Mac-test niet uitgevoerd.
 
 ## v71.11.0 — flexibele prijsafspraken en gekoppelde financiële statistieken
 - Klussen ondersteunen uurbasis, vaste prijs en een later handmatig definitief bedrag. Werkelijke uren, referentietarief, berekende urenwaarde en afgesproken bedrag blijven onafhankelijk; extra kosten kunnen inbegrepen zijn of erbovenop komen.

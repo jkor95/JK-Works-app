@@ -1,6 +1,8 @@
-# Prijsafspraken en betalingen (v71.11.0)
+# Prijsafspraken en betalingen (v71.12.0)
 
-Kies bij een klus **Op uurbasis**, **Vaste prijs** of **Handmatig bedrag**. Het referentie-uurtarief blijft altijd behouden. Handmatig mag nog leeg zijn: het overzicht vermeldt dan ‘Nog te bepalen’. Extra kosten worden apart ingevuld, met de keuze inbegrepen of erbovenop. Inkoopbonnetjes zijn afzonderlijke zakelijke uitgaven en verhogen het klusbedrag alleen wanneer je ze zelf factureert.
+Open een klus en kies **Uren & bedrag**. Vul meerdere werkelijke werkdagen in met begin-/eindtijd en pauze. Kies daarna **Gewerkte uren × uurtarief** of **Vast bedrag invullen**, voeg eventuele extra kosten toe en controleer het direct bijgewerkte totaal. Bestaande uren worden alleen gewijzigd als je de invoer daadwerkelijk aanpast. Oude onbevestigde registraties blijven buiten de berekening totdat je expliciet bevestigt dat die uren zijn gewerkt. Opslaan gebeurt lokaal samen met het klusbedrag; bij intussen gewijzigde gegevens wordt niets overschreven.
+
+Via het algemene klusformulier kun je ook kiezen voor **Op uurbasis**, **Vaste prijs** of **Handmatig bedrag**. Het referentie-uurtarief blijft altijd behouden. Handmatig mag nog leeg zijn: het overzicht vermeldt dan ‘Nog te bepalen’. Extra kosten worden apart ingevuld, met de keuze inbegrepen of erbovenop. Inkoopbonnetjes zijn afzonderlijke zakelijke uitgaven en verhogen het klusbedrag alleen wanneer je ze zelf factureert.
 
 Een klus van 17 werkelijke uren tegen €10 met een vaste prijs van €150 toont €170 urenwaarde, €150 afgesproken en €8,82 effectief afgesproken per uur. Na €100 ontvangst blijft €50 open en is het effectieve ontvangen tarief €5,88. Het totaal is pas ontvangen zodra de betalingen het verschuldigde bedrag dekken.
 
