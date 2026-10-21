@@ -1,3 +1,11 @@
+## v71.13.14 — optioneel afwijkend uitvoeringsadres per klus
+- Bij **Klus bewerken / Nieuwe klus** staat onder de werkplanning het vakje **Uitvoering op ander adres dan klantadres**. Standaard uit; bij aanvinken klappen invulvelden voor **straat/huisnummer, postcode en plaats** uit.
+- Het afwijkende adres wordt uitsluitend in de klus bewaard als `executionAddress` en getoond bij de **klusdetails**. Bij uitvinken wordt het adres weer uit de klus gewist.
+- Het **klantadres** blijft zelfstandig in de bestaande klantkaart en wordt **ongewijzigd gebruikt voor offertes en facturen**. Geen aangepaste documentvelden, PDF's, betalingsdata of Supabase-tabellen.
+- De uitgeklapte velden zijn pas verplicht/actief wanneer geselecteerd. Bestaande klussen zonder uitvoeringsadres blijven werken.
+- Browserregressie: uit-/inklappen, opslaan/heropenen/uitvinken, klantadres ongewijzigd en offerte-/factuurvelden uitsluitend met klantadres.
+- Versie en PWA-cache verhoogd voor iPhone/webapp-verversing.
+
 ## v71.13.13 — statistieken alleen ontvangen en nog te ontvangen
 - **Meer → Statistieken** toont geen kopje, bedrag, tekst of toegankelijkheidsomschrijving **Afgesproken** meer in de klant-, maand-, kwartaal- en jaaroverzichten.
 - De samenvatting toont alleen **Ontvangen** en **Nog te ontvangen** (plus de gevraagde gewerkte uren bij **Per klant**). De horizontale klantbalk en de maand-/kwartaal-/jaarstaven geven alleen deze twee geldbedragen weer, met exacte getallen.

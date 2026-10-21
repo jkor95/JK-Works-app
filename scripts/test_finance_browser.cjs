@@ -535,6 +535,51 @@ module.exports=async(browser,origin)=>{
   console.log('PASS: afgeboekt bedrag volledig verborgen bij klant en periode, alleen werkelijk openstaande schulden rood, klantbalken 14 px');
   console.log('PASS: alleen eigen verdiensten en transparant rood openstaand per laatste uitvoerdag, ook meerdaags, over jaargrens, los, ongedateerd en kwijtschelding');
   console.log('PASS: alleen eigen verdiensten zonder voorgeschoten bonnetjes/extra kosten, incl. KOR, factuurregels, deelbetaling, losse factuur en ongewijzigde betaalrecords');
+  // Apart en alleen op de klus: afwijkende werklocatie bij klant uit Zwijndrecht.
+  // Zowel offerte als factuur moeten gewoon klantadres blijven gebruiken.
+  await page.evaluate(async()=>{
+    await JKDB.putLocal('clients',{id:'address-client',name:'Bedrijf Zwijndrecht',street:'Klantstraat 10',postal:'3331 AA',city:'Zwijndrecht',email:'adres@example.org'});
+    await JKDB.putLocal('jobs',{id:'address-job',title:'Montage in Barendrecht',clientId:'address-client',clientName:'Bedrijf Zwijndrecht',street:'Klantstraat 10',postal:'3331 AA',city:'Zwijndrecht',date:'2026-10-20',status:'gepland',pricingType:'fixed',agreedAmount:100});
+    await App.editJob('address-job');
+  });
+  assert.equal(await page.locator('#jobExecutionDifferent').isChecked(),false,'Nieuw uitvoeringsadres staat standaard uit');
+  assert.equal(await page.locator('#jobExecutionAddressFields').isVisible(),false,'Adresvelden zijn standaard ingeklapt');
+  await page.locator('#jobExecutionDifferent').check();
+  assert.equal(await page.locator('#jobExecutionAddressFields').isVisible(),true,'Adresvelden klappen direct uit bij aanvinken');
+  await page.locator('[name=executionStreet]').fill('Klusstraat 25');
+  await page.locator('[name=executionPostal]').fill('2991 BB');
+  await page.locator('[name=executionCity]').fill('Barendrecht');
+  assert.equal(await page.locator('[name=street]').inputValue(),'Klantstraat 10','Klantadres is apart en ongewijzigd');
+  await page.locator('#jobForm button.primary').click();
+  await page.waitForFunction(()=>!document.querySelector('#jobForm'));
+  const executionStored=await page.evaluate(async()=>{
+    const j=await JKDB.get('jobs','address-job'),c=await JKDB.get('clients','address-client');
+    return {job:j.executionAddress,jobClientStreet:j.street,client:{street:c.street,postal:c.postal,city:c.city}};
+  });
+  assert.deepEqual(executionStored,{job:{street:'Klusstraat 25',postal:'2991 BB',city:'Barendrecht'},jobClientStreet:'Klantstraat 10',client:{street:'Klantstraat 10',postal:'3331 AA',city:'Zwijndrecht'}},'Alleen klus krijgt het uitvoeringsadres, niet de klant');
+  await page.evaluate(()=>App.showJob('address-job'));
+  assert.match(await page.locator('#modalRoot .job-execution-summary').innerText(),/Klusstraat 25[\s\S]*2991 BB Barendrecht/,'Uitvoeringsadres staat op klusdetail');
+  assert.match(await page.locator('#modalRoot').innerText(),/Klantstraat 10/,'Klantgegevens blijven zichtbaar');
+  await page.evaluate(()=>App.createBusinessDoc('Offerte',{jobId:'address-job'}));
+  assert.equal(await page.locator('[name=address]').inputValue(),'Klantstraat 10','Offerte gebruikt klantadres');
+  assert.match(await page.locator('[name=postalCity]').inputValue(),/3331 AA.*Zwijndrecht/,'Offerte gebruikt klantplaats');
+  assert.doesNotMatch(await page.locator('#businessDocForm').innerText(),/Klusstraat 25|2991 BB/,'Uitvoeringsadres niet op offerte');
+  await page.evaluate(()=>App.createBusinessDoc('Factuur',{jobId:'address-job'}));
+  assert.equal(await page.locator('[name=address]').inputValue(),'Klantstraat 10','Factuur gebruikt klantadres');
+  assert.match(await page.locator('[name=postalCity]').inputValue(),/3331 AA.*Zwijndrecht/,'Factuur gebruikt klantplaats');
+  assert.doesNotMatch(await page.locator('#businessDocForm').innerText(),/Klusstraat 25|2991 BB/,'Uitvoeringsadres niet op factuur');
+  await page.evaluate(()=>App.editJob('address-job'));
+  assert.equal(await page.locator('#jobExecutionDifferent').isChecked(),true,'Bij heropenen staat afwijkend adres nog aangevinkt');
+  assert.equal(await page.locator('[name=executionStreet]').inputValue(),'Klusstraat 25','Uitvoeringsadres wordt teruggeladen');
+  await page.locator('#jobExecutionDifferent').uncheck();
+  assert.equal(await page.locator('#jobExecutionAddressFields').isVisible(),false,'Adresveld klapt weer in');
+  await page.locator('#jobForm button.primary').click();
+  await page.waitForFunction(()=>!document.querySelector('#jobForm'));
+  const cleared=await page.evaluate(async()=>({job:await JKDB.get('jobs','address-job'),client:await JKDB.get('clients','address-client')}));
+  assert.equal(cleared.job.executionAddress,null,'Uitvinken wist het afwijkende uitvoeringsadres');
+  assert.equal(cleared.client.street,'Klantstraat 10','Klantadres blijft na uitvinken intact');
+  await page.evaluate(async()=>{await JKDB.remove('jobs','address-job');await JKDB.remove('clients','address-client');});
+  console.log('PASS: optioneel uitvoeringsadres klapt uit, bewaart los op klus, toont op detail en blijft weg van offerte/factuur');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');
  }finally{await context.close();}
