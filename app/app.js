@@ -847,7 +847,7 @@ const App = (() => {
     $('#view').innerHTML=`
       ${backupReminder?`<div class="warning backup-reminder" role="status"><strong>Herinnering: back-up maken?</strong><p class="small">Je laatste back-up op dit apparaat was ${backupReminder.daysSinceBackup} dagen geleden. Jij kiest of en wanneer je opnieuw een back-up maakt.</p><div class="button-row"><button class="link-btn" id="dashBackup" type="button">Back-up maken</button><button class="link-btn" id="dismissBackupReminder" type="button">Herinner mij over 30 dagen</button></div></div>`:''}
       <div class="dashboard-attention"><button id="dashRequests"><span>📥</span><strong>${newRequests}</strong><small>nieuwe aanvragen</small></button><button id="dashActions"><span>🔔</span><strong>${actions.length}</strong><small>open acties</small></button><button id="dashOpenPayments"><span>💶</span><strong>${money(openPayments)}</strong><small>openstaand</small></button></div>
-      ${financeSummary(jobs,entries,company,state.finance.documents)}${dashboardJobHtml}\n      <div class="section-title dashboard-first-title"><h2>Snel openen</h2></div>
+      ${dashboardJobHtml}\n      <div class="section-title dashboard-first-title"><h2>Snel openen</h2></div>
       <div class="quick-grid dashboard-quick-grid">
         <button class="quick" id="newJobDash"><span class="emoji">👷</span><strong>Nieuwe klus</strong><small>Opdracht en klant koppelen</small></button>
         <button class="quick" id="addHours"><span class="emoji">🕒</span><strong>Uren invoeren</strong><small>Datum en van-tot registreren</small></button>
@@ -861,7 +861,7 @@ const App = (() => {
     $('#dashboardJobOpen')?.addEventListener('click',()=>showJob(dashboardJob.id));
     $('#newInvoice').addEventListener('click',()=>createBusinessDoc('Factuur'));
     $('#newQuote').addEventListener('click',()=>createBusinessDoc('Offerte'));
-    $('#addHours').addEventListener('click',()=>editTimeEntry());
+    $('#addHours').addEventListener('click',()=>chooseJobCalculation());
     $('#newJobDash').addEventListener('click',()=>editJob());
     $('#clientsDash').addEventListener('click',()=>showClients());
     $('#timeStatsDash').addEventListener('click',()=>showTimeStats());
@@ -915,15 +915,10 @@ const App = (() => {
     const [allJobs,entries,company]=await Promise.all([JKDB.all('jobs'),JKDB.all('timeEntries'),JKDB.get('settings','company')]);
     const jobs=allJobs.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
     const invoiceJobs=jobs.filter(j=>jobPaymentType(j)==='invoice'),cashJobs=jobs.filter(j=>jobPaymentType(j)==='cash');
-    const sumAmount=list=>list.reduce((sum,j)=>sum+jobOwnAmount(j,entries,company),0);
-    const openAmount=list=>list.reduce((sum,j)=>{return sum+jobFinancial(j,entries,company).open},0);
-    const totalMinutes=jobs.reduce((sum,j)=>sum+jobMinutes(j,entries),0);
-    const openInvoice=openAmount(invoiceJobs),openCash=openAmount(cashJobs),openTotal=openInvoice+openCash;
     const visible=state.jobPaymentFilter==='invoice'?invoiceJobs:state.jobPaymentFilter==='cash'?cashJobs:jobs;
     $('#view').innerHTML=`<div class="button-row"><button class="primary" id="newJob">+ Nieuwe klus</button></div>
-      <div class="card jobs-summary-card" style="margin-top:12px"><div class="section-inline"><h3>Snel overzicht</h3><span class="muted small">intern, geen factuur</span></div><div class="kpi-row"><div class="kpi"><strong>${hoursLabel(totalMinutes)}</strong><span>Geregistreerd</span></div><div class="kpi"><strong>${money(sumAmount(invoiceJobs))}</strong><span>Afgesproken via factuur</span></div><div class="kpi"><strong>${money(sumAmount(cashJobs))}</strong><span>Afgesproken contant</span></div></div><div class="open-payment-summary ${openTotal>0?'has-open':''}"><div class="open-payment-title"><strong>Openstaand</strong><span>${money(openTotal)}</span></div><div class="open-payment-grid"><div><span>Factuur</span><strong>${money(openInvoice)}</strong></div><div><span>Contant</span><strong>${money(openCash)}</strong></div></div></div><p class="muted small" style="margin-bottom:0">Afgesproken bedragen volgen de prijsafspraak. Ontvangsten komen uitsluitend uit betalingen. Openstaand is het hoogste van afgesproken bedrag of factuurtotaal min ontvangen. Bonnetjes zijn apart geregistreerde inkoopkosten.</p></div>
-      ${financeSummary(jobs,entries,company,state.finance.documents)}${state.finance.documents.filter(isUnassignedInvoice).some(d=>state.finance.document(d).open>0)?`<div class="card"><h3>Open facturen zonder bestaande klus</h3>${state.finance.documents.filter(d=>isUnassignedInvoice(d)&&state.finance.document(d).open>0).map(d=>`<button type="button" class="secondary" data-unassigned-invoice="${esc(d.id)}">${esc(d.meta?.number||d.filename||'Factuur')} · open ${money(state.finance.document(d).open)}</button>`).join('')}</div>`:''}<div class="tabs" style="margin-top:12px"><button class="tab ${state.jobPaymentFilter==='all'?'active':''}" data-jpf="all">Alles</button><button class="tab ${state.jobPaymentFilter==='invoice'?'active':''}" data-jpf="invoice">Factuur</button><button class="tab ${state.jobPaymentFilter==='cash'?'active':''}" data-jpf="cash">Contant</button></div>
-      <div class="section-title"><h2>Klussen</h2></div>${visible.length?`<div class="list">${visible.map(j=>{const mins=jobMinutes(j,entries),amount=jobOwnAmount(j,entries,company),ptype=jobPaymentType(j),unpaid=jobFinancial(j,entries,company).open>0;return `<div class="list-item clickable job-payment-row ${unpaid?'payment-unpaid':'payment-paid'}" data-job="${j.id}"><div class="main"><div class="title">${esc(j.title)}</div><div class="sub">${esc(j.clientName||'Geen klant')} · ${jobWorkDays(j).length>1?jobWorkDays(j).length+' werkdagen · '+nlDate(j.date):nlDate(j.date)||'geen datum'}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}</div><div class="sub">${hoursLabel(mins)} · ${money(amount)} · <strong>${ptype==='cash'?'Contant':'Factuur'}</strong>${unpaid?' · <strong class="payment-open-text">OPENSTAAND</strong>':jobFinancial(j,entries,company).paid?' · ✓ ontvangen':''}</div>${jobFinanceHtml(j,entries,company)}</div><div class="job-row-pills">${unpaid?'<span class="pill danger">Nog te ontvangen</span>':''}<span class="pill ${j.status==='afgerond'?'success':'warn'}">${esc(j.status||'open')}</span></div></div>`}).join('')}</div>`:'<div class="empty">Geen klussen in deze selectie.</div>'}`;
+      ${state.finance.documents.filter(isUnassignedInvoice).some(d=>state.finance.document(d).open>0)?`<div class="card"><h3>Open facturen zonder bestaande klus</h3>${state.finance.documents.filter(d=>isUnassignedInvoice(d)&&state.finance.document(d).open>0).map(d=>`<button type="button" class="secondary" data-unassigned-invoice="${esc(d.id)}">${esc(d.meta?.number||d.filename||'Factuur')} · open ${money(state.finance.document(d).open)}</button>`).join('')}</div>`:''}<div class="tabs" style="margin-top:12px"><button class="tab ${state.jobPaymentFilter==='all'?'active':''}" data-jpf="all">Alles</button><button class="tab ${state.jobPaymentFilter==='invoice'?'active':''}" data-jpf="invoice">Factuur</button><button class="tab ${state.jobPaymentFilter==='cash'?'active':''}" data-jpf="cash">Contant</button></div>
+      <div class="section-title"><h2>Klussen</h2></div>${visible.length?`<div class="list">${visible.map(j=>{const unpaid=jobFinancial(j,entries,company).open>0;return `<div class="list-item clickable job-payment-row ${unpaid?'payment-unpaid':'payment-paid'}" data-job="${j.id}"><div class="main"><div class="title">${esc(j.title)}</div><div class="sub">${esc(j.clientName||'Geen klant')} · ${jobWorkDays(j).length>1?jobWorkDays(j).length+' werkdagen · '+nlDate(j.date):nlDate(j.date)||'geen datum'}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}</div></div><div class="job-row-pills">${unpaid?'<span class="pill danger">Nog te ontvangen</span>':''}<span class="pill ${j.status==='afgerond'?'success':'warn'}">${esc(j.status||'open')}</span></div></div>`}).join('')}</div>`:'<div class="empty">Geen klussen in deze selectie.</div>'}`;
     $$('[data-unassigned-invoice]').forEach(b=>b.addEventListener('click',()=>showDocument(b.dataset.unassignedInvoice)));
     $('#newJob').addEventListener('click',()=>editJob());
     $$('[data-job]').forEach(x=>x.addEventListener('click',()=>showJob(x.dataset.job)));
@@ -958,6 +953,70 @@ const App = (() => {
       }
       closeModal();toast('Klus en planning opgeslagen. Werkelijke uren vul je apart in.');render();if(!quoteWasNeeded&&j.quoteNeeded){const actions=await refreshActionBadges(true);if(actions?.some(a=>a.key==='quoteCreate:'+j.id))JKPush.quoteNeeded(j.id).catch(e=>console.warn('Offertepush niet verstuurd',e));}});
     $('#delJob')?.addEventListener('click',async()=>{if(confirm('Klus verwijderen?')){for(const p of (await JKDB.all('jobPhotos')).filter(x=>x.jobId===j.id))await JKDB.remove('jobPhotos',p.id);await JKDB.remove('jobs',j.id);closeModal();render();}});
+  }
+  async function chooseJobCalculation(){
+    const jobs=(await JKDB.all('jobs')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    modal(`${modalHead('Uren & bedrag')}<form id="chooseCalculationJob"><div class="field"><label>Voor welke klus?<select name="calculationJob" required><option value="">Kies een klus</option>${jobs.map(j=>`<option value="${esc(j.id)}">${esc(j.title)} · ${esc(j.clientName||'Geen klant')} · ${nlDate(j.date)}</option>`).join('')}</select></label></div><button class="primary" ${jobs.length?'':'disabled'}>Werkdagen en bedrag invullen</button></form><div class="button-row"><button type="button" class="secondary" id="calculationNewJob">+ Nieuwe klus</button><button type="button" class="ghost" id="calculationGeneralHours">Algemene uren zonder klus</button></div>`);
+    $('#chooseCalculationJob').addEventListener('submit',e=>{e.preventDefault();editJobCalculation(new FormData(e.currentTarget).get('calculationJob'));});
+    $('#calculationNewJob').addEventListener('click',()=>editJob());
+    $('#calculationGeneralHours').addEventListener('click',()=>editTimeEntry());
+  }
+  async function editJobCalculation(id){
+    const [job,allEntries,company]=await Promise.all([JKDB.get('jobs',id),JKDB.all('timeEntries'),JKDB.get('settings','company')]);
+    if(!job)return;
+    const originals=uniqueEntries(allEntries.filter(e=>e.jobId===id)).sort((a,b)=>entryDate(a).localeCompare(entryDate(b))||a.id.localeCompare(b.id));
+    const rowHtml=e=>`<fieldset class="workday-row" data-actual-row="${esc(e.id||JKDB.id('draft'))}"><legend>Gewerkte dag</legend><div class="form-grid"><div class="field"><label>Datum<input type="date" name="actualDate" value="${esc(entryDate(e)||job.date||today())}"></label></div><div class="field"><label>Van<input type="time" name="actualFrom" value="${esc(entryFrom(e))}"></label></div><div class="field"><label>Tot<input type="time" name="actualTo" value="${esc(entryTo(e))}"></label></div><div class="field"><label>Pauze (minuten)<input type="number" min="0" step="1" name="actualBreak" value="${num(e.breakMinutes)}"></label></div></div>${e.autoFromJobSchedule&&!e.actualConfirmed?'<label class="checkline"><input type="checkbox" name="confirmActual"><span>Deze uren heb ik daadwerkelijk gewerkt</span></label>':''}<div class="small" data-actual-total></div>${e.id?'':'<button type="button" class="ghost" data-discard-actual>Dag verwijderen</button>'}</fieldset>`;
+    modal(`${modalHead('Uren & totaalbedrag')}<form id="jobCalculationForm"><h3>${esc(job.title)}</h3><div class="card"><h3>1. Gewerkte dagen</h3><div id="actualDays">${(originals.length?originals:[{}]).map(rowHtml).join('')}</div><button type="button" class="secondary" id="addActualDay">+ Gewerkte dag toevoegen</button><p class="muted small">Vul de werkelijke tijden in. Geplande tijden worden niet overgenomen.</p><strong id="actualHoursTotal"></strong></div><div class="card"><h3>2. Bedrag kiezen</h3><div class="field"><label>Berekenen op basis van<select name="calculationType"><option value="hourly" ${JKFinance.type(job)==='hourly'?'selected':''}>Gewerkte uren × uurtarief</option><option value="fixed" ${JKFinance.type(job)!=='hourly'?'selected':''}>Vast bedrag invullen</option></select></label></div><div class="field" id="calculationRateField"><label>Uurtarief<input type="number" name="calculationRate" min="0" step="0.01" required value="${esc(jobRate(job,company))}"></label></div><div class="field" id="calculationFixedField"><label>Vast bedrag<input type="number" name="calculationFixed" min="0" step="0.01" value="${esc(job.agreedAmount??'')}"></label></div></div><div class="card"><h3>3. Extra kosten</h3><div class="field"><label>Extra kosten / materiaal<input type="number" name="calculationExtra" min="0" step="0.01" value="${esc(job.extraAmount||0)}"></label></div><div id="calculationIncludedField"><label class="checkline"><input type="checkbox" name="calculationIncluded" ${job.extraIncluded?'checked':''}><span>Deze kosten zitten al in het vaste bedrag</span></label></div></div><div class="card"><div id="calculationFormula" class="small"></div><div class="doc-total"><span>Totaalbedrag</span><strong id="calculationTotal"></strong></div><small class="muted">Exclusief eventuele btw; bij KOR komt er geen btw bij.</small></div><button class="primary" id="saveJobCalculation">Uren en bedrag opslaan</button></form>`);
+    const readRows=()=>$$('[data-actual-row]').map(row=>{
+      const old=originals.find(e=>e.id===row.dataset.actualRow),value={date:$('[name=actualDate]',row).value,from:$('[name=actualFrom]',row).value,to:$('[name=actualTo]',row).value,breakMinutes:num($('[name=actualBreak]',row).value)};
+      const confirmed=!old?.autoFromJobSchedule||!!old?.actualConfirmed||!!$('[name=confirmActual]',row)?.checked;
+      const unchanged=old&&value.date===entryDate(old)&&value.from===entryFrom(old)&&value.to===entryTo(old)&&value.breakMinutes===num(old.breakMinutes)&&!$('[name=confirmActual]',row)?.checked;
+      const minutes=unchanged?entryMinutes(old):confirmed?entryMinutes(value):0;
+      return {row,old,value,confirmed,unchanged,minutes};
+    });
+    const preview=()=>{
+      const form=$('#jobCalculationForm'),fixed=form.elements.calculationType.value==='fixed',rows=readRows(),minutes=rows.reduce((n,r)=>n+r.minutes,0);
+      rows.forEach(r=>$('[data-actual-total]',r.row).textContent=r.confirmed?'Netto: '+hoursLabel(r.minutes):'Nog te bevestigen — telt niet mee');
+      $('#actualHoursTotal').textContent='Totaal gewerkt: '+hoursLabel(minutes);
+      $('#calculationFixedField').hidden=!fixed;form.elements.calculationFixed.required=fixed;
+      $('#calculationRateField').hidden=fixed;form.elements.calculationRate.required=!fixed;
+      $('#calculationIncludedField').hidden=!fixed;
+      const price=JKFinance.price({pricingType:fixed?'fixed':'hourly',agreedAmount:form.elements.calculationFixed.value,extraAmount:form.elements.calculationExtra.value,extraIncluded:fixed&&form.elements.calculationIncluded.checked},minutes,num(form.elements.calculationRate.value));
+      const base=fixed?money(price.base):hoursLabel(minutes)+' × '+money(form.elements.calculationRate.value);
+      $('#calculationFormula').textContent=base+(fixed&&form.elements.calculationIncluded.checked?' (extra kosten inbegrepen)':' + '+money(price.extra)+' extra kosten');
+      $('#calculationTotal').textContent=money(price.agreed);return rows;
+    };
+    $('#jobCalculationForm').addEventListener('input',preview);$('#jobCalculationForm').addEventListener('change',preview);
+    $('#addActualDay').addEventListener('click',()=>{$('#actualDays').insertAdjacentHTML('beforeend',rowHtml({}));preview();});
+    $('#actualDays').addEventListener('click',e=>{const button=e.target.closest('[data-discard-actual]');if(button){button.closest('[data-actual-row]').remove();preview();}});preview();
+    $('#jobCalculationForm').addEventListener('submit',async event=>{
+      event.preventDefault();const form=event.currentTarget;if(form.dataset.saving)return;form.dataset.saving='1';$('#saveJobCalculation').disabled=true;
+      try{
+        const rows=preview(),changes=[],dates=new Map();
+        for(const r of rows){
+          if(!r.old&&!r.value.from&&!r.value.to)continue;
+          if(!r.unchanged&&r.confirmed){
+            if(!r.value.date||!r.value.from||!r.value.to)throw Error('Vul per gewerkte dag de datum, begintijd en eindtijd in.');
+            const raw=entryMinutes({...r.value,breakMinutes:0});
+            if(r.value.breakMinutes<0||r.value.breakMinutes>raw)throw Error('De pauze mag niet langer zijn dan de gewerkte tijd.');
+          }
+          const previous=dates.get(r.value.date);
+          if(previous&&(!r.unchanged||!previous.unchanged))throw Error('Deze datum staat al bij de gewerkte dagen. Bewerk de bestaande dag.');
+          dates.set(r.value.date,r);
+          if(r.unchanged||!r.confirmed)continue;
+          let entryId=r.old?.id;
+          if(!entryId){const base='time_workday_'+id+'_'+r.value.date;let n=0;entryId=base;while(allEntries.some(e=>e.id===entryId)||await JKDB.isDeletedLocal('timeEntries',entryId))entryId=base+'_'+(++n);}
+          changes.push({...r.old,id:entryId,...r.value,jobId:id,jobTitle:job.title,actualConfirmed:true,autoFromJobSchedule:false,start:null,end:null});
+        }
+        const finance=await refreshFinance();
+        // Preserve historical receipts before changing hours/price; no hours are written here.
+        for(const p of finance.receipts.filter(p=>p.legacy&&p.resolvedJobId===id))if(!finance.stored.some(x=>x.id===p.id))await JKDB.put('settings',{...p,jobId:p.resolvedJobId});
+        const fixed=form.elements.calculationType.value==='fixed';
+        const updated={...job,paymentLedger:true,pricingType:fixed?'fixed':'hourly',hourlyRate:num(form.elements.calculationRate.value),agreedAmount:fixed?num(form.elements.calculationFixed.value):job.agreedAmount??'',extraAmount:num(form.elements.calculationExtra.value),extraIncluded:fixed&&form.elements.calculationIncluded.checked};
+        await JKDB.saveJobWork(updated,changes,job,originals);
+        closeModal();await render();await showJob(id);toast('Werkelijke uren en totaalbedrag opgeslagen');
+      }catch(error){alert(error.message||'Opslaan mislukt. Bestaande uren zijn behouden.');form.dataset.saving='';$('#saveJobCalculation').disabled=false;}
+    });
   }
   async function repeatJob(id){
     const src=await JKDB.get('jobs',id);if(!src)return;
@@ -1014,11 +1073,7 @@ const App = (() => {
     const checkHtml=check?check.items.map((item,i)=>`<label class="checkline"><input type="checkbox" data-jobcheck="${i}" ${j.checklistState?.[i]?'checked':''}><span>${esc(item)}</span></label>`).join(''):'<span class="muted small">Geen checklist gekoppeld.</span>';
     const c=client||j,contact=[c.attention?`t.a.v. ${esc(c.attention)}`:'',c.street||j.address?esc(c.street||j.address):'',([c.postal,c.city].filter(Boolean).join(' ')?esc([c.postal,c.city].filter(Boolean).join(' ')):''),c.phone?esc(c.phone):'',c.email?esc(c.email):''].filter(Boolean).join('<br>');
     const policy=j.photoPolicy||'optional';
-    const photoCards=Object.entries(photoPhaseMeta).map(([phase,meta])=>{
-      const list=photos.filter(p=>p.phase===phase),missing=policy==='required'&&!list.length;
-      const thumbs=list.map(p=>{const url=URL.createObjectURL(p.blob);return `<div class="job-photo-thumb"><img src="${url}" alt="${esc(meta.label)} foto"><button type="button" class="photo-delete" data-del-photo="${p.id}" aria-label="Foto verwijderen">×</button></div>`}).join('');
-      return `<div class="job-photo-phase ${missing?'photo-missing':''}"><div class="job-photo-head"><strong>${meta.icon} ${meta.label}</strong><span>${list.length} foto${list.length===1?'':'\'s'}${missing?' · nog nodig':''}</span></div><div class="job-photo-grid">${thumbs||'<div class="job-photo-empty">Nog geen foto</div>'}</div><div class="button-row photo-actions"><button type="button" class="secondary" data-camera="${phase}">📷 Foto maken</button><button type="button" class="secondary" data-upload="${phase}">⬆ Uploaden</button></div><input type="file" accept="image/*" capture="environment" data-camera-input="${phase}" hidden><input type="file" accept="image/*" multiple data-upload-input="${phase}" hidden></div>`;
-    }).join('');
+    const photoCards=`<div class="card job-photo-folder"><div class="button-row photo-actions"><button type="button" class="primary" data-upload="general">Foto’s toevoegen</button><button type="button" class="secondary" data-camera="general">📷 Foto maken</button></div><input type="file" accept="image/*" capture="environment" data-camera-input="general" hidden><input type="file" accept="image/*" multiple data-upload-input="general" hidden><p class="muted small">Kies meerdere foto’s tegelijk uit je fotorol. Alle foto’s staan in deze klusmap. Je kunt ze daarna hieronder indelen; een categorie kiezen is optioneel.</p><div class="job-photo-grid">${photos.map(p=>`<div class="job-photo-item"><div class="job-photo-thumb"><button type="button" class="photo-open" data-job-photo="${esc(p.id)}" aria-label="Foto bekijken"><img src="${URL.createObjectURL(p.blob)}" alt="${esc(p.name||'Klusfoto')}"></button><button type="button" class="photo-delete" data-del-photo="${esc(p.id)}" aria-label="Foto verwijderen">×</button></div>${photoCategorySelect(p)}</div>`).join('')||'<div class="job-photo-empty">Nog geen foto’s</div>'}</div></div>`;
     const localPhotoInfo='<div class="successbox"><strong>Foto’s op al je apparaten</strong><br><span class="small">Dezelfde foto wordt bij de klus én onder Documenten → Klusfoto’s getoond. Er is maar één cloudbestand. Foto’s worden vóór upload verkleind tot ongeveer maximaal 250 KB per foto en gaan mee bij handmatige Sync.</span></div>';
     const photoNotice=(policy==='required'?'<div class="warning"><strong>Foto’s verplicht bij deze klus</strong><br><span class="small">Maak minimaal één foto vóór, tijdens en na de werkzaamheden.</span></div>':policy==='none'?'<div class="successbox"><strong>Foto’s niet nodig</strong><br><span class="small">Je kunt hieronder alsnog foto’s toevoegen als je dat wilt.</span></div>':'<div class="successbox"><strong>Foto’s optioneel</strong><br><span class="small">Je kunt voor, tijdens en na foto’s toevoegen zonder dat dit verplicht is.</span></div>')+localPhotoInfo;
 
@@ -1029,7 +1084,7 @@ const App = (() => {
       return `<div class="list-item clickable" data-job-expense="${esc(e.id)}"><div style="flex:0 0 56px;text-align:center">${thumb}</div><div class="main"><div class="title">${esc(e.supplier||'Uitgave')}</div><div class="sub">${nlDate(e.date)} · ${esc(e.category||'Overig')} · ${e.receiptBlob?'Bon opgeslagen':'Zonder bonbestand'}</div>${e.notes?`<div class="sub">${esc(String(e.notes).slice(0,100))}</div>`:''}</div><strong>${money(e.amountIncl)}</strong></div>`;
     }).join('')}</div>`:'<div class="empty">Nog geen bonnetjes aan deze klus gekoppeld.</div>'}`;
     const paymentCard=`<div class="section-title"><h2>Prijsafspraak & betalingen</h2><span class="pill">${esc(jobPaymentLabel(j))}</span></div><div class="card">${jobFinanceHtml(j,entries,company)}<p class="muted small">Openstaand is het hoogste van afgesproken totaal of factuurtotaal, verminderd met ontvangen betalingen. Facturen zijn inclusief eventuele btw; afspraken en urenwaarde exclusief btw. Ontvangen bedragen staan op de werkelijke betaaldatum.</p><button class="primary" id="paymentsThisJob">Betalingen bekijken / registreren</button></div>`;
-    modal(`${modalHead(j.title)}<div class="button-row"><button class="secondary" id="editThisJob">Bewerken</button><button class="secondary" id="repeatThisJob">↻ Herhalen</button><button class="primary" id="hoursThisJob">+ Uren</button><button class="secondary" id="quoteThisJob">+ Offerte</button><button class="secondary" id="invoiceThisJob">+ Factuur</button><button class="secondary" id="calendarThisJob">📅 Google Agenda</button></div><div class="card" style="margin-top:10px"><strong>${esc(c.name||j.clientName||'Geen klant')}</strong><div class="muted small">${nlDate(j.date)}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}${contact?'<br>'+contact:''}</div>${j.notes?`<p class="small">${esc(j.notes)}</p>`:''}</div>${workDaysCard(j,entries)}${paymentCard}${jobExpensesHtml}<div class="section-title"><h2>Foto’s</h2><span class="muted small">${esc(photoPolicyText(policy))}</span></div>${photoNotice}<div class="job-photo-sections">${photoCards}</div><div class="section-title"><h2>Checklist</h2></div><div class="card">${checkHtml}</div><div class="section-title"><h2>Uren</h2><span class="muted small">${(entries.reduce((s,e)=>s+entryMinutes(e),0)/60).toFixed(2).replace('.',',')} u</span></div>${entries.length?`<div class="list">${entries.map(e=>`<div class="list-item clickable" data-time="${e.id}"><div class="main"><div class="title">${nlDate(entryDate(e))}</div><div class="sub">${esc(entryFrom(e))} - ${esc(entryTo(e))} · pauze ${num(e.breakMinutes)} min${e.autoFromJobSchedule&&!e.actualConfirmed?' · nog te bevestigen':''}${e.note?' · '+esc(e.note):''}</div></div><strong>${durationHM(entryMinutes(e))}</strong></div>`).join('')}</div>`:'<div class="empty">Nog geen uren.</div>'}`);
+    modal(`${modalHead(j.title)}<div class="button-row"><button class="secondary" id="editThisJob">Bewerken</button><button class="secondary" id="repeatThisJob">↻ Herhalen</button><button class="primary" id="hoursThisJob">Uren & bedrag</button><button class="secondary" id="quoteThisJob">+ Offerte</button><button class="secondary" id="invoiceThisJob">+ Factuur</button><button class="secondary" id="calendarThisJob">📅 Google Agenda</button></div><div class="card" style="margin-top:10px"><strong>${esc(c.name||j.clientName||'Geen klant')}</strong><div class="muted small">${nlDate(j.date)}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}${contact?'<br>'+contact:''}</div>${j.notes?`<p class="small">${esc(j.notes)}</p>`:''}</div>${workDaysCard(j,entries)}${paymentCard}${jobExpensesHtml}<div class="section-title"><h2>Foto’s</h2><span class="muted small">${esc(photoPolicyText(policy))}</span></div>${photoNotice}<div class="job-photo-sections">${photoCards}</div><div class="section-title"><h2>Checklist</h2></div><div class="card">${checkHtml}</div><div class="section-title"><h2>Uren</h2><span class="muted small">${(entries.reduce((s,e)=>s+entryMinutes(e),0)/60).toFixed(2).replace('.',',')} u</span></div>${entries.length?`<div class="list">${entries.map(e=>`<div class="list-item clickable" data-time="${e.id}"><div class="main"><div class="title">${nlDate(entryDate(e))}</div><div class="sub">${esc(entryFrom(e))} - ${esc(entryTo(e))} · pauze ${num(e.breakMinutes)} min${e.autoFromJobSchedule&&!e.actualConfirmed?' · nog te bevestigen':''}${e.note?' · '+esc(e.note):''}</div></div><strong>${durationHM(entryMinutes(e))}</strong></div>`).join('')}</div>`:'<div class="empty">Nog geen uren.</div>'}`);
     $('#paymentsThisJob').addEventListener('click',()=>showPayments(id));
     $('#addReceiptThisJob').addEventListener('click',()=>editExpense(null,{jobId:id,returnJobId:id}));
     $('#allReceiptsThisJob').addEventListener('click',async()=>{
@@ -1041,12 +1096,14 @@ const App = (() => {
     $$('[data-work-entry]').forEach(b=>b.addEventListener('click',()=>editTimeEntry(b.dataset.workEntry,j.id,'',j.id)));
     $$('[data-work-calendar]').forEach(b=>b.addEventListener('click',()=>openGoogleCalendarForJob({...j,...jobWorkDays(j).find(d=>d.date===b.dataset.workCalendar),workDays:undefined})));
     $('#jobIcs').addEventListener('click',()=>downloadBlob(new Blob([jobCalendarIcs(j)],{type:'text/calendar;charset=utf-8'}),'JK-Works-werkdagen.ics'));
-    $('#editThisJob').addEventListener('click',()=>{closeModal();editJob(id)});$('#repeatThisJob').addEventListener('click',()=>repeatJob(id));$('#hoursThisJob').addEventListener('click',()=>{closeModal();editTimeEntry(null,id)});$('#quoteThisJob').addEventListener('click',()=>{closeModal();createBusinessDoc('Offerte',{jobId:j.id,clientId:j.clientId,workDate:j.date})});$('#invoiceThisJob').addEventListener('click',()=>{closeModal();createBusinessDoc('Factuur',{jobId:j.id,clientId:j.clientId,workDate:j.date})});$('#calendarThisJob').addEventListener('click',()=>openGoogleCalendarForJob(j));$$('[data-time]').forEach(x=>x.addEventListener('click',()=>{editTimeEntry(x.dataset.time)}));$$('[data-jobcheck]').forEach(c=>c.addEventListener('change',async()=>{j.checklistState=j.checklistState||{};j.checklistState[c.dataset.jobcheck]=c.checked;await JKDB.put('jobs',j)}));
+    $('#editThisJob').addEventListener('click',()=>{closeModal();editJob(id)});$('#repeatThisJob').addEventListener('click',()=>repeatJob(id));$('#hoursThisJob').addEventListener('click',()=>{closeModal();editJobCalculation(id)});$('#quoteThisJob').addEventListener('click',()=>{closeModal();createBusinessDoc('Offerte',{jobId:j.id,clientId:j.clientId,workDate:j.date})});$('#invoiceThisJob').addEventListener('click',()=>{closeModal();createBusinessDoc('Factuur',{jobId:j.id,clientId:j.clientId,workDate:j.date})});$('#calendarThisJob').addEventListener('click',()=>openGoogleCalendarForJob(j));$$('[data-time]').forEach(x=>x.addEventListener('click',()=>{editTimeEntry(x.dataset.time)}));$$('[data-jobcheck]').forEach(c=>c.addEventListener('change',async()=>{j.checklistState=j.checklistState||{};j.checklistState[c.dataset.jobcheck]=c.checked;await JKDB.put('jobs',j)}));
     $$('[data-camera]').forEach(b=>b.addEventListener('click',()=>document.querySelector(`[data-camera-input="${b.dataset.camera}"]`)?.click()));
     $$('[data-upload]').forEach(b=>b.addEventListener('click',()=>document.querySelector(`[data-upload-input="${b.dataset.upload}"]`)?.click()));
     const handleFiles=async(input,phase)=>{const files=[...(input.files||[])];if(!files.length)return;input.disabled=true;try{for(const file of files)await saveJobPhoto(j.id,phase,file);toast(files.length===1?'Foto opgeslagen':`${files.length} foto’s opgeslagen`);await showJob(j.id);}catch(e){console.error(e);alert('Foto opslaan lukte niet: '+(e.message||e));}finally{input.disabled=false;}};
     $$('[data-camera-input]').forEach(i=>i.addEventListener('change',()=>handleFiles(i,i.dataset.cameraInput)));
     $$('[data-upload-input]').forEach(i=>i.addEventListener('change',()=>handleFiles(i,i.dataset.uploadInput)));
+    bindPhotoCategories();
+    $$('[data-job-photo]').forEach(b=>b.addEventListener('click',()=>showPhotoDocument(b.dataset.jobPhoto,j.id)));
     $$('[data-del-photo]').forEach(b=>b.addEventListener('click',async()=>{if(!confirm('Deze foto verwijderen?'))return;await JKDB.remove('jobPhotos',b.dataset.delPhoto);toast('Foto verwijderd');showJob(j.id)}));
   }
 
@@ -1314,15 +1371,9 @@ const App = (() => {
     for(const p of photos.sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))){
       const key=p.jobId||'zonder-klus';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(p);
     }
-    const phaseOrder=['before','during','after'];
     const html=[...groups.entries()].map(([jobId,list])=>{
       const job=jobMap.get(jobId),title=job?.title||'Klus niet meer aanwezig',sub=[job?.clientName,nlDate(job?.date)].filter(Boolean).join(' · ');
-      const phases=phaseOrder.map(phase=>{
-        const items=list.filter(p=>p.phase===phase);if(!items.length)return '';
-        const meta=photoPhaseMeta[phase]||{label:phase,icon:'📷'};
-        return `<div class="photo-doc-phase"><div class="job-photo-head"><strong>${meta.icon} ${esc(meta.label)}</strong><span>${items.length} foto${items.length===1?'':'’s'}</span></div><div class="job-photo-grid">${items.map(p=>{const url=URL.createObjectURL(p.blob);return `<button class="job-photo-thumb photo-doc-thumb" type="button" data-photo-doc="${p.id}"><img src="${url}" alt="${esc(meta.label)} foto"></button>`}).join('')}</div></div>`;
-      }).join('');
-      return `<div class="card photo-doc-job"><h3>${esc(title)}</h3>${sub?`<div class="muted small">${esc(sub)}</div>`:''}<div class="photo-doc-phases">${phases}</div></div>`;
+      return `<div class="card photo-doc-job"><h3>${esc(title)}</h3>${sub?`<div class="muted small">${esc(sub)}</div>`:''}<div class="job-photo-grid">${list.map(p=>`<button class="job-photo-thumb photo-doc-thumb" type="button" data-photo-doc="${esc(p.id)}"><img src="${URL.createObjectURL(p.blob)}" alt="${esc(p.name||'Klusfoto')}"></button>`).join('')}</div></div>`;
     }).join('');
     $('#view').innerHTML=`<div class="button-row"><button class="secondary" id="backToFolders">← Mappen</button></div><div class="section-title"><h2>Klusfoto’s</h2><span class="muted small">${photos.length} totaal</span></div><div class="successbox"><strong>Cloudfoto’s zonder dubbele opslag</strong><br><span class="small">Deze map toont exact dezelfde foto’s als bij de klus. Foto’s worden gecomprimeerd naar ongeveer maximaal 250 KB en bij handmatige Sync via Supabase beschikbaar op je andere apparaten.</span></div>${html||'<div class="empty">Nog geen klusfoto’s. Voeg ze toe vanuit een klus.</div>'}`;
     $('#backToFolders').addEventListener('click',()=>{state.docFolder=null;renderDocuments()});
@@ -1365,13 +1416,28 @@ const App = (() => {
     $('#editExpense').addEventListener('click',()=>editExpense(id,{returnJobId}));$('#shareExpense')?.addEventListener('click',()=>shareBlob(e.receiptBlob,e.receiptName||'bon'));$('#backExpenseJob')?.addEventListener('click',()=>showJob(returnJobId));
   }
 
-  async function showPhotoDocument(id){
+  function photoCategorySelect(p){
+    return `<label class="photo-category">Categorie<select data-photo-category="${esc(p.id)}" aria-label="Categorie voor ${esc(p.name||'foto')}"><option value="general" ${!photoPhaseMeta[p.phase]?'selected':''}>Niet ingedeeld</option>${Object.entries(photoPhaseMeta).map(([key,meta])=>`<option value="${key}" ${p.phase===key?'selected':''}>${meta.label}</option>`).join('')}</select></label>`;
+  }
+  function bindPhotoCategories(){
+    $$('[data-photo-category]').forEach(select=>select.addEventListener('change',async()=>{
+      select.disabled=true;
+      try{
+        const p=await JKDB.get('jobPhotos',select.dataset.photoCategory);if(!p)throw new Error('Deze foto is inmiddels verwijderd.');
+        if(p.phase!==select.value){p.phase=select.value;await JKDB.put('jobPhotos',p);}
+        toast('Categorie opgeslagen');
+      }catch(error){alert('Categorie opslaan lukte niet: '+error.message);}finally{select.disabled=false;}
+    }));
+  }
+  async function showPhotoDocument(id,returnJobId=''){
     const p=await JKDB.get('jobPhotos',id);if(!p)return;
     const j=p.jobId?await JKDB.get('jobs',p.jobId):null,meta=photoPhaseMeta[p.phase]||{label:'Foto',icon:'📷'},url=URL.createObjectURL(p.blob);
-    modal(`${modalHead(`${meta.icon} ${meta.label}`)}<div class="card"><img src="${url}" alt="Klusfoto" style="width:100%;max-height:62vh;object-fit:contain;border-radius:14px;background:#f2eee7"><h3 style="margin-top:12px">${esc(j?.title||'Klusfoto')}</h3><div class="muted small">${esc(p.name||'foto.jpg')} · ${fmtDateTime(p.createdAt)}${j?.clientName?' · '+esc(j.clientName):''}${p.compressedSize||p.blob?.size?' · '+humanBytes(p.compressedSize||p.blob?.size):''}</div><div class="button-row" style="margin-top:14px"><button class="primary" id="sharePhotoDoc">Delen / bewaar</button><button class="secondary" id="downloadPhotoDoc">Download</button><button class="danger-btn" id="deletePhotoDoc">Verwijderen</button></div></div>`);
+    modal(`${modalHead(`${meta.icon} ${meta.label}`)}<div class="card"><img src="${url}" alt="Klusfoto" style="width:100%;max-height:62vh;object-fit:contain;border-radius:14px;background:#f2eee7"><h3 style="margin-top:12px">${esc(j?.title||'Klusfoto')}</h3><div class="muted small">${esc(p.name||'foto.jpg')} · ${fmtDateTime(p.createdAt)}${j?.clientName?' · '+esc(j.clientName):''}${p.compressedSize||p.blob?.size?' · '+humanBytes(p.compressedSize||p.blob?.size):''}</div>${photoCategorySelect(p)}<div class="button-row" style="margin-top:14px">${returnJobId?'<button class="secondary" id="backPhotoJob">Terug naar klus</button>':''}<button class="primary" id="sharePhotoDoc">Delen / bewaar</button><button class="secondary" id="downloadPhotoDoc">Download</button><button class="danger-btn" id="deletePhotoDoc">Verwijderen</button></div></div>`);
+    bindPhotoCategories();
+    $('#backPhotoJob')?.addEventListener('click',()=>showJob(returnJobId));
     $('#sharePhotoDoc').addEventListener('click',()=>shareBlob(p.blob,p.name||'klusfoto.jpg'));
     $('#downloadPhotoDoc').addEventListener('click',()=>downloadBlob(p.blob,p.name||'klusfoto.jpg'));
-    $('#deletePhotoDoc').addEventListener('click',async()=>{if(!confirm('Deze foto verwijderen? De foto verdwijnt ook bij de gekoppelde klus.'))return;await JKDB.remove('jobPhotos',p.id);closeModal();toast('Foto verwijderd');if(state.route==='documents')renderDocuments();});
+    $('#deletePhotoDoc').addEventListener('click',async()=>{if(!confirm('Deze foto verwijderen? De foto verdwijnt ook bij de gekoppelde klus.'))return;await JKDB.remove('jobPhotos',p.id);closeModal();toast('Foto verwijderd');if(returnJobId)await showJob(returnJobId);else if(state.route==='documents')renderDocuments();});
   }
   function chooseImportFolder(){
     if(['offerte','factuur','diversen'].includes(state.docFolder)){state.importFolderTarget=state.docFolder;$('#hiddenExistingPdfInput').click();return;}
@@ -2090,7 +2156,7 @@ const App = (() => {
     }catch(error){backupProgress(restored?'Gegevens zijn lokaal hersteld en beschermd tegen sync; het scherm kon niet worden bijgewerkt. Heropen de app.':error.safeBackupMessage?'Herstel niet uitgevoerd: '+error.message+' Bestaande gegevens zijn behouden.':'Herstel niet uitgevoerd: bestand ongeldig of lokale gegevens gewijzigd. Bestaande gegevens zijn behouden.');}
     finally{password='';if($('#restorePassword'))$('#restorePassword').value='';backupButtons(false);}
   }
-  async function quickAdd(){modal(`${modalHead('Snel toevoegen')}<div class="grid two"><button class="quick" id="qaInvoice"><span class="emoji">🧾</span><strong>Factuur</strong></button><button class="quick" id="qaQuote"><span class="emoji">📄</span><strong>Offerte</strong></button><button class="quick" id="qaTime"><span class="emoji">🕒</span><strong>Uren</strong></button><button class="quick" id="qaJob"><span class="emoji">👷</span><strong>Klus</strong></button></div>`);$('#qaInvoice').addEventListener('click',()=>{closeModal();createBusinessDoc('Factuur')});$('#qaQuote').addEventListener('click',()=>{closeModal();createBusinessDoc('Offerte')});$('#qaTime').addEventListener('click',()=>{closeModal();editTimeEntry()});$('#qaJob').addEventListener('click',()=>{closeModal();editJob()});}
+  async function quickAdd(){modal(`${modalHead('Snel toevoegen')}<div class="grid two"><button class="quick" id="qaInvoice"><span class="emoji">🧾</span><strong>Factuur</strong></button><button class="quick" id="qaQuote"><span class="emoji">📄</span><strong>Offerte</strong></button><button class="quick" id="qaTime"><span class="emoji">🕒</span><strong>Uren</strong></button><button class="quick" id="qaJob"><span class="emoji">👷</span><strong>Klus</strong></button></div>`);$('#qaInvoice').addEventListener('click',()=>{closeModal();createBusinessDoc('Factuur')});$('#qaQuote').addEventListener('click',()=>{closeModal();createBusinessDoc('Offerte')});$('#qaTime').addEventListener('click',()=>{closeModal();chooseJobCalculation()});$('#qaJob').addEventListener('click',()=>{closeModal();editJob()});}
 
   return {init,go};
 })();
