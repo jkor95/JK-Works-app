@@ -1,3 +1,11 @@
+## v71.13.6 — staafgrafiek terug onder eenvoudige statistieken
+- Onder de compacte getallenlijst van Meer → Statistieken staat weer een staafgrafiek met het bijbehorende bedrag of het aantal uren direct bij elke staaf.
+- Per week, maand, kwartaal en jaar: één verticale balk per periode, met periode en waarde erbij; horizontaal schuifbaar op de iPhone. Per klant: compacte horizontale balken met klantnaam en exacte waarde.
+- Grafiek volgt automatisch de al bestaande selectie Ontvangen / Afgesproken / Uren en de gekozen periode of klant/kalenderjaar. Ontvangen blijft de werkelijk geregistreerde ontvangst; er is geen dubbel tellen of omzetberekening gewijzigd.
+- De eerder verwijderde zesdelige KPI-kaarten, btw, effectieve uurtarieven en gecombineerde uren/geldgrafieken komen niet terug. Geen wijzigingen aan gebruikers-, betaal-, uren-, klanten- of Supabase-gegevens.
+- Uitbreiding van Playwright-statistiektests met waarden en schakelmomenten in de staafgrafiek; GitHub Actions, GitGuardian en Pages na PR te bevestigen.
+- Herstelbranch voor de vooraf succesvol gepubliceerde v71.13.5: `recovery/2026-10-21-v71-13-5`, commit `69d7a3cf14a6167637841777a2009ae250c50ad0`. Echte iPhone/PWA visuele controle blijft aan gebruiker.
+
 ## v71.13.5 — overzichtelijke statistieken per klant en periode
 - Meer → Statistieken toont voortaan één duidelijk bedrag per klant, week, maand, kwartaal of jaar, met één totaal erboven. Het standaardoverzicht toont werkelijk **ontvangen** bedragen op betaaldatum.
 - Via een eenvoudige keuze **Ontvangen / Afgesproken / Uren** kun je ook de afgesproken klussom of gewerkte uren bekijken, zonder alle cijfers naast elkaar. Alleen periodes of klanten met activiteit binnen de gekozen maatstaf worden getoond; klanten sorteren op het geselecteerde bedrag.

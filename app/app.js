@@ -2016,6 +2016,23 @@ const App = (() => {
     const label=statMetricLabel(metric),empty=metric==='hours'?'Geen gewerkte uren':metric==='agreed'?'Geen afspraken':'Geen ontvangen bedragen';
     return `<div class="card stats-simple-total"><span class="muted small">Totaal ${esc(label.toLowerCase())}${context?' · '+esc(context):''}</span><strong>${statMetricText({minutes:total,amount:total,received:total},metric)}</strong></div>${shown.length?`<div class="list stats-simple-list">${shown.map(b=>`<div class="list-item stats-simple-row"><div class="main"><div class="title">${esc(b.label)}</div></div><strong class="stats-simple-value">${esc(statMetricText(b,metric))}</strong></div>`).join('')}</div>`:`<div class="empty">${empty}${context?' '+esc(context):''}.</div>`}`;
   }
+  // Eén staaf per gekozen meetwaarde; exact dezelfde bedragen als in de compacte lijst.
+  // Periodes chronologisch, klanten op de geselecteerde waarde gesorteerd.
+  function simpleStatsChartHtml(buckets,metric,customerMode=false){
+  const valid=buckets.filter(b=>Math.abs(statMetricValue(b,metric))>0.00001);
+  if(!valid.length)return '';
+  const maximum=Math.max(...valid.map(b=>Math.abs(statMetricValue(b,metric))),0.01);
+  const barWidth=b=>Math.max(3,Math.round(Math.abs(statMetricValue(b,metric))/maximum*1000)/10);
+  const title='Grafiek · '+statMetricLabel(metric).toLowerCase();
+  if(customerMode){
+    const clients=[...valid].sort((a,b)=>statMetricValue(b,metric)-statMetricValue(a,metric)||a.label.localeCompare(b.label,'nl'));
+    return `<div class="card stats-chart-card" aria-label="${esc(title)}"><h3>${esc(title)}</h3><div class="stats-client-chart">${clients.map(b=>`<div class="stats-client-chart-row"><div class="stats-client-chart-caption"><span>${esc(b.label)}</span><strong>${esc(statMetricText(b,metric))}</strong></div><div class="stats-client-chart-track" role="img" aria-label="${esc(b.label+': '+statMetricText(b,metric))}"><span class="stats-client-chart-fill" style="width:${barWidth(b)}%"></span></div></div>`).join('')}</div></div>`;
+  }
+  return `<div class="card stats-chart-card" aria-label="${esc(title)}"><h3>${esc(title)}</h3><div class="stats-period-chart-scroll"><div class="stats-period-chart">${buckets.map(b=>{
+    const value=statMetricValue(b,metric),height=value?barWidth(b):0;
+    return `<div class="stats-period-chart-col" role="img" aria-label="${esc(b.label+': '+statMetricText(b,metric))}"><span class="stats-period-chart-value">${esc(statMetricText(b,metric))}</span><div class="stats-period-chart-track"><span class="stats-period-chart-fill" style="height:${height}%"></span></div><span class="stats-period-chart-label">${esc(b.label)}</span></div>`;
+  }).join('')}</div></div></div>`;
+}
   function customerStatBuckets(entries,jobs,clients,company,year){
     const map=new Map(),clientMap=new Map(clients.map(c=>[c.id,c]));
     for(const event of financialEvents(entries,jobs,company)){
@@ -2036,7 +2053,7 @@ const App = (() => {
       const customerMode=mode==='client';
       const periods={week:'laatste 12 weken',month:'laatste 12 maanden',quarter:'laatste 8 kwartalen',year:'alle kalenderjaren'};
       const buckets=customerMode?customerStatBuckets(entries,jobs,clients,company,customerYear):periodBuckets(entries,jobs,company,mode);
-      const content=simpleStatsHtml(buckets,metric,customerMode?'in '+customerYear:periods[mode]);
+      const content=simpleStatsHtml(buckets,metric,customerMode?'in '+customerYear:periods[mode])+simpleStatsChartHtml(buckets,metric,customerMode);
       const undated=state.finance.receipts.filter(p=>!p.date).reduce((n,p)=>n+p.amount,0);
       modal(`${modalHead('Statistieken')}<div class="tabs stats-tabs" aria-label="Statistieken per periode"><button type="button" class="tab ${mode==='week'?'active':''}" data-stat-mode="week">Per week</button><button type="button" class="tab ${mode==='month'?'active':''}" data-stat-mode="month">Per maand</button><button type="button" class="tab ${mode==='quarter'?'active':''}" data-stat-mode="quarter">Per kwartaal</button><button type="button" class="tab ${mode==='year'?'active':''}" data-stat-mode="year">Per jaar</button><button type="button" class="tab ${mode==='client'?'active':''}" data-stat-mode="client">Per klant</button></div>
       ${customerMode?`<div class="field stat-year-field"><label for="customerStatsYear">Kalenderjaar</label><select id="customerStatsYear">${years.map(y=>`<option value="${y}" ${y===customerYear?'selected':''}>${y}</option>`).join('')}</select></div>`:''}
