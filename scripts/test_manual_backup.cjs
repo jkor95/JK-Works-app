@@ -49,14 +49,15 @@ module.exports=async(browser,origin)=>{
       await JKDB.putLocal('settings',{id:'company',companyName:'Fictieve JK Works',defaultRate:42});
       await JKDB.putLocal('settings',{id:'notifications',badges:false});
       await JKDB.putLocal('clients',{id:'local-client',name:'Local fixture',email:'fixture@example.invalid'});
-      await JKDB.putLocal('jobs',{id:'job',title:'Fixture klus',clientId:'local-client',materials:[{name:'hout',amount:2}]});
-      await JKDB.putLocal('timeEntries',{id:'hours',jobId:'job',minutes:60,rate:42});
+      await JKDB.putLocal('jobs',{id:'job',title:'Fixture klus',pricingType:'fixed',agreedAmount:150,extraIncluded:true,clientId:'local-client',materials:[{name:'hout',amount:2}]});
+      await JKDB.putLocal('timeEntries',{id:'hours',jobId:'job',minutes:60,rate:42,actualConfirmed:true,autoFromJobSchedule:true});
       await JKDB.putLocal('documents',{id:'local-doc',filename:'fixture.pdf',kind:'Offerte',blob:pdf,meta:{paid:false,confirmed:true}});
       await JKDB.putLocal('jobPhotos',{id:'photo',jobId:'job',blob:photo,name:photo.name,originalSize:photo.size});
       await JKDB.putLocal('expenses',{id:'receipt',amountIncl:12,receiptBlob:pdf});
       await JKDB.putLocal('tools',{id:'tool',name:'Fictief gereedschap',serial:'test'});
       await JKDB.putLocal('mboxes',{id:'box',name:'Test Mbox',items:['tool'],checked:{tool:true}});
       await JKDB.putLocal('checklists',{id:'check',items:['Test'],checked:{Test:true}});
+      await JKDB.putLocal('settings',{id:'fixture-payment',kind:'jkPayment',jobId:'job',amount:100,date:'2026-10-10',method:'bank'});
       fixture.before=await JKDB.snapshot();fixture.backup=await JKCloud.withBackupRead(()=>JKBackup.make());
     });
     const results=await page.evaluate(async()=>{
@@ -68,6 +69,7 @@ module.exports=async(browser,origin)=>{
       check(fixture.backup.scope.cloudChecked&&fixture.backup.counts.clients===2&&fixture.backup.counts.documents===2,'Lokale en uitsluitend in cloud aanwezige records gecombineerd');
       check(fixture.backup.cloud.files.length===4,'Alle drie Storage-buckets inclusief los bestand meegenomen');
       const validated=await JKBackup.validate(fixture.backup);
+      check(validated.stores.settings.find(r=>r.id==='fixture-payment')?.amount===100&&validated.stores.jobs.find(r=>r.id==='job')?.agreedAmount===150&&validated.stores.timeEntries.find(r=>r.id==='hours')?.actualConfirmed===true,'Prijsafspraak, deelbetaling en bevestigde uren in herstelkopie behouden');
       check(validated.stores.documents.find(r=>r.id==='cloud-doc').blob instanceof Blob,'Cloud-PDF ingebed');
       check(validated.stores.jobPhotos[0].blob instanceof File&&validated.stores.jobPhotos[0].blob.name==='origineel.jpg'&&validated.stores.jobPhotos[0].blob.lastModified===1700000000000,'Originele bestandsmetadata behouden waar aanwezig');
       const password=crypto.randomUUID()+crypto.randomUUID();
@@ -99,6 +101,7 @@ module.exports=async(browser,origin)=>{
       let safety;
       check(await JKBackup.restore(opened,{confirm:async()=>true,safetyCopy:async p=>{safety=p;await JKBackup.read(await JKBackup.pack(p));return true;}}),'Volledig gecontroleerd lokaal herstel');
       check(safety.purpose==='safety-before-restore'&&safety.stores.clients.some(x=>x.id==='new-during-restore'),'Veiligheidskopie bevat huidige lokale gegevens');
+      check((await JKDB.get('settings','fixture-payment'))?.amount===100&&(await JKDB.get('jobs','job'))?.pricingType==='fixed'&&(await JKDB.get('timeEntries','hours'))?.actualConfirmed===true,'Prijsafspraak, deelbetaling en bevestigde uren werkelijk hersteld');
       check((await JKDB.all('clients')).length===2&&(await JKDB.get('documents','cloud-doc')).meta.paid===true,'Klanten en betaalstatus hersteld');
       check(await (await JKDB.get('documents','local-doc')).blob.text()==='%PDF-1.4\nfixture invoice','PDF exact hersteld');
       check((await JKDB.get('jobPhotos','photo')).blob.size===4,'Foto exact hersteld');

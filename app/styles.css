@@ -245,3 +245,11 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 
 /* Compact day planning and actual hours; no horizontal scrolling on iPhone. */
 .workday-fields{grid-column:1/-1;min-width:0;width:100%}.workday-row{min-width:0;margin:0 0 12px;padding:12px;border:1px solid #ddd;border-radius:12px}.workday-row legend{font-weight:700}.workday-row input{width:100%;min-width:0}.workday-summary{padding:12px 0;border-bottom:1px solid #ddd;overflow-wrap:anywhere}.workday-summary>div{margin:6px 0}.workday-summary .button-row{flex-wrap:wrap}.workday-list{min-width:0}@media(max-width:480px){.workday-row .form-grid{grid-template-columns:1fr}.workday-summary .button-row button{flex:1 1 100%}}
+
+/* Financial values remain readable on narrow iPhone screens. */
+.finance-kpis{grid-template-columns:repeat(auto-fit,minmax(110px,1fr));margin:10px 0}
+.finance-kpis .kpi{min-width:0;padding:10px}
+.finance-kpis .kpi strong{font-size:16px;overflow-wrap:anywhere}
+.job-payment-row .main{min-width:0}
+.job-payment-row{align-items:flex-start}
+@media(max-width:430px){.job-payment-row{display:block}.job-row-pills{max-width:none;flex-direction:row;margin-top:8px}.finance-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
