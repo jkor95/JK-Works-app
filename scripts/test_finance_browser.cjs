@@ -54,7 +54,7 @@ module.exports=async(browser,origin)=>{
   await page.locator('#paymentForm button.primary').click();
   await page.waitForFunction(()=>!document.querySelector('#paymentForm'));
   assert.match(await page.locator('#modalRoot [data-edit-payment]').first().innerText(),/Betaalverzoek/,'Betaalverzoek in betalingshistorie');
-  assert.doesNotMatch(await page.locator('#modalRoot [data-edit-payment]').first().innerText(),/\\bPin\\b/,'Geen Pin-label in de historie');
+  assert.doesNotMatch(await page.locator('#modalRoot [data-edit-payment]').first().innerText(),/Pin/,'Geen Pin-label in de historie');
   assert.equal(await page.evaluate(()=>JKDB.all('settings').then(xs=>xs.find(x=>x.kind==='jkPayment'&&!x.legacy&&!x.voided)?.method)),'card',
     'Bestaande opslagcode blijft intact, geen gegevensmigratie');
   await page.evaluate(()=>App.renderDashboard());assert.match(await page.locator('#dashOpenPayments').innerText(),/50,00/);assert.equal(await page.locator('#view .finance-kpis').count(),0,'Dashboard toont geen financiële statistiekkaarten');
