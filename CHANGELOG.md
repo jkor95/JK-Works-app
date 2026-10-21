@@ -1,3 +1,9 @@
+## v71.12.3 — gecentreerd openstaand en totalen van ontvangen betalingen
+- Openstaand bedrag staat gecentreerd op een eigen rij met rode tekst en lichtrode achtergrond. Totaal contant en Totaal factuur blijven wit op de rij eronder, op mobiel en desktop.
+- De kleine toelichting onder de drie totalen is verwijderd. Totaal contant en Totaal factuur bevatten uitsluitend werkelijk ontvangen bedragen, verdeeld naar de klusafhandeling. Onbetaalde prijsafspraken tellen niet mee, deelbetalingen alleen voor de ontvangen som. Gekoppelde facturen tellen niet dubbel; losse factuurontvangsten tellen bij factuur. Bestaande gegevens blijven behouden.
+- Volledige lokale browsersuite en gerichte controles voor onbetaald/deels/betaald, contant/factuur, gedeelde factuurbetalingen, losse facturen en het wijzigen/verwijderen van betalingen. Centrering, kleuren en verwijderde toelichting op 390 en 1024 px gecontroleerd. Fictieve gegevens; geen fysieke iPhone/Mac-test.
+- App-/cacheversie vernieuwd. Herstelpunt: geannoteerde tag v71.12.2 op 613a1737020f3bd7ef3f0b2a4949330dbc6d33af, bevestigd als succesvolle Pages-publicatie via main / met jkworks.nl. Geen database-/schemawijzigingen.
+
 ## v71.12.2 — drie klustotalen en openstaand pas na afronding
 - Compacte totalen Openstaand bedrag, Totaal contant en Totaal factuur terug boven Klussen. Contant/factuur volgen de afgesproken klusbedragen; de rest van de uitgebreide statistieken blijft in details.
 - Een klus telt pas mee als openstaand na expliciete status afgerond én na alle werkdagen/eindtijden. Zelfde berekening voor dashboard, klustotaal, betaalbadge, klusdetails en klantgeschiedenis. Een toekomstige dag toevoegen of de klus heropenen sluit het bedrag opnieuw uit.
