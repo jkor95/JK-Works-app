@@ -318,6 +318,7 @@ module.exports=async(browser,origin)=>{
   await page.locator('[data-close]').click();await page.evaluate(()=>App.renderJobs());
   await page.locator('[data-jpf="open"]').click();
   await page.locator('#showAllJobs').click();
+  await page.locator('[data-job="settlement-cash"]').waitFor();
   assert.equal(await page.locator('[data-job="settlement-cash"]').count(),1,'All jobs restored');
   console.log('PASS: issue #35 - open filter, compact price card, partial vs rounded paid, actual receipts and reversal');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
