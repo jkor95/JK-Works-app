@@ -45,6 +45,18 @@ module.exports=async(browser,origin)=>{
   await page.locator('[name=amount]').fill('100');await page.locator('[name=date]').fill(`${await page.evaluate(()=>fixtureYear)}-02-10`);await page.locator('[name=method]').selectOption('bank');
   await page.evaluate(()=>{const f=document.querySelector('#paymentForm');f.requestSubmit();f.requestSubmit();});await page.waitForFunction(()=>!document.querySelector('#paymentForm'));
   m=await metrics();assert.equal(m.received,100);assert.equal(m.open,50);assert.equal(m.paid,false);
+  // Betaalwijze 'Pin' is voortaan 'Betaalverzoek'; bestaande opslagcode 'card' blijft compatibel.
+  await page.locator('[data-edit-payment]').first().click();
+  const methodSelect=page.locator('#paymentForm [name=method]');
+  assert.equal(await methodSelect.locator('option[value=card]').innerText(),'Betaalverzoek','Betaalverzoek is de zichtbare naam');
+  assert.equal(await methodSelect.locator('option').filter({hasText:'Pin'}).count(),0,'Pin staat niet meer in de keuzes');
+  await methodSelect.selectOption('card');
+  await page.locator('#paymentForm button.primary').click();
+  await page.waitForFunction(()=>!document.querySelector('#paymentForm'));
+  assert.match(await page.locator('#modalRoot [data-edit-payment]').first().innerText(),/Betaalverzoek/,'Betaalverzoek in betalingshistorie');
+  assert.doesNotMatch(await page.locator('#modalRoot [data-edit-payment]').first().innerText(),/\\bPin\\b/,'Geen Pin-label in de historie');
+  assert.equal(await page.evaluate(()=>JKDB.all('settings').then(xs=>xs.find(x=>x.kind==='jkPayment'&&!x.legacy&&!x.voided)?.method)),'card',
+    'Bestaande opslagcode blijft intact, geen gegevensmigratie');
   await page.evaluate(()=>App.renderDashboard());assert.match(await page.locator('#dashOpenPayments').innerText(),/50,00/);assert.equal(await page.locator('#view .finance-kpis').count(),0,'Dashboard toont geen financiële statistiekkaarten');
   const detailLabels=['Berekende urenwaarde','Afgesproken omzet','Gefactureerd incl. btw','Ontvangen','Effectief afgesproken / uur','Effectief ontvangen / uur'];
   for(const label of detailLabels)assert.ok(!(await page.locator('#view').innerText()).includes(label),label+' niet op dashboard');
