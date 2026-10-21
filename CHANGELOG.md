@@ -1,3 +1,10 @@
+## v71.13.9 — per klant uren en afspraken/ontvangsten samen
+- **Meer → Statistieken** opent nu standaard met **Per klant**. De tab **Per week** is uit het scherm verwijderd; volgorde: **Per klant, Per maand, Per kwartaal, Per jaar**.
+- Per klant toont één compacte gezamenlijke kaart zowel een horizontale **urenbalk** als een horizontale **verdienstenbalk** met **afgesproken**, **ontvangen** en het verschil **nog niet ontvangen**, plus alle exacte cijfers. Geen wisselen tussen drie losse maatstaven of dubbele klantlijsten meer.
+- Maand, kwartaal en jaar tonen in dezelfde tijdsstaaf het ontvangen deel en het resterende afgesproken deel. De hoogte is gebaseerd op de grootste van afgesproken en ontvangen, zodat ook een overbetaling herkenbaar blijft. Uren per klant blijven gebaseerd op daadwerkelijke ingevoerde/bevestigde werkzaamheden.
+- De eerdere uitgangspunten blijven van kracht: alleen eigen verdiensten (geen voorgeschoten bonnetjes), inkomsten toegerekend aan de laatste uitvoeringsdag, geen wijzigingen aan betalingen, boekingsdatums, facturen, documenten, Supabase of opgeslagen data.
+- Visuele tests aangepast voor de gecombineerde klantgrafiek, exacte bedragen, openstaand segment, volgorde en het ontbreken van **Per week**; versie en PWA-cache vernieuwd.
+
 ## v71.13.8 — inkomsten bij laatste uitvoerdag, openstaand in transparant rood
 - In **Meer → Statistieken** worden alle ontvangen eigen verdiensten en afgesproken bedragen gekoppeld aan de **laatste uitvoerdatum** van een klus (laatste werkdag). De echte betaaldatum blijft ongewijzigd in de betalingsadministratie. Een betaling in juli voor werk dat in juni is afgerond verschijnt in juni.
 - In de staafgrafieken en klantgrafiek van **Ontvangen** wordt het **nog openstaande deel van de eigen verdiensten** doorzichtig rood boven (of naast) het ontvangen bedrag getoond. De bedragen en een kleine legenda maken de twee delen herkenbaar. Ook volledig onbetaalde afgeronde klussen krijgen een rode staaf; na betaling of definitieve afronding verdwijnt die.

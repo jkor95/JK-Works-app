@@ -2169,29 +2169,90 @@ const App = (() => {
     }
     return [...map.values()].sort((a,b)=>b.amount-a.amount||b.minutes-a.minutes||a.label.localeCompare(b.label,'nl'));
   }
+  function statsComparisonHtml(buckets,customerMode,context){
+    const hasData=b=>Math.abs(num(b.amount))+Math.abs(num(b.received))+Math.abs(num(b.minutes))>0.00001;
+    const shown=buckets.filter(hasData);
+    const agreed=shown.reduce((n,b)=>n+num(b.amount),0);
+    const received=shown.reduce((n,b)=>n+num(b.received),0);
+    const minutes=shown.reduce((n,b)=>n+num(b.minutes),0);
+    const label=context?' · '+esc(context):'';
+    return `<div class="card stats-comparison-summary" aria-label="Totaaloverzicht${label}">
+      <div><span>Afgesproken${label}</span><strong>${money(agreed)}</strong></div>
+      <div><span>Ontvangen</span><strong>${money(received)}</strong></div>
+      ${customerMode?`<div><span>Gewerkte uren</span><strong>${hoursLabel(minutes)}</strong></div>`:''}
+    </div>`;
+  }
+
+  function statsComparisonChartHtml(buckets,customerMode=false){
+    const agreed=b=>Math.max(0,num(b.amount));
+    const received=b=>Math.max(0,num(b.received));
+    const hours=b=>Math.max(0,num(b.minutes));
+    const remaining=b=>Math.max(0,agreed(b)-received(b));
+    const total=b=>Math.max(agreed(b),received(b));
+    const relevant=b=>total(b)>0.00001||hours(b)>0.00001;
+    const list=buckets.filter(relevant);
+    if(!list.length)return '<div class="empty">Nog geen werkzaamheden of verdiensten voor deze selectie.</div>';
+    const percentage=(part,whole)=>whole>0?Math.min(100,Math.round(part/whole*1000)/10):0;
+    const legend=`<div class="stats-chart-legend"><span><i class="stats-chart-dot"></i> Ontvangen</span><span><i class="stats-chart-dot stats-chart-dot-open"></i> Nog niet ontvangen</span></div>`;
+    if(customerMode){
+      const maxHours=Math.max(1,...list.map(hours));
+      const maxMoney=Math.max(0.01,...list.map(total));
+      const sorted=[...list].sort((a,b)=>total(b)-total(a)||hours(b)-hours(a)||a.label.localeCompare(b.label,'nl'));
+      return `<section class="card stats-chart-card stats-comparison-chart" aria-label="Uren en verdiensten per klant"><h3>Uren en verdiensten per klant</h3>${legend}
+      <div class="stats-client-chart">${sorted.map(b=>{
+        const ownTotal=total(b),paid=percentage(received(b),ownTotal),unpaid=percentage(remaining(b),ownTotal);
+        const financeScale=percentage(ownTotal,maxMoney),hourScale=percentage(hours(b),maxHours);
+        const desc=`${b.label}: ${hoursLabel(hours(b))} gewerkt, ${money(agreed(b))} afgesproken, ${money(received(b))} ontvangen, ${money(remaining(b))} nog niet ontvangen`;
+        return `<div class="stats-client-combined" role="group" aria-label="${esc(desc)}">
+          <div class="stats-client-name">${esc(b.label)}</div>
+          <div class="stats-comparison-label"><span>Uren</span><strong>${hoursLabel(hours(b))}</strong></div>
+          <div class="stats-client-chart-track stats-client-hours-track" role="img" aria-label="${esc(hoursLabel(hours(b)))} gewerkt"><span class="stats-client-hours-fill" style="width:${hourScale}%"></span></div>
+          <div class="stats-comparison-label"><span>Verdiensten</span><strong>${money(agreed(b))} afgesproken</strong></div>
+          <div class="stats-client-chart-track stats-client-money-track" role="img" aria-label="${esc(money(received(b))+' ontvangen van '+money(agreed(b))+' afgesproken')}"><div class="stats-client-money-width" style="width:${financeScale}%"><span class="stats-client-chart-fill" style="width:${paid}%"></span>${unpaid>0?`<span class="stats-client-chart-open" style="width:${unpaid}%"></span>`:''}</div></div>
+          <div class="stats-comparison-detail"><span>${money(received(b))} ontvangen</span>${remaining(b)>0.005?`<span>${money(remaining(b))} nog niet ontvangen</span>`:''}</div>
+        </div>`;
+      }).join('')}</div></section>`;
+    }
+    const maxMoney=Math.max(0.01,...list.map(total));
+    return `<section class="card stats-chart-card stats-comparison-chart" aria-label="Afgesproken en ontvangen per periode"><h3>Afgesproken en ontvangen</h3>${legend}
+    <div class="stats-period-chart-scroll"><div class="stats-period-chart">${buckets.map(b=>{
+      const ownTotal=total(b),barHeight=percentage(ownTotal,maxMoney),paid=percentage(received(b),ownTotal),unpaid=percentage(remaining(b),ownTotal);
+      const desc=`${b.label}: ${money(agreed(b))} afgesproken, ${money(received(b))} ontvangen, ${money(remaining(b))} nog niet ontvangen`;
+      return `<div class="stats-period-chart-col" role="img" aria-label="${esc(desc)}">
+        <span class="stats-period-chart-value">${ownTotal>0?`<strong>${money(received(b))}</strong><small>van ${money(agreed(b))}</small>`:'–'}</span>
+        <div class="stats-period-chart-track">${ownTotal>0?`<span class="stats-period-chart-stack" style="height:${barHeight}%">${unpaid>0?`<span class="stats-period-chart-open" style="height:${unpaid}%"></span>`:''}<span class="stats-period-chart-fill" style="height:${paid}%"></span></span>`:''}</div>
+        <span class="stats-period-chart-label">${esc(b.label)}</span>
+      </div>`;
+    }).join('')}</div></div></section>`;
+  }
+
   async function showTimeStats(){
     await refreshFinance();
     const [entries,jobs,clients,company]=await Promise.all([JKDB.all('timeEntries'),JKDB.all('jobs'),JKDB.all('clients'),JKDB.get('settings','company')]);
-    let mode='month',metric='received';
+    let mode='client';
     const years=[...new Set([...entries.map(e=>entryDate(e)),...jobs.map(j=>jobStatsDate(j,entries)),...state.finance.documents.map(invoiceStatsDate)].filter(Boolean).map(v=>new Date(v+'T12:00:00')).filter(d=>!Number.isNaN(d.getTime())).map(d=>d.getFullYear()))].sort((a,b)=>b-a);
     if(!years.includes(new Date().getFullYear()))years.unshift(new Date().getFullYear());
     let customerYear=new Date().getFullYear();
     const draw=()=>{
       const customerMode=mode==='client';
-      const periods={week:'laatste 12 weken',month:'laatste 12 maanden',quarter:'laatste 8 kwartalen',year:'alle kalenderjaren'};
+      const periods={month:'laatste 12 maanden',quarter:'laatste 8 kwartalen',year:'alle kalenderjaren'};
       const buckets=customerMode?customerStatBuckets(entries,jobs,clients,company,customerYear):periodBuckets(entries,jobs,company,mode);
-      const content=simpleStatsHtml(buckets,metric,customerMode?'in '+customerYear:periods[mode])+simpleStatsChartHtml(buckets,metric,customerMode);
+      const content=statsComparisonHtml(buckets,customerMode,customerMode?'in '+customerYear:periods[mode])+statsComparisonChartHtml(buckets,customerMode);
       const undated=financialEvents(entries,jobs,company).reduce((n,event)=>n+(event.undatedReceived||0),0);
-      modal(`${modalHead('Statistieken')}<div class="tabs stats-tabs" aria-label="Statistieken per periode"><button type="button" class="tab ${mode==='week'?'active':''}" data-stat-mode="week">Per week</button><button type="button" class="tab ${mode==='month'?'active':''}" data-stat-mode="month">Per maand</button><button type="button" class="tab ${mode==='quarter'?'active':''}" data-stat-mode="quarter">Per kwartaal</button><button type="button" class="tab ${mode==='year'?'active':''}" data-stat-mode="year">Per jaar</button><button type="button" class="tab ${mode==='client'?'active':''}" data-stat-mode="client">Per klant</button></div>
+      modal(`${modalHead('Statistieken')}<div class="tabs stats-tabs" aria-label="Statistieken per periode">
+        <button type="button" class="tab ${customerMode?'active':''}" data-stat-mode="client">Per klant</button>
+        <button type="button" class="tab ${mode==='month'?'active':''}" data-stat-mode="month">Per maand</button>
+        <button type="button" class="tab ${mode==='quarter'?'active':''}" data-stat-mode="quarter">Per kwartaal</button>
+        <button type="button" class="tab ${mode==='year'?'active':''}" data-stat-mode="year">Per jaar</button>
+      </div>
       ${customerMode?`<div class="field stat-year-field"><label for="customerStatsYear">Kalenderjaar</label><select id="customerStatsYear">${years.map(y=>`<option value="${y}" ${y===customerYear?'selected':''}>${y}</option>`).join('')}</select></div>`:''}
-      <div class="tabs stats-metric-tabs" aria-label="Kies welk bedrag of uren je bekijkt"><button type="button" class="tab ${metric==='received'?'active':''}" data-stat-metric="received" aria-pressed="${metric==='received'}">Ontvangen</button><button type="button" class="tab ${metric==='agreed'?'active':''}" data-stat-metric="agreed" aria-pressed="${metric==='agreed'}">Afgesproken</button><button type="button" class="tab ${metric==='hours'?'active':''}" data-stat-metric="hours" aria-pressed="${metric==='hours'}">Uren</button></div>
-      ${content}${metric==='received'&&undated>0?`<p class="muted small stats-undated">Zonder uitvoerdatum (niet ingedeeld): ${money(undated)}</p>`:''}`);
+      ${content}<p class="muted small stats-comparison-note">Rood is het verschil tussen het afgesproken bedrag en wat je hebt ontvangen; dit kan ook nog niet gefactureerd werk zijn.</p>
+      ${undated>0?`<p class="muted small stats-undated">Zonder uitvoerdatum (niet ingedeeld): ${money(undated)}</p>`:''}`);
       $$('[data-stat-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.statMode;draw()}));
-      $$('[data-stat-metric]').forEach(b=>b.addEventListener('click',()=>{metric=b.dataset.statMetric;draw()}));
       $('#customerStatsYear')?.addEventListener('change',e=>{customerYear=Number(e.target.value);draw()});
-    };draw();
+    };
+    draw();
   }
-
   async function showTimeEntries(){
     const es=(await JKDB.all('timeEntries')).sort((a,b)=>(entryDate(b)+entryFrom(b)).localeCompare(entryDate(a)+entryFrom(a)));
     modal(`${modalHead('Urenregistratie')}<button class="primary" id="addTime" style="width:100%;margin-bottom:12px">+ Uren toevoegen</button>${es.length?`<div class="list">${es.map(e=>`<div class="list-item clickable" data-time="${e.id}"><div class="main"><div class="title">${nlDate(entryDate(e))} · ${esc(e.jobTitle||'Algemeen')}</div><div class="sub">${esc(entryFrom(e))} - ${esc(entryTo(e))} · pauze ${num(e.breakMinutes)} min${e.autoFromJobSchedule&&!e.actualConfirmed?' · nog te bevestigen':''}${e.note?' · '+esc(e.note):''}</div></div><strong>${durationHM(entryMinutes(e))}</strong></div>`).join('')}</div>`:'<div class="empty">Nog geen uren geregistreerd.</div>'}`);$('#addTime').addEventListener('click',()=>{editTimeEntry()});$$('[data-time]').forEach(x=>x.addEventListener('click',()=>{editTimeEntry(x.dataset.time)}));

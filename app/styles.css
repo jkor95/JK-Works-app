@@ -334,3 +334,35 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 .stats-total-open{font-size:14px;margin-top:4px}
 .stats-row-open{font-size:11px;white-space:nowrap}
 @media(max-width:430px){.stats-period-chart-col{grid-template-rows:45px 136px 32px}.stats-period-chart-value{min-height:40px}}
+
+
+/* Statistieken: uren en eigen verdiensten op dezelfde pagina, vanaf v71.13.9. */
+.stats-comparison-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:10px;padding:15px}
+.stats-comparison-summary>div{min-width:0}
+.stats-comparison-summary>div span{display:block;color:var(--muted);font-size:12px;font-weight:700;line-height:1.35}
+.stats-comparison-summary>div strong{display:block;font-size:20px;line-height:1.4;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.stats-comparison-summary>div:nth-child(3){grid-column:1/-1}
+.stats-comparison-chart{margin-top:11px}
+.stats-client-combined{padding:13px 0;border-bottom:1px solid var(--line)}
+.stats-client-combined:first-child{padding-top:0}
+.stats-client-combined:last-child{padding-bottom:0;border-bottom:0}
+.stats-client-name{font-size:15px;font-weight:800;margin-bottom:9px;overflow-wrap:anywhere}
+.stats-comparison-label{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;margin:7px 0 5px;color:var(--muted)}
+.stats-comparison-label strong{font-size:13px;color:var(--text);text-align:right;font-variant-numeric:tabular-nums}
+.stats-client-hours-track{height:12px}
+.stats-client-hours-fill{display:block;height:100%;background:#50866b;border-radius:999px}
+.stats-client-money-track{height:16px}
+.stats-client-money-width{height:100%;display:flex;align-items:stretch}
+.stats-client-money-width .stats-client-chart-fill{border-radius:0}
+.stats-client-money-width .stats-client-chart-fill:first-child{border-radius:999px 0 0 999px}
+.stats-client-money-width .stats-client-chart-fill:last-child{border-radius:999px}
+.stats-client-money-width .stats-client-chart-open{border-left:1px solid rgba(180,40,40,.48);border-radius:0 999px 999px 0}
+.stats-client-money-width .stats-client-chart-open:first-child{border-radius:999px}
+.stats-comparison-detail{display:flex;justify-content:space-between;gap:9px;flex-wrap:wrap;font-size:11px;font-weight:750;margin-top:5px;color:var(--muted)}
+.stats-comparison-detail span:last-child:not(:first-child){color:#b43635}
+.stats-comparison-note{margin:11px 2px 2px}
+.stats-comparison-chart .stats-period-chart-col{grid-template-rows:47px 143px 32px}
+.stats-comparison-chart .stats-period-chart-value{font-size:11px}
+.stats-comparison-chart .stats-period-chart-value small{font-size:9px;font-weight:650}
+.stats-comparison-chart .stats-period-chart-value strong{font-size:11px}
+@media(max-width:430px){.stats-comparison-summary{gap:8px;padding:13px}.stats-comparison-summary>div strong{font-size:18px}.stats-comparison-chart .stats-period-chart-col{grid-template-rows:47px 136px 32px}}
