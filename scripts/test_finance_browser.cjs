@@ -131,7 +131,7 @@ module.exports=async(browser,origin)=>{
   await page.locator('[data-stat-mode="quarter"]').click();
   assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/100,00/);
   assert.equal(await page.locator('#modalRoot .stats-period-chart-col').count(),8,'Kwartaalgrafiek toont 8 kwartalen');
-  assert.match(await page.locator('#modalRoot .stats-period-chart-col[aria-label*="Q1"]').getAttribute('aria-label'),/100,00/);
+  assert.match(await page.locator('#modalRoot .stats-period-chart-col[aria-label*="Q1"]').last().getAttribute('aria-label'),/100,00/,'Q1 van het actieve jaar bevat de ontvangst');
   await page.locator('[data-stat-mode="year"]').click();
   assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/100,00/);
   assert.equal(await page.locator('#modalRoot .stats-period-chart-col').count(),1,'Jaargrafiek toont jaren met activiteit');
