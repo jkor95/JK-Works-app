@@ -1958,85 +1958,138 @@ const App = (() => {
     const key=String(d.getFullYear());return {key,label:key,sort:key};
   }
   // Statistieken tonen alleen eigen verdiensten, zonder expliciet doorberekende bonnen/extra kosten.
-  function expenseLinesRecharged(d){
-  // Alleen doorbelaste factuurregels, niet willekeurige bonnen die bij de klus zijn opgeslagen.
-  return (d?.meta?.lines||[]).reduce((sum,line)=>{
-    const title=String(line.description||'').trim();
-    const separateExpense=line.expenseId||/^extra kosten\s*(?:\/|&|en)\s*materiaal\b/i.test(title);
-    if(!separateExpense)return sum;
-    const qty=Math.max(0,num(line.qty)),price=Math.max(0,num(line.price)),vat=Math.max(0,num(line.vatRate??(d.meta?.korApplied?0:d.meta?.vatRate??0)));
-    return sum+Math.round(qty*price*(1+vat/100)*100);
-  },0);
-}
-  function ownEarningsProfile(j,entries,company,finance){
-  const p=JKFinance.price(j,jobMinutes(j,entries),jobRate(j,company));
-  const docs=(finance?.documents||[]).filter(d=>linkedInvoiceJobId(d)===j.id);
-  const invoiced=docs.reduce((sum,d)=>sum+Math.round(num(d.meta?.total)*100),0);
-  const expensesOnInvoices=docs.reduce((sum,d)=>sum+expenseLinesRecharged(d),0);
-  const extra=Math.max(0,Math.round(num(j.extraAmount)*100));
-  const agreed=Math.max(0,Math.round(num(p.agreed)*100));
-  // Een bon die ook als extra klusbedrag is ingevuld, mag niet dubbel worden afgetrokken.
-  const reimbursement=Math.max(extra,expensesOnInvoices);
-  return {agreed:Math.min(Math.max(0,agreed-extra),Math.max(0,Math.max(agreed,invoiced)-reimbursement)),grossDue:Math.max(agreed,invoiced),reimbursement};
-}
-  function ownEarningsPayments(finance,jobs,entries,company){
-  const result=new Map(),jMap=new Map(jobs.map(j=>[String(j.id),j]));
-  const docs=new Map((finance?.documents||[]).map(d=>[String(d.id),d]));
-  const groups=new Map();
-  for(const p of finance?.receipts||[]){
-    const jobId=String(p.resolvedJobId||p.jobId||''),invoiceId=String(p.invoiceId||'');
-    const key=jobId&&jMap.has(jobId)?'job:'+jobId:invoiceId&&docs.has(invoiceId)?'invoice:'+invoiceId:'payment:'+String(p.id);
-    if(!groups.has(key))groups.set(key,[]);
-    groups.get(key).push(p);
+  function normalizeStatsDate(value){
+    const raw=String(value||'').trim(),iso=raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T|\s)/);
+    const dutch=raw.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+    const date=iso?`${iso[1]}-${iso[2]}-${iso[3]}`:dutch?`${dutch[3]}-${dutch[2]}-${dutch[1]}`:'';
+    if(!date)return '';
+    const d=new Date(date+'T12:00:00');
+    return !Number.isNaN(d.getTime())&&d.getFullYear()===Number(date.slice(0,4))&&d.getMonth()+1===Number(date.slice(5,7))&&d.getDate()===Number(date.slice(8,10))?date:'';
   }
-  for(const [key,payments] of groups){
-    let due=0,reimbursement=0;
-    if(key.startsWith('job:')){
-      const j=jMap.get(key.slice(4)),profile=ownEarningsProfile(j,entries,company,finance);
-      due=profile.grossDue;reimbursement=profile.reimbursement;
-    }else if(key.startsWith('invoice:')){
-      const doc=docs.get(key.slice(8));
-      due=Math.max(0,Math.round(num(doc.meta?.total)*100));
-      reimbursement=expenseLinesRecharged(doc);
-    }
-    const totalPaid=payments.reduce((sum,p)=>sum+Math.max(0,Math.round(num(p.amount)*100)),0);
-    due=Math.max(due,totalPaid);
-    const earnedMax=Math.max(0,due-reimbursement);
-    // Betaalde bedragen toerekenen aan eigen werk vóór de voorgeschoten kosten.
-    // Bij een deelbetaling nooit kosten aftrekken die nog niet zijn terugontvangen.
-    let grossSoFar=0;
-    for(const p of [...payments].sort((a,b)=>String(a.date||'9999-99-99').localeCompare(String(b.date||'9999-99-99'))||String(a.id).localeCompare(String(b.id)))){
-      const prior=Math.min(grossSoFar,earnedMax);
-      grossSoFar+=Math.max(0,Math.round(num(p.amount)*100));
-      result.set(p.id,(Math.min(grossSoFar,earnedMax)-prior)/100);
-    }
+    function jobStatsDate(j,entries){
+    const planned=jobWorkDays(j).map(x=>normalizeStatsDate(x.date));
+    const actual=uniqueEntries(entries).filter(e=>String(e.jobId)===String(j.id)&&(!e.autoFromJobSchedule||e.actualConfirmed)).map(e=>normalizeStatsDate(entryDate(e)));
+    return [...planned,...actual,normalizeStatsDate(j.date)].filter(Boolean).sort().at(-1)||'';
   }
-  return result;
-}
+    function invoiceStatsDate(d){
+    // Losse facturen: alleen werkdatum gebruiken. Nooit factuur- of betaaldatum gokken.
+    return normalizeStatsDate(d?.meta?.workDate||d?.meta?.work_date||'');
+  }
+    function invoicePassThroughParts(d){
+    let receipts=0,extras=0;
+    for(const line of d?.meta?.lines||[]){
+      const description=String(line.description||'').trim();
+      const isReceipt=!!line.expenseId, isExtra=/^extra kosten\s*(?:\/|&|en)\s*materiaal\b/i.test(description);
+      if(!isReceipt&&!isExtra)continue;
+      const quantity=Math.max(0,num(line.qty)),unitPrice=Math.max(0,num(line.price));
+      const vat=Math.max(0,num(line.vatRate??(d.meta?.korApplied?0:d.meta?.vatRate??0)));
+      const cents=Math.round(quantity*unitPrice*(1+vat/100)*100);
+      if(isReceipt)receipts+=cents;else extras+=cents;
+    }
+    return {receipts,extras};
+  }
+    function expenseLinesRecharged(d){
+    const parts=invoicePassThroughParts(d);
+    return parts.receipts+parts.extras;
+  }
+    function ownEarningsProfile(j,entries,company,finance){
+    const p=JKFinance.price(j,jobMinutes(j,entries),jobRate(j,company));
+    const docs=(finance?.documents||[]).filter(d=>String(linkedInvoiceJobId(d))===String(j.id));
+    const invoiced=docs.reduce((sum,d)=>sum+Math.round(num(d.meta?.total)*100),0);
+    const receiptsOnInvoices=docs.reduce((sum,d)=>sum+invoicePassThroughParts(d).receipts,0);
+    const extrasOnInvoices=docs.reduce((sum,d)=>sum+invoicePassThroughParts(d).extras,0);
+    const extra=Math.max(0,Math.round(num(j.extraAmount)*100));
+    const agreed=Math.max(0,Math.round(num(p.agreed)*100));
+    // Een als klus-extra EN factuur-extra ingevoerd bedrag slechts eenmaal aftrekken.
+    // Bonnetjes met een eigen expenseId komen hier bovenop (afzonderlijke voorschotten).
+    const reimbursement=Math.max(extra,receiptsOnInvoices+extrasOnInvoices);
+    const grossDue=Math.max(agreed,invoiced);
+    return {agreed:Math.min(Math.max(0,agreed-extra),Math.max(0,grossDue-reimbursement)),grossDue,reimbursement};
+  }
+    function ownEarningsPayments(finance,jobs,entries,company){
+    const result=new Map(),jMap=new Map(jobs.map(j=>[String(j.id),j]));
+    const docs=new Map((finance?.documents||[]).map(d=>[String(d.id),d]));
+    const groups=new Map();
+    for(const p of finance?.receipts||[]){
+      const jobId=String(p.resolvedJobId||p.jobId||''),invoiceId=String(p.invoiceId||'');
+      const key=jobId&&jMap.has(jobId)?'job:'+jobId:invoiceId&&docs.has(invoiceId)?'invoice:'+invoiceId:'payment:'+String(p.id);
+      if(!groups.has(key))groups.set(key,[]);
+      groups.get(key).push(p);
+    }
+    for(const [key,payments] of groups){
+      let due=0,reimbursement=0;
+      if(key.startsWith('job:')){
+        const profile=ownEarningsProfile(jMap.get(key.slice(4)),entries,company,finance);
+        due=profile.grossDue;reimbursement=profile.reimbursement;
+      }else if(key.startsWith('invoice:')){
+        const doc=docs.get(key.slice(8));
+        due=Math.max(0,Math.round(num(doc.meta?.total)*100));
+        reimbursement=expenseLinesRecharged(doc);
+      }
+      const totalPaid=payments.reduce((sum,p)=>sum+Math.max(0,Math.round(num(p.amount)*100)),0);
+      due=Math.max(due,totalPaid);
+      const earnedMax=Math.max(0,due-reimbursement);
+      // Totale verdiensten worden gemaximeerd tot werkloon; voorgeschoten kosten
+      // komen nooit als eigen inkomen in de statistieken terecht.
+      let grossSoFar=0;
+      for(const p of [...payments].sort((a,b)=>String(a.date||'9999-99-99').localeCompare(String(b.date||'9999-99-99'))||String(a.id).localeCompare(String(b.id)))){
+        const prior=Math.min(grossSoFar,earnedMax);
+        grossSoFar+=Math.max(0,Math.round(num(p.amount)*100));
+        result.set(p.id,(Math.min(grossSoFar,earnedMax)-prior)/100);
+      }
+    }
+    return result;
+  }
     function financialEvents(entries,jobs,company,finance=state.finance){
-    const events=[],jobMap=new Map(jobs.map(j=>[j.id,j]));
+    const events=[],jobMap=new Map(jobs.map(j=>[String(j.id),j])),ownPaid=ownEarningsPayments(finance,jobs,entries,company);
+    const incomeByJob=new Map();
+    for(const p of finance?.receipts||[]){
+      const id=String(p.resolvedJobId||'');
+      if(jobMap.has(id))incomeByJob.set(id,(incomeByJob.get(id)||0)+Math.round((ownPaid.get(p.id)||0)*100));
+    }
     for(const e of uniqueEntries(entries)){
-      const j=jobMap.get(e.jobId),minutes=entryMinutes(e);
+      const j=jobMap.get(String(e.jobId)),minutes=entryMinutes(e);
       events.push({date:entryDate(e),job:j,minutes,hoursValue:j?Math.round(minutes/60*jobRate(j,company)*100)/100:0});
     }
     for(const j of jobs){
-      const date=j.date||entries.filter(e=>e.jobId===j.id).map(entryDate).filter(Boolean).sort()[0]||'',amount=ownEarningsProfile(j,entries,company,finance).agreed/100;
-      events.push({date,job:j,amount,invoiceAmount:jobPaymentType(j)==='invoice'?amount:0,cashAmount:jobPaymentType(j)==='cash'?amount:0});
+      const date=jobStatsDate(j,entries),profile=ownEarningsProfile(j,entries,company,finance);
+      const earned=incomeByJob.get(String(j.id))||0;
+      const grossOpen=Math.round(num(finance?.job?.(j)?.open)*100);
+      const ownOpen=Math.max(0,Math.min(grossOpen,profile.agreed-earned));
+      const amount=profile.agreed/100;
+      events.push({date,job:j,amount,open:ownOpen/100,invoiceAmount:jobPaymentType(j)==='invoice'?amount:0,cashAmount:jobPaymentType(j)==='cash'?amount:0});
     }
-    for(const d of finance?.documents||[])events.push({date:invoiceReportDate(d),job:jobMap.get(linkedInvoiceJobId(d)),client:d.meta?.client,clientId:d.meta?.clientId,invoiced:num(d.meta?.total)});
-    const earnedPayments=ownEarningsPayments(finance,jobs,entries,company);
+    // Factuurbedrag blijft voor bestaande metrics beschikbaar, maar hoort niet
+    // bij eigen verdiensten en beïnvloedt de nieuwe grafiek niet.
+    for(const d of finance?.documents||[]){
+      const job=jobMap.get(String(linkedInvoiceJobId(d)));
+      events.push({date:job?jobStatsDate(job,entries):invoiceStatsDate(d),job,client:d.meta?.client,clientId:d.meta?.clientId,invoiced:num(d.meta?.total)});
+    }
     for(const p of finance?.receipts||[]){
-      const d=finance.documents.find(d=>d.id===p.invoiceId);
-      const amount=earnedPayments.get(p.id)||0;
-      events.push({date:p.date||'',job:jobMap.get(p.resolvedJobId),client:d?.meta?.client,clientId:d?.meta?.clientId,received:p.date?amount:0,undatedReceived:p.date?0:amount});
+      const d=(finance?.documents||[]).find(d=>String(d.id)===String(p.invoiceId)),j=jobMap.get(String(p.resolvedJobId||'')),amount=ownPaid.get(p.id)||0;
+      const date=j?jobStatsDate(j,entries):d?invoiceStatsDate(d):'';
+      events.push({date,job:j,client:d?.meta?.client,clientId:d?.meta?.clientId,received:date?amount:0,undatedReceived:date?0:amount});
+    }
+    // Losse facturen zonder klus kunnen eveneens nog openstaande eigen
+    // werkzaamheden bevatten. Aan een klus gekoppelde facturen zijn hierboven al verwerkt.
+    for(const d of finance?.documents||[]){
+      if(jobMap.has(String(linkedInvoiceJobId(d))))continue;
+      const date=invoiceStatsDate(d),totalCents=Math.max(0,Math.round(num(d.meta?.total)*100));
+      const costs=expenseLinesRecharged(d);
+      const ownInvoice=Math.max(0,totalCents-costs);
+      const payments=(finance?.receipts||[]).filter(p=>String(p.invoiceId)===String(d.id));
+      const earned=payments.reduce((sum,p)=>sum+Math.round((ownPaid.get(p.id)||0)*100),0);
+      const financeOpen=Math.max(0,Math.round(num(finance?.document?.(d)?.open)*100));
+      const open=Math.max(0,Math.min(financeOpen,ownInvoice-earned));
+      events.push({date,job:null,client:d.meta?.client,clientId:d.meta?.clientId,amount:ownInvoice/100,open:open/100});
     }
     return events;
   }
-  const emptyMetrics=()=>({minutes:0,amount:0,invoiceAmount:0,cashAmount:0,hoursValue:0,invoiced:0,received:0,undatedReceived:0});
+    const emptyMetrics=()=>({minutes:0,amount:0,invoiceAmount:0,cashAmount:0,hoursValue:0,invoiced:0,received:0,open:0,undatedReceived:0});
   function addMetrics(target,event){for(const key of Object.keys(emptyMetrics()))target[key]=(target[key]||0)+(event[key]||0);}
   function periodBuckets(entries,jobs,company,mode){
     const now=new Date(), map=new Map();
-    const ensure=info=>{let b=map.get(info.key);if(!b){b={...info,minutes:0,amount:0,invoiceAmount:0,cashAmount:0};map.set(info.key,b)}return b};
+    const ensure=info=>{let b=map.get(info.key);if(!b){b={...info,...emptyMetrics()};map.set(info.key,b)}return b};
     for(const event of financialEvents(entries,jobs,company)){
       const info=statPeriodInfo(event.date,mode);if(!info)continue;
       addMetrics(ensure(info),event);
@@ -2049,17 +2102,17 @@ const App = (() => {
         const d=new Date(monday);d.setDate(d.getDate()-(i*7));
         const ymd=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         const w=isoWeekInfo(ymd);if(!w)continue;
-        arr.push(map.get(w.key)||{key:w.key,label:w.label,sort:w.key,minutes:0,amount:0,invoiceAmount:0,cashAmount:0});
+        arr.push(map.get(w.key)||{key:w.key,label:w.label,sort:w.key,...emptyMetrics()});
       }
       return arr;
     }
     if(mode==='month'){
-      const arr=[];for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1),key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;arr.push(map.get(key)||{key,label:`${monthName(d.getMonth())} '${String(d.getFullYear()).slice(-2)}`,sort:key,minutes:0,amount:0,invoiceAmount:0,cashAmount:0})}return arr;
+      const arr=[];for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1),key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;arr.push(map.get(key)||{key,label:`${monthName(d.getMonth())} '${String(d.getFullYear()).slice(-2)}`,sort:key,...emptyMetrics()})}return arr;
     }
     if(mode==='quarter'){
-      const arr=[];const cq=Math.floor(now.getMonth()/3)+1;for(let i=7;i>=0;i--){let q=cq-i,y=now.getFullYear();while(q<=0){q+=4;y--}while(q>4){q-=4;y++}const key=`${y}-Q${q}`;arr.push(map.get(key)||{key,label:`Q${q} '${String(y).slice(-2)}`,sort:`${y}-${q}`,minutes:0,amount:0,invoiceAmount:0,cashAmount:0})}return arr;
+      const arr=[];const cq=Math.floor(now.getMonth()/3)+1;for(let i=7;i>=0;i--){let q=cq-i,y=now.getFullYear();while(q<=0){q+=4;y--}while(q>4){q-=4;y++}const key=`${y}-Q${q}`;arr.push(map.get(key)||{key,label:`Q${q} '${String(y).slice(-2)}`,sort:`${y}-${q}`,...emptyMetrics()})}return arr;
     }
-    const years=[...map.values()].sort((a,b)=>a.sort.localeCompare(b.sort));if(!years.length)years.push({key:String(now.getFullYear()),label:String(now.getFullYear()),sort:String(now.getFullYear()),minutes:0,amount:0,invoiceAmount:0,cashAmount:0});return years;
+    const years=[...map.values()].sort((a,b)=>a.sort.localeCompare(b.sort));if(!years.length)years.push({key:String(now.getFullYear()),label:String(now.getFullYear()),sort:String(now.getFullYear()),...emptyMetrics()});return years;
   }
   // Eén getal tegelijk: de berekeningen veranderen niet, alleen de presentatie.
   function statMetricValue(bucket,metric){
@@ -2068,29 +2121,45 @@ const App = (() => {
   function statMetricLabel(metric){return metric==='hours'?'Gewerkte uren':metric==='agreed'?'Afgesproken':'Ontvangen';}
   function statMetricText(bucket,metric){const v=statMetricValue(bucket,metric);return metric==='hours'?hoursLabel(v):money(v);}
   function simpleStatsHtml(buckets,metric,context=''){
-    const shown=buckets.filter(b=>Math.abs(statMetricValue(b,metric))>0.00001);
-    shown.sort((a,b)=>context.startsWith('in ')?statMetricValue(b,metric)-statMetricValue(a,metric)||a.label.localeCompare(b.label,'nl'):String(b.sort||b.key).localeCompare(String(a.sort||a.key)));
+    const include=b=>Math.abs(statMetricValue(b,metric))>0.00001||(metric==='received'&&num(b.open)>0.00001);
+    const shown=buckets.filter(include);
+    shown.sort((a,b)=>context.startsWith('in ')?statMetricValue(b,metric)-statMetricValue(a,metric)||num(b.open)-num(a.open)||a.label.localeCompare(b.label,'nl'):String(b.sort||b.key).localeCompare(String(a.sort||a.key)));
     const total=shown.reduce((sum,b)=>sum+statMetricValue(b,metric),0);
-    const label=statMetricLabel(metric),empty=metric==='hours'?'Geen gewerkte uren':metric==='agreed'?'Geen afspraken':'Geen ontvangen bedragen';
-    return `<div class="card stats-simple-total"><span class="muted small">Totaal ${esc(label.toLowerCase())}${context?' · '+esc(context):''}</span><strong>${statMetricText({minutes:total,amount:total,received:total},metric)}</strong></div>${shown.length?`<div class="list stats-simple-list">${shown.map(b=>`<div class="list-item stats-simple-row"><div class="main"><div class="title">${esc(b.label)}</div></div><strong class="stats-simple-value">${esc(statMetricText(b,metric))}</strong></div>`).join('')}</div>`:`<div class="empty">${empty}${context?' '+esc(context):''}.</div>`}`;
+    const open=metric==='received'?shown.reduce((sum,b)=>sum+num(b.open),0):0;
+    const label=statMetricLabel(metric),empty=metric==='hours'?'Geen gewerkte uren':metric==='agreed'?'Geen afspraken':'Geen ontvangen of openstaande verdiensten';
+    return `<div class="card stats-simple-total"><span class="muted small">Totaal ${esc(label.toLowerCase())}${context?' · '+esc(context):''}</span><strong>${statMetricText({minutes:total,amount:total,received:total},metric)}</strong>${open>0?`<span class="stats-total-open">Nog te ontvangen: ${money(open)}</span>`:''}</div>${shown.length?`<div class="list stats-simple-list">${shown.map(b=>`<div class="list-item stats-simple-row"><div class="main"><div class="title">${esc(b.label)}</div></div><div class="stats-simple-figures"><strong class="stats-simple-value">${esc(statMetricText(b,metric))}</strong>${metric==='received'&&num(b.open)>0?`<span class="stats-row-open">+ ${money(b.open)} open</span>`:''}</div></div>`).join('')}</div>`:`<div class="empty">${empty}${context?' '+esc(context):''}.</div>`}`;
   }
-  // Eén staaf per gekozen meetwaarde; exact dezelfde bedragen als in de compacte lijst.
-  // Periodes chronologisch, klanten op de geselecteerde waarde gesorteerd.
+
   function simpleStatsChartHtml(buckets,metric,customerMode=false){
-  const valid=buckets.filter(b=>Math.abs(statMetricValue(b,metric))>0.00001);
-  if(!valid.length)return '';
-  const maximum=Math.max(...valid.map(b=>Math.abs(statMetricValue(b,metric))),0.01);
-  const barWidth=b=>Math.max(3,Math.round(Math.abs(statMetricValue(b,metric))/maximum*1000)/10);
-  const title='Grafiek · '+statMetricLabel(metric).toLowerCase();
-  if(customerMode){
-    const clients=[...valid].sort((a,b)=>statMetricValue(b,metric)-statMetricValue(a,metric)||a.label.localeCompare(b.label,'nl'));
-    return `<div class="card stats-chart-card" aria-label="${esc(title)}"><h3>${esc(title)}</h3><div class="stats-client-chart">${clients.map(b=>`<div class="stats-client-chart-row"><div class="stats-client-chart-caption"><span>${esc(b.label)}</span><strong>${esc(statMetricText(b,metric))}</strong></div><div class="stats-client-chart-track" role="img" aria-label="${esc(b.label+': '+statMetricText(b,metric))}"><span class="stats-client-chart-fill" style="width:${barWidth(b)}%"></span></div></div>`).join('')}</div></div>`;
+    const hasOpen=b=>metric==='received'&&num(b.open)>0.00001;
+    const relevant=b=>Math.abs(statMetricValue(b,metric))>0.00001||hasOpen(b);
+    const valid=buckets.filter(relevant);
+    if(!valid.length)return '';
+    const current=b=>Math.max(0,statMetricValue(b,metric));
+    const pending=b=>hasOpen(b)?Math.max(0,num(b.open)):0;
+    const full=b=>current(b)+pending(b);
+    const maximum=Math.max(...valid.map(full),0.01);
+    const width=b=>Math.max(3,Math.round(full(b)/maximum*1000)/10);
+    const pct=(part,sum)=>sum>0?Math.round(part/sum*1000)/10:0;
+    const title='Grafiek · '+statMetricLabel(metric).toLowerCase();
+    const legend=metric==='received'&&valid.some(hasOpen)?'<div class="stats-chart-legend"><span><i class="stats-chart-dot"></i> Ontvangen</span><span><i class="stats-chart-dot stats-chart-dot-open"></i> Openstaand</span></div>':'';
+    if(customerMode){
+      const clients=[...valid].sort((a,b)=>statMetricValue(b,metric)-statMetricValue(a,metric)||num(b.open)-num(a.open)||a.label.localeCompare(b.label,'nl'));
+      return `<div class="card stats-chart-card" aria-label="${esc(title)}"><h3>${esc(title)}</h3>${legend}<div class="stats-client-chart">${clients.map(b=>{
+        const total=full(b),maxWidth=width(b),receivedWidth=pct(current(b),total)*maxWidth/100,openWidth=pct(pending(b),total)*maxWidth/100;
+        const description=b.label+': '+statMetricText(b,metric)+(hasOpen(b)?', '+money(pending(b))+' openstaand':'');
+        return `<div class="stats-client-chart-row"><div class="stats-client-chart-caption"><span>${esc(b.label)}</span><strong>${esc(statMetricText(b,metric))}${hasOpen(b)?`<small class="stats-chart-open-value">+ ${money(pending(b))} open</small>`:''}</strong></div><div class="stats-client-chart-track" role="img" aria-label="${esc(description)}"><span class="stats-client-chart-fill" style="width:${receivedWidth}%"></span>${hasOpen(b)?`<span class="stats-client-chart-open" style="width:${openWidth}%"></span>`:''}</div></div>`;
+      }).join('')}</div></div>`;
+    }
+    return `<div class="card stats-chart-card" aria-label="${esc(title)}"><h3>${esc(title)}</h3>${legend}<div class="stats-period-chart-scroll"><div class="stats-period-chart">${buckets.map(b=>{
+      const value=current(b),open=pending(b),combined=full(b),height=combined?width(b):0;
+      const description=b.label+': '+statMetricText(b,metric)+(hasOpen(b)?', '+money(open)+' openstaand':'');
+      const bar=metric==='received'
+        ?`<span class="stats-period-chart-stack" style="height:${height}%">${hasOpen(b)?`<span class="stats-period-chart-open" style="height:${pct(open,combined)}%"></span>`:''}<span class="stats-period-chart-fill" style="height:${pct(value,combined)}%"></span></span>`
+        :`<span class="stats-period-chart-fill" style="height:${height}%"></span>`;
+      return `<div class="stats-period-chart-col" role="img" aria-label="${esc(description)}"><span class="stats-period-chart-value">${esc(statMetricText(b,metric))}${hasOpen(b)?`<small class="stats-chart-open-value">+ ${money(open)} open</small>`:''}</span><div class="stats-period-chart-track">${bar}</div><span class="stats-period-chart-label">${esc(b.label)}</span></div>`;
+    }).join('')}</div></div></div>`;
   }
-  return `<div class="card stats-chart-card" aria-label="${esc(title)}"><h3>${esc(title)}</h3><div class="stats-period-chart-scroll"><div class="stats-period-chart">${buckets.map(b=>{
-    const value=statMetricValue(b,metric),height=value?barWidth(b):0;
-    return `<div class="stats-period-chart-col" role="img" aria-label="${esc(b.label+': '+statMetricText(b,metric))}"><span class="stats-period-chart-value">${esc(statMetricText(b,metric))}</span><div class="stats-period-chart-track"><span class="stats-period-chart-fill" style="height:${height}%"></span></div><span class="stats-period-chart-label">${esc(b.label)}</span></div>`;
-  }).join('')}</div></div></div>`;
-}
   function customerStatBuckets(entries,jobs,clients,company,year){
     const map=new Map(),clientMap=new Map(clients.map(c=>[c.id,c]));
     for(const event of financialEvents(entries,jobs,company)){
@@ -2104,7 +2173,7 @@ const App = (() => {
     await refreshFinance();
     const [entries,jobs,clients,company]=await Promise.all([JKDB.all('timeEntries'),JKDB.all('jobs'),JKDB.all('clients'),JKDB.get('settings','company')]);
     let mode='month',metric='received';
-    const years=[...new Set([...entries.map(e=>entryDate(e)),...jobs.map(j=>j.date),...state.finance.documents.map(invoiceReportDate),...state.finance.receipts.map(p=>p.date)].filter(Boolean).map(v=>new Date(v+'T12:00:00')).filter(d=>!Number.isNaN(d.getTime())).map(d=>d.getFullYear()))].sort((a,b)=>b-a);
+    const years=[...new Set([...entries.map(e=>entryDate(e)),...jobs.map(j=>jobStatsDate(j,entries)),...state.finance.documents.map(invoiceStatsDate)].filter(Boolean).map(v=>new Date(v+'T12:00:00')).filter(d=>!Number.isNaN(d.getTime())).map(d=>d.getFullYear()))].sort((a,b)=>b-a);
     if(!years.includes(new Date().getFullYear()))years.unshift(new Date().getFullYear());
     let customerYear=new Date().getFullYear();
     const draw=()=>{
@@ -2116,7 +2185,7 @@ const App = (() => {
       modal(`${modalHead('Statistieken')}<div class="tabs stats-tabs" aria-label="Statistieken per periode"><button type="button" class="tab ${mode==='week'?'active':''}" data-stat-mode="week">Per week</button><button type="button" class="tab ${mode==='month'?'active':''}" data-stat-mode="month">Per maand</button><button type="button" class="tab ${mode==='quarter'?'active':''}" data-stat-mode="quarter">Per kwartaal</button><button type="button" class="tab ${mode==='year'?'active':''}" data-stat-mode="year">Per jaar</button><button type="button" class="tab ${mode==='client'?'active':''}" data-stat-mode="client">Per klant</button></div>
       ${customerMode?`<div class="field stat-year-field"><label for="customerStatsYear">Kalenderjaar</label><select id="customerStatsYear">${years.map(y=>`<option value="${y}" ${y===customerYear?'selected':''}>${y}</option>`).join('')}</select></div>`:''}
       <div class="tabs stats-metric-tabs" aria-label="Kies welk bedrag of uren je bekijkt"><button type="button" class="tab ${metric==='received'?'active':''}" data-stat-metric="received" aria-pressed="${metric==='received'}">Ontvangen</button><button type="button" class="tab ${metric==='agreed'?'active':''}" data-stat-metric="agreed" aria-pressed="${metric==='agreed'}">Afgesproken</button><button type="button" class="tab ${metric==='hours'?'active':''}" data-stat-metric="hours" aria-pressed="${metric==='hours'}">Uren</button></div>
-      ${content}${metric==='received'&&undated>0?`<p class="muted small stats-undated">Zonder betaaldatum (niet ingedeeld): ${money(undated)}</p>`:''}`);
+      ${content}${metric==='received'&&undated>0?`<p class="muted small stats-undated">Zonder uitvoerdatum (niet ingedeeld): ${money(undated)}</p>`:''}`);
       $$('[data-stat-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.statMode;draw()}));
       $$('[data-stat-metric]').forEach(b=>b.addEventListener('click',()=>{metric=b.dataset.statMetric;draw()}));
       $('#customerStatsYear')?.addEventListener('change',e=>{customerYear=Number(e.target.value);draw()});

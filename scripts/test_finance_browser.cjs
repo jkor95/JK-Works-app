@@ -4,7 +4,7 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 module.exports=async(browser,origin)=>{
  const root=path.join(__dirname,'..'),cloudSource=(await fs.readFile(path.join(root,'app/cloud.js'),'utf8')).replace('return {readBackupSnapshot,','return {encodeRecord,decodeRecord,readBackupSnapshot,');
- const source=(await fs.readFile(path.join(root,'app/app.js'),'utf8')).replace('return {init,go};','return {init,go,state,editJob,showJob,showDocument,showPayments,renderJobs,renderDashboard,refreshFinance,jobMinutes,jobFinancial,financialEvents,periodBuckets,customerStatBuckets,showClientHistory,showTimeStats,generateAnnualInvoiceReport,createBusinessDoc,setInvoiceJobLink};').replace("document.addEventListener('DOMContentLoaded',()=>App.init());",'');
+ const source=(await fs.readFile(path.join(root,'app/app.js'),'utf8')).replace('return {init,go};','return {init,go,state,editJob,showJob,showDocument,showPayments,renderJobs,renderDashboard,refreshFinance,jobMinutes,jobFinancial,financialEvents,periodBuckets,customerStatBuckets,simpleStatsChartHtml,showClientHistory,showTimeStats,generateAnnualInvoiceReport,createBusinessDoc,setInvoiceJobLink};').replace("document.addEventListener('DOMContentLoaded',()=>App.init());",'');
  const context=await browser.newContext({serviceWorkers:'block',viewport:{width:390,height:844}}),page=await context.newPage(),errors=[],writes=[];
  page.setDefaultTimeout(15000);
  await page.clock.setFixedTime(new Date('2026-10-21T10:00:00Z'));
@@ -94,26 +94,26 @@ module.exports=async(browser,origin)=>{
   // Restore fixed agreement for independent January / February / year / customer amounts.
   await page.evaluate(()=>App.editJob('fixed'));await page.locator('[name=pricingType]').selectOption('fixed');await page.locator('[name=agreedAmount]').fill('150');await saveJob();
   const stats=await page.evaluate(async()=>{await App.refreshFinance();const es=await JKDB.all('timeEntries'),js=await JKDB.all('jobs'),cs=await JKDB.all('clients');return {fixtureYear,week:App.periodBuckets(es,js,{},'week'),quarter:App.periodBuckets(es,js,{},'quarter'),month:App.periodBuckets(es,js,{},'month'),year:App.periodBuckets(es,js,{},'year'),clients:App.customerStatBuckets(es,js,cs,{},fixtureYear)};});
-  assert.equal(stats.month.find(b=>b.key.endsWith('-01')).amount,270);assert.equal(stats.month.find(b=>b.key.endsWith('-02')).received,100);assert.equal(stats.year.find(b=>b.key===String(stats.fixtureYear)).received,100);
-  assert.equal(stats.quarter.find(b=>b.key===`${stats.fixtureYear}-Q1`).received,100);assert.equal(stats.quarter.find(b=>b.key===`${stats.fixtureYear}-Q1`).amount,270);assert.equal(stats.week.reduce((n,b)=>n+(b.received||0),0),0,'February payment never leaks into recent weeks');
-  assert.equal(stats.clients[0].received,100);assert.equal(stats.clients[0].amount,270);
+  assert.equal(stats.month.find(b=>b.key.endsWith('-01')).amount,270);assert.equal(stats.month.find(b=>b.key.endsWith('-01')).received,200,'Februari-betaling en oude ongedateerde betaling horen bij januari-uitvoering');assert.equal(stats.month.find(b=>b.key.endsWith('-02')).received,0);assert.equal(stats.year.find(b=>b.key===String(stats.fixtureYear)).received,200);
+  assert.equal(stats.quarter.find(b=>b.key===`${stats.fixtureYear}-Q1`).received,200);assert.equal(stats.quarter.find(b=>b.key===`${stats.fixtureYear}-Q1`).amount,270);assert.equal(stats.week.reduce((n,b)=>n+(b.received||0),0),0,'February payment never leaks into recent weeks');
+  assert.equal(stats.clients[0].received,200);assert.equal(stats.clients[0].amount,270);
   await page.evaluate(()=>App.showClientHistory('client'));assert.match(await page.locator('#modalRoot').innerText(),/Ontvangen/);
   // Compacte weergave: precies één geselecteerd getal per maand/klant en één totaal.
   await page.evaluate(()=>App.showTimeStats());
   await page.locator('[data-stat-metric="received"].active').waitFor();
-  assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/100,00/);
+  assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/200,00/);
   assert.equal(await page.locator('#modalRoot .stats-simple-row').count(),1,'Alleen maanden met ontvangsten tonen');
-  assert.match(await page.locator('#modalRoot .stats-simple-row').first().innerText(),/feb[\s\S]*100,00/i);
+  assert.match(await page.locator('#modalRoot .stats-simple-row').first().innerText(),/jan[\s\S]*200,00/i);
   assert.equal(await page.locator('#modalRoot .stats-chart-card').count(),1,'Eén grafiek onder de compacte lijst');
   assert.equal(await page.locator('#modalRoot .stats-period-chart-col').count(),12,'Maandgrafiek toont 12 maanden');
-  assert.match(await page.locator('#modalRoot .stats-period-chart-col[aria-label*="feb"]').getAttribute('aria-label'),/100,00/);
-  assert.equal(await page.locator('#modalRoot .stats-period-chart-fill[style*="100%"]').count(),1,'De maand met ontvangst krijgt de hoogste staaf');
+  assert.match(await page.locator('#modalRoot .stats-period-chart-col[aria-label*="jan"]').getAttribute('aria-label'),/200,00/);
+  assert.equal(await page.locator('#modalRoot .stats-period-chart-stack[style*="100%"]').count(),1,'De hoogste gestapelde balk heeft volledige hoogte');assert.ok(await page.locator('#modalRoot .stats-period-chart-open').count()>0,'Transparant rood boven ontvangen');assert.match(await page.locator('#modalRoot .stats-chart-legend').innerText(),/Ontvangen[\s\S]*Openstaand/);
   assert.equal(await page.evaluate(()=>{const c=document.querySelector('.stats-period-chart-scroll');return c.scrollWidth>c.clientWidth}),true,'Maandgrafiek is horizontaal schuifbaar op mobiel');
   assert.equal(await page.locator('#modalRoot .stats-client-chart-row').count(),0,'Per maand geen klantgrafiek');
   assert.equal(await page.locator('#modalRoot .finance-kpis').count(),0,'Geen zesdelige financiële kaarten');
   assert.equal(await page.locator('#modalRoot .dual-stats-chart').count(),0,'Geen dubbele uren/geldgrafieken');
   assert.doesNotMatch(await page.locator('#modalRoot').innerText(),/Berekende urenwaarde|Gefactureerd incl\\. btw|Effectief afgesproken|Effectief ontvangen|Afgesproken omzet/);
-  assert.match(await page.locator('#modalRoot').innerText(),/Zonder betaaldatum/,'Ongedateerde ontvangst niet stilzwijgend bij periode optellen');
+  assert.doesNotMatch(await page.locator('#modalRoot').innerText(),/Zonder betaaldatum/,'Betaaldatum stuurt maand niet meer');
   await page.locator('[data-stat-metric="agreed"]').click();
   assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/270,00/,'Afspraken blijven gebaseerd op bestaande bedragen');
   assert.equal(await page.locator('#modalRoot .stats-simple-row').count(),1);
@@ -125,17 +125,17 @@ module.exports=async(browser,origin)=>{
   assert.match(await page.locator('#modalRoot .stats-client-chart-row').innerText(),/Fictieve klant[\s\S]*270,00/);
   assert.equal(await page.locator('#modalRoot .stats-period-chart-col').count(),0,'Klantgrafiek vervangt periodegrafiek');
   await page.locator('[data-stat-metric="received"]').click();
-  assert.match(await page.locator('#modalRoot .stats-simple-row').first().innerText(),/Fictieve klant.*100,00/s);
-  assert.match(await page.locator('#modalRoot .stats-client-chart-row').innerText(),/Fictieve klant[\s\S]*100,00/,'Klantgrafiek volgt Ontvangen');
+  assert.match(await page.locator('#modalRoot .stats-simple-row').first().innerText(),/Fictieve klant.*200,00/s);
+  assert.match(await page.locator('#modalRoot .stats-client-chart-row').innerText(),/Fictieve klant[\s\S]*200,00/,'Klantgrafiek volgt Ontvangen');
   assert.doesNotMatch(await page.locator('#modalRoot .stats-client-chart-row').innerText(),/270,00/,'Geen oude afspraakwaarde bij ontvangsten');
   await page.locator('[data-stat-mode="quarter"]').click();
-  assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/100,00/);
+  assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/200,00/);
   assert.equal(await page.locator('#modalRoot .stats-period-chart-col').count(),8,'Kwartaalgrafiek toont 8 kwartalen');
-  assert.match(await page.locator('#modalRoot .stats-period-chart-col[aria-label*="Q1"]').last().getAttribute('aria-label'),/100,00/,'Q1 van het actieve jaar bevat de ontvangst');
+  assert.match(await page.locator('#modalRoot .stats-period-chart-col[aria-label*="Q1"]').last().getAttribute('aria-label'),/200,00/,'Q1 van het uitvoeringsjaar bevat de ontvangst');
   await page.locator('[data-stat-mode="year"]').click();
-  assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/100,00/);
+  assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/200,00/);
   assert.equal(await page.locator('#modalRoot .stats-period-chart-col').count(),1,'Jaargrafiek toont jaren met activiteit');
-  assert.match(await page.locator('#modalRoot .stats-period-chart-value').innerText(),/100,00/);
+  assert.match(await page.locator('#modalRoot .stats-period-chart-value').innerText(),/200,00/);
   await page.locator('[data-stat-metric="hours"]').click();
   assert.match(await page.locator('#modalRoot .stats-simple-total').innerText(),/u/);
   assert.match(await page.locator('#modalRoot .stats-period-chart-value').innerText(),/u/,'Uren als eenheid ook in grafiek');
@@ -375,7 +375,7 @@ module.exports=async(browser,origin)=>{
       pricingType:'fixed',agreedAmount,extraAmount,extraIncluded
     });
     const mkDoc=(id,jobId,total,lines)=>({
-      id,folder:'factuur',meta:{jobId,docDate:year+'-01-15',total,korApplied:true,lines}
+      id,folder:'factuur',meta:{jobId,docDate:year+'-01-15',workDate:year+'-01-15',total,korApplied:true,lines}
     });
     const mkPay=(id,amount,jobId,invoiceId,date)=>({
       id,kind:'jkPayment',amount,jobId:invoiceId?'':jobId,invoiceId,date,method:'bank'
@@ -413,8 +413,8 @@ module.exports=async(browser,origin)=>{
   assert.equal(earnings.full.ownAgreed,150);
   assert.equal(earnings.full.oldGrossReceived,190,'Betalingsregister bevat nog steeds de volledige ontvangst');
   assert.equal(earnings.full.ownReceived,150,'Eigen verdiensten tellen geen €40 bonvergoeding');
-  assert.deepEqual(earnings.full.receipts,[{date:earnings.year+'-01-20',received:100},{date:earnings.year+'-02-20',received:50}],
-    'Twee betalingen verdeeld over maanden, zonder dubbel tellen');
+  assert.deepEqual(earnings.full.receipts,[{date:earnings.year+'-01-15',received:100},{date:earnings.year+'-01-15',received:50}],
+    'Beide betalingen horen bij de uitvoerdatum, zonder dubbel tellen');
   for(const [key,agreed,received] of [
     ['included',110,110],['receiptOnly',150,150],['allIn',150,150],['extraLine',150,150],['noCost',150,150]
   ]){
@@ -425,6 +425,62 @@ module.exports=async(browser,origin)=>{
   assert.equal(earnings.orphan.ownReceived,150,'Losse factuur: ook bonvergoeding uitsluiten');
   assert.equal(earnings.partial.ownReceived,100,'Deelbetaling niet verlagen met nog niet ontvangen materiaalvergoeding');
   assert.equal(earnings.tip.ownReceived,160,'Meerbetaling boven klussom hoort bij eigen inkomsten');
+
+  // Eigen verdiensten en openstaand volgen de LAATSTE uitvoerdag, nooit de betaling.
+  const endDateStats=await page.evaluate(()=>{
+    const workDays=[{id:'d1',date:'2026-05-31'},{id:'d2',date:'2026-06-02'}];
+    const job={id:'lastday',title:'Twee werkdagen',clientId:'client',clientName:'Fictieve klant',date:'2026-05-31',workDays,status:'afgerond',pricingType:'fixed',agreedAmount:150,extraAmount:40};
+    const p=(amount,date)=>({id:'paid-'+amount,kind:'jkPayment',jobId:'lastday',amount,date,method:'bank'});
+    const snap=rows=>JKFinance.snapshot([job],[],rows,j=>JKFinance.price(j,0,10),()=>true);
+    const view=rows=>{
+      const f=snap(rows),events=App.financialEvents([], [job], {},f),own=events.filter(e=>e.date==='2026-06-02'),moneyEvents=own.filter(e=>e.received||e.open||e.amount);
+      const chart=App.simpleStatsChartHtml([{key:'2026-06',label:'jun',sort:'2026-06',received:own.reduce((n,e)=>n+(e.received||0),0),open:own.reduce((n,e)=>n+(e.open||0),0)}],'received');
+      return {gross:f.job(job).received,openGross:f.job(job).open,earned:own.reduce((n,e)=>n+(e.received||0),0),ownOpen:own.reduce((n,e)=>n+(e.open||0),0),agreed:own.reduce((n,e)=>n+(e.amount||0),0),moneyEvents:moneyEvents.length,
+        otherDates:events.filter(e=>e.received||e.open||e.amount).map(e=>e.date),chart};
+    };
+    const partial=view([p(130,'2026-07-21')]);
+    const allPaid=view([p(190,'2026-08-21')]);
+    const costsOnlyOpen=view([p(150,'2026-08-21')]);
+    const undatedPaid=view([p(130,'')]);
+    const waived=view([p(130,'2026-07-21'),{id:'settled-60',kind:'jkWriteoff',jobId:job.id,amount:60}]);
+    const future={...job,id:'crossyear',date:'2026-12-30',workDays:[{date:'2026-12-30'},{date:'2027-01-02'}],extraAmount:0};
+    const crossSnapshot=JKFinance.snapshot([future],[],[{id:'cross-payment',kind:'jkPayment',jobId:'crossyear',date:'2027-03-03',amount:100}],j=>JKFinance.price(j,0,10),()=>true);
+    const crossYear=App.financialEvents([], [future],{},crossSnapshot).filter(e=>e.received||e.amount).map(e=>({date:e.date,received:e.received||0,amount:e.amount||0}));
+    const orphan={id:'orphan-two',folder:'factuur',meta:{jobId:'',workDate:'02-06-2026',docDate:'2026-07-21',total:190,korApplied:true,lines:[{qty:1,price:150,description:'Werk'},{qty:1,price:40,expenseId:'bon-x',description:'Bon'}]}};
+    const orphanPay={id:'orphan-paid',kind:'jkPayment',invoiceId:'orphan-two',amount:190,date:'2026-08-01'};
+    const orphanFinance=JKFinance.snapshot([], [orphan],[orphanPay],()=>JKFinance.price({},0,10),()=>true);
+    const orphanEvents=App.financialEvents([], [],{},orphanFinance).filter(e=>e.received||e.amount).map(e=>({date:e.date,received:e.received||0,amount:e.amount||0}));
+    const withoutDate={...orphan,id:'orphan-undated',meta:{...orphan.meta,workDate:''}};
+    const withoutPay={...orphanPay,id:'orphan-unpaid-date',invoiceId:'orphan-undated'};
+    const noDateFinance=JKFinance.snapshot([], [withoutDate],[withoutPay],()=>JKFinance.price({},0,10),()=>true);
+    const noDateEvents=App.financialEvents([],[],{},noDateFinance);
+    const noDate={datedTotal:noDateEvents.reduce((n,e)=>n+(e.received||0),0),undatedTotal:noDateEvents.reduce((n,e)=>n+(e.undatedReceived||0),0)};
+    const onlyOpenChart=App.simpleStatsChartHtml([{key:'2026-06',label:'jun',received:0,open:50}],'received');
+    const noCostChart=App.simpleStatsChartHtml([{key:'2026-06',label:'jun',received:150,open:0}],'received');
+    return {partial,allPaid,costsOnlyOpen,undatedPaid,waived,crossYear,orphanEvents,noDate,onlyOpenChart,noCostChart};
+  });
+  assert.equal(endDateStats.partial.gross,130);
+  assert.equal(endDateStats.partial.openGross,60,'Bruto openstaand bevat 40 euro voorgeschoten kosten');
+  assert.equal(endDateStats.partial.agreed,150,'Afgesproken uitsluitend eigen werkzaamheden');
+  assert.equal(endDateStats.partial.earned,130,'Betaald in juli, als eigen inkomen in juni');
+  assert.equal(endDateStats.partial.ownOpen,20,'Rood bevat geen 40 euro openstaande materialen');
+  assert.ok(endDateStats.partial.otherDates.every(d=>d==='2026-06-02'),'Alle inkomsten en openstanden op laatste uitvoerdag');
+  assert.match(endDateStats.partial.chart,/stats-period-chart-open/);
+  assert.match(endDateStats.partial.chart,/20,00 openstaand/);
+  assert.equal(endDateStats.allPaid.earned,150,'Volledig betaalde 190 euro levert 150 euro eigen verdiensten op');
+  assert.equal(endDateStats.allPaid.ownOpen,0,'Openstaand rood verdwijnt na volledige betaling');
+  assert.equal(endDateStats.costsOnlyOpen.ownOpen,0,'Alleen nog kosten open: geen rood deel in verdiensten');
+  assert.equal(endDateStats.undatedPaid.earned,130,'Ongedateerde oude betaling hoort bij bekende uitvoerdatum');
+  assert.equal(endDateStats.waived.earned,130);
+  assert.equal(endDateStats.waived.ownOpen,0,'Kwijtgescholden restant verschijnt niet als achterstallige eigen omzet');
+  assert.deepEqual(endDateStats.crossYear,[{date:'2027-01-02',received:0,amount:150},{date:'2027-01-02',received:100,amount:0}],
+    'Werk afgelopen in januari 2027 blijft in 2027, ook bij latere betaling');
+  assert.deepEqual(endDateStats.orphanEvents,[{date:'2026-06-02',received:150,amount:0},{date:'2026-06-02',received:0,amount:150}],
+    'Losse factuur met expliciete werkdatum telt eigen verdiensten en geen bonkosten');
+  assert.deepEqual(endDateStats.noDate,{datedTotal:0,undatedTotal:150},'Ontbrekende uitvoerdatum valt niet terug op factuur-/betaaldatum');
+  assert.match(endDateStats.onlyOpenChart,/stats-period-chart-open/,'Niets betaald: toch volledig rode staaf');
+  assert.doesNotMatch(endDateStats.noCostChart,/stats-period-chart-open/,'Geen rood bij volledig betaald eigen werk');
+  console.log('PASS: alleen eigen verdiensten en transparant rood openstaand per laatste uitvoerdag, ook meerdaags, over jaargrens, los, ongedateerd en kwijtschelding');
   console.log('PASS: alleen eigen verdiensten zonder voorgeschoten bonnetjes/extra kosten, incl. KOR, factuurregels, deelbetaling, losse factuur en ongewijzigde betaalrecords');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');
