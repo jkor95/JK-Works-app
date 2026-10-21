@@ -134,7 +134,7 @@ module.exports=async(browser,origin)=>{
   assert.equal(await page.evaluate(()=>JKDB.all('timeEntries').then(es=>es.filter(e=>e.jobId==='simple').length)),0);
   const actualRow=page.locator('[data-actual-row]').first();await actualRow.locator('[name=actualDate]').fill('2026-03-01');await actualRow.locator('[name=actualFrom]').fill('08:00');await actualRow.locator('[name=actualTo]').fill('17:00');await actualRow.locator('[name=actualBreak]').fill('60');
   await page.locator('#addActualDay').click();const secondRow=page.locator('[data-actual-row]').nth(1);await secondRow.locator('[name=actualDate]').fill('2026-03-02');await secondRow.locator('[name=actualFrom]').fill('08:00');await secondRow.locator('[name=actualTo]').fill('17:00');
-  assert.match(await page.locator('#actualHoursTotal').innerText(),/17 u/);assert.match(await page.locator('#calculationTotal').innerText(),/170,00/);
+  assert.match(await page.locator('#actualHoursTotal').innerText(),/17 u/);assert.match(await page.locator('#calculationTotal').innerText(),/170,00/);assert.equal(await page.evaluate(()=>document.querySelector('.modal').scrollWidth<=document.querySelector('.modal').clientWidth+1),true,'Multi-day form fits an iPhone width');
   await page.locator('[name=calculationType]').selectOption('fixed');await page.locator('[name=calculationFixed]').fill('150');assert.equal(await page.locator('[name=calculationRate]').isVisible(),false);assert.match(await page.locator('#calculationTotal').innerText(),/150,00/);
   await page.locator('[name=calculationExtra]').fill('20');assert.match(await page.locator('#calculationTotal').innerText(),/170,00/);
   await page.locator('[name=calculationIncluded]').check();assert.match(await page.locator('#calculationTotal').innerText(),/150,00/);
@@ -150,7 +150,7 @@ module.exports=async(browser,origin)=>{
   });
   await page.locator('[data-close]').click();await page.evaluate(()=>App.renderDashboard());await page.locator('#addHours').click();await page.locator('[name=calculationJob]').selectOption('simple');await page.locator('#chooseCalculationJob button.primary').click();await page.locator('[name=calculationType]').selectOption('hourly');await page.locator('[name=calculationExtra]').fill('25');
   assert.match(await page.locator('#actualHoursTotal').innerText(),/17 u/);assert.match(await page.locator('#calculationTotal').innerText(),/195,00/);
-  assert.equal(await page.locator('[name=confirmActual]').isChecked(),false);
+  assert.equal(await page.locator('[name=confirmActual]').isChecked(),false);assert.ok(await page.locator('[name=confirmActual]').evaluate(e=>e.getBoundingClientRect().width<=24),'Confirmation checkbox remains compact');
   await page.locator('#saveJobCalculation').click();await page.locator('#paymentsThisJob').waitFor();
   assert.equal((await simpleData()).financial.agreed,195);
   assert.equal(await page.evaluate(async()=>JSON.stringify((await JKDB.all('timeEntries')).filter(e=>e.jobId==='simple'))===workflowOriginal),true,'Price-only changes preserve every hour and confirmation flag byte-for-byte');
@@ -170,6 +170,10 @@ module.exports=async(browser,origin)=>{
     await JKDB.putLocal('timeEntries',{id:'foreign-hour',jobId:'other',date:'2026-03-04',from:'08:00',to:'09:00',actualConfirmed:true});
     try{await JKDB.saveJobWork({...j,extraAmount:999},[{id:'foreign-hour',jobId:'simple',date:'2026-03-04',from:'08:00',to:'10:00'}],j,es);return false;}catch{return (await JKDB.get('jobs','simple')).extraAmount===25&&(await JKDB.get('timeEntries','foreign-hour')).jobId==='other';}
   });assert.equal(protectedSave,true,'Atomic rollback protects job and foreign hours');
+  await page.evaluate(()=>App.showJob('simple'));await page.locator('#hoursThisJob').click();await page.locator('[name=confirmActual]').check();
+  assert.match(await page.locator('#actualHoursTotal').innerText(),/26 u/);await page.locator('#saveJobCalculation').click();await page.locator('#paymentsThisJob').waitFor();
+  assert.equal((await simpleData()).entries.length,3);assert.equal((await simpleData()).entries.find(e=>e.id==='simple-unconfirmed').actualConfirmed,true,'Only explicitly confirmed old hours become actual');
+  const deletedJobProtected=await page.evaluate(async()=>{const j=await JKDB.get('jobs','simple'),es=(await JKDB.all('timeEntries')).filter(e=>e.jobId==='simple');await JKDB.markDeleteLocal('jobs','simple');try{await JKDB.saveJobWork({...j,extraAmount:999},[],j,es);return false;}catch{return (await JKDB.get('jobs','simple')).extraAmount===25;}});assert.equal(deletedJobProtected,true,'A pending job deletion cannot be undone by a stale form');
   console.log('PASS: eenvoudige meerdaagse invoer, uren/vast bedrag, extra/inbegrepen kosten, direct totaal, dubbele submit, ongewijzigde bevestigde uren, oude onbevestigde uren en atomaire conflictafhandeling');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');

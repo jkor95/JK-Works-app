@@ -47,7 +47,7 @@ const JKDB = (() => {
       const check=()=>{
         if(--remaining)return;
         const own=b.result.filter(e=>e.jobId===job.id);
-        if(snapshotKey(a.result)!==snapshotKey(expectedJob)||snapshotKey(ordered(own))!==snapshotKey(ordered(expectedEntries))){reason='De klus of uren zijn intussen gewijzigd. Open dit scherm opnieuw; bestaande uren zijn behouden.';t.abort();return;}
+        if(c.result.some(m=>m.store==='jobs'&&m.recordId===job.id)||snapshotKey(a.result)!==snapshotKey(expectedJob)||snapshotKey(ordered(own))!==snapshotKey(ordered(expectedEntries))){reason='De klus of uren zijn intussen gewijzigd. Open dit scherm opnieuw; bestaande uren zijn behouden.';t.abort();return;}
         const ids=new Set();
         for(const e of entries){
           const previous=b.result.find(x=>x.id===e.id);
