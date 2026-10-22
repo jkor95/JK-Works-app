@@ -128,14 +128,14 @@ module.exports=async(browser,origin)=>{
   // Eén bedrag vóór en één bedrag ná de balk, allebei rechts.
   const upper=combined.locator('.stats-client-money-label');
   const lower=combined.locator('.stats-client-open-caption');
-  assert.match(await upper.innerText(),/Verdiensten[\s\S]*€ 200,00 ontvangen/,'Ontvangen rechts naast Verdiensten');
+  assert.match(await upper.innerText(),/Verdiensten[\s\S]*€\s+200,00 ontvangen/,'Ontvangen rechts naast Verdiensten');
   assert.doesNotMatch(await upper.innerText(),/open|nog te ontvangen|50,00/i,'Openstaand niet dubbel boven de balk');
   assert.equal(await lower.count(),1,'Een afzonderlijk label onder de balk');
   assert.equal(await lower.locator('span').count(),1,'Geen dubbele ontvangsten onder de balk');
-  assert.match(await lower.innerText(),/€ 50,00 nog te ontvangen/,'Alleen openstaand onder de balk');
+  assert.match(await lower.innerText(),/€\s+50,00 nog te ontvangen/,'Alleen openstaand onder de balk');
   assert.doesNotMatch(await lower.innerText(),/200,00|ontvangen(?!$)/i,'Ontvangen niet herhaald onder de balk');
   const onlyReceived=await page.evaluate(()=>App.statsComparisonChartHtml([{label:'Volledig betaald',received:335,open:0,minutes:660}],true));
-  assert.match(onlyReceived,/€ 335,00 ontvangen/,'Bij volledig betaald blijft bovenlabel zichtbaar');
+  assert.match(onlyReceived,/€\s+335,00 ontvangen/,'Bij volledig betaald blijft bovenlabel zichtbaar');
   assert.doesNotMatch(onlyReceived,/stats-client-open-caption/,'Geen lege onderregel als niets openstaat');
   const pos=await combined.evaluate(el=>{
     const top=el.querySelector('.stats-client-money-label'),title=top.querySelector('span'),paid=top.querySelector('strong'),bar=el.querySelector('.stats-client-money-track'),unpaid=el.querySelector('.stats-client-open-caption span');
