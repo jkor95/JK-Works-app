@@ -15,12 +15,12 @@ window.JKJobLabelEditor=(()=>{
    const date=Date.parse(String(j.date||'').slice(0,10));
    return Number.isFinite(date)?date:Number.MAX_SAFE_INTEGER;
  };
- async function ensureJobNumbers(jobs,write){
+ async function ensureJobNumbers(jobs,write,startingAt=1){
    // Persist once, in original creation order; deleting or changing a date never renumbers an existing job.
    const sorted=[...(jobs||[])].sort((a,b)=>creationOrder(a)-creationOrder(b)||String(a.id).localeCompare(String(b.id)));
    const existing=new Set(sorted.map(j=>String(j.jobNumber||j.ticketNumber||j.number||'').trim().toUpperCase()).filter(Boolean));
    const values=sorted.map(j=>Number(/^K-(\d+)$/i.exec(String(j.jobNumber||j.ticketNumber||j.number||''))?.[1]||0));
-   let next=Math.max(0,...values)+1;
+   let next=Math.max(1,Number(startingAt)||1,Math.max(0,...values)+1);
    for(let i=0;i<sorted.length;i++){
      const job=sorted[i];
      if(String(job.jobNumber||job.ticketNumber||job.number||'').trim())continue;
