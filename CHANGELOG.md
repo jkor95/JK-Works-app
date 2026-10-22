@@ -1,3 +1,11 @@
+## v71.13.16 — aanpasbare zwart-wit werkbon als 4×6-foto
+- Bij **Klussen → open klus** staat de knop **🖨️ Werkbon / label**. De app maakt een staande zwart-witte werkbon in **1200 × 1800 pixels (4 × 6 inch, 300 dpi)** met witte achtergrond, zwarte kaders en tekst; geschikt voor thermische labels.
+- Beschikbare klusgegevens worden vooraf ingevuld: titel, status, klant/contact/telefoon, klant- en afwijkend uitvoeringsadres, werkdagen/tijden, uren, prijsafspraak, bedrag en betaalafhandeling. Zonder brongegevens worden oningevulde velden niet op de werkbon getoond; er worden geen gegevens verzonnen.
+- Vóór export kun je **alle werkbonvelden aanpassen**, vooral **Meeneemlijst** en **Notities**, één per regel. Toevoegen of schrappen geldt alleen voor die werkbon; bestaande klus-/klant-/factuurgegevens blijven ongewijzigd.
+- **Voorbeeld bijwerken**, **Delen / Bewaar in Foto’s** (native iPhone-deelkaart, ook printerapp) en **PNG downloaden**. Bij geen deelkaart kan de afbeelding via download of lang indrukken worden opgeslagen; direct schrijven naar iOS Foto’s vanuit een PWA wordt niet beloofd.
+- Dynamische tekstomloop en proportionele lettergroottes; ongeschikte/te lange inhoud geeft een melding in plaats van ongezien afknippen. De werkbon blijft een intern document, geen factuur of offerte.
+- Nieuwe lokale/offline renderer en editor in de service-worker cache, geen nieuwe Supabase-tabellen, externe calls of wijzigingen aan betalingen en administratie. Browserregressie test 4×6 PNG, bewerken, export, delen en behoud van originele gegevens.
+
 ## v71.13.15 — bedragen per klant zonder herhaling, rechts uitgelijnd
 - **Meer → Statistieken → Per klant:** boven de geldbalk staat rechts op dezelfde regel als **Verdiensten** uitsluitend **€ … ontvangen**.
 - Alleen bij een werkelijk openstaand bedrag verschijnt direct **onder de geldbalk rechts** **€ … nog te ontvangen**. Geen tweede bedrag met ontvangen onder de balk, en openstaand wordt boven de balk niet meer herhaald.
