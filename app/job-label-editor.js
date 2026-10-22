@@ -1,4 +1,4 @@
-/* JK Works - private, editable 4x6 work-order PNG controls. No database writes. */
+/* JK Works - editable 4x6 work-order PNG controls; edits are print-only, job numbering persisted separately. */
 window.JKJobLabelEditor=(()=>{
  'use strict';
  const query=(s)=>document.querySelector(s);
@@ -15,6 +15,23 @@ window.JKJobLabelEditor=(()=>{
    const date=Date.parse(String(j.date||'').slice(0,10));
    return Number.isFinite(date)?date:Number.MAX_SAFE_INTEGER;
  };
+ async function ensureJobNumbers(jobs,write){
+   // Persist once, in original creation order; deleting or changing a date never renumbers an existing job.
+   const sorted=[...(jobs||[])].sort((a,b)=>creationOrder(a)-creationOrder(b)||String(a.id).localeCompare(String(b.id)));
+   const existing=new Set(sorted.map(j=>String(j.jobNumber||j.ticketNumber||j.number||'').trim().toUpperCase()).filter(Boolean));
+   const values=sorted.map(j=>Number(/^K-(\d+)$/i.exec(String(j.jobNumber||j.ticketNumber||j.number||''))?.[1]||0));
+   let next=Math.max(0,...values)+1;
+   for(let i=0;i<sorted.length;i++){
+     const job=sorted[i];
+     if(String(job.jobNumber||job.ticketNumber||job.number||'').trim())continue;
+     let label='K-'+String(next).padStart(3,'0');
+     while(existing.has(label)){next++;label='K-'+String(next).padStart(3,'0');}
+     existing.add(label);next++;
+     const updated={...job,jobNumber:label};
+     sorted[i]=typeof write==='function'?(await write(updated))||updated:updated;
+   }
+   return sorted;
+ }
  function jobNumber(jobs,job){
    const assigned=String(job.jobNumber||job.ticketNumber||job.number||'').trim();
    if(assigned)return assigned;
@@ -153,5 +170,5 @@ window.JKJobLabelEditor=(()=>{
    query('#jobLabelBack').addEventListener('click',()=>api.showJob(info.job.id));
    render();
  }
- return {open,defaultData,dataFromForm,pngBlobFromDataURL};
+ return {open,defaultData,dataFromForm,pngBlobFromDataURL,ensureJobNumbers,jobNumber,actualPlanning};
 })();
