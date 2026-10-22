@@ -606,11 +606,12 @@ module.exports=async(browser,origin)=>{
   });
   assert.equal(await page.locator('#labelThisJob').count(),1,'Werkbonknop in klusdetails');
   await page.locator('#labelThisJob').click();
+  await page.locator('#jobLabelForm [name=number]').waitFor();
+  assert.match(await page.locator('#jobLabelForm [name=number]').inputValue(),/^K-\d{3,}$/,'Klusnummer automatisch ingevuld');
   await page.evaluate(async()=>{
     window.workLabelOriginal=JSON.stringify(await JKDB.get('jobs','fixed'));
     window.workLabelOriginalClient=JSON.stringify(await JKDB.get('clients','client'));
   });
-  assert.match(await page.locator('#jobLabelForm [name=number]').inputValue(),/^K-\d{3,}$/,'Klusnummer automatisch ingevuld');
   assert.equal(await page.locator('#jobLabelForm [name=items]').count(),0,'Meeneemlijst niet meer in het bewerkscherm');
   assert.equal(await page.locator('#jobLabelPreview').count(),1);
   await page.waitForFunction(()=>document.querySelector('#jobLabelPreview').naturalWidth===1200);
@@ -674,10 +675,10 @@ module.exports=async(browser,origin)=>{
       return {replaced,mixed,tentative,numbered:numbered.map(j=>[j.id,j.jobNumber]),reversed:reversed.map(j=>j.jobNumber),future:future.map(j=>j.jobNumber),noPacking};
     });
   });
-  assert.match(labelFixtures.replaced.planning,/Gewerkt.*20 okt 2026.*08:30 - 16:00/,'Werkelijke dag vervangt verlopen geplande dag');
+  assert.match(labelFixtures.replaced.planning,/Gewerkt.*20 okt\\.? 2026.*08:30 - 16:00/,'Werkelijke dag vervangt verlopen geplande dag');
   assert.doesNotMatch(labelFixtures.replaced.planning,/19 okt|09:00/,'Vervallen plandag wordt niet afgebeeld');
   assert.equal(labelFixtures.replaced.workedHours,'7 uur','Netto bevestigde uren op de bon');
-  assert.match(labelFixtures.mixed.planning,/Gepland.*24 okt 2026.*10:00 - 13:00/,'Toekomstige resterende planning blijft');
+  assert.match(labelFixtures.mixed.planning,/Gepland.*24 okt\\.? 2026.*10:00 - 13:00/,'Toekomstige resterende planning blijft');
   assert.equal(labelFixtures.mixed.plannedHours,'3 uur','Nog geplande uren afzonderlijk');
   assert.match(labelFixtures.tentative.planning,/Gepland/,'Onbevestigde automatische uren blijven uitsluitend planning');
   assert.equal(labelFixtures.tentative.workedHours,'','Onbevestigde uren zijn geen gewerkt uur');
