@@ -12,11 +12,10 @@ window.JKJobLabel=(()=>{
       {heading:'',rows:keep([row('Klusnummer:',data.number),row('Status:',data.status),row('Klus:',data.title)])},
       {heading:'Klant',rows:keep([row('Bedrijf / naam:',data.client),row('Contact:',data.contact),row('Telefoon:',data.phone)])},
       {heading:'Adressen',rows:keep([row('Klantadres:',data.clientAddress),row('Uitvoering:',data.executionAddress)])},
-      {heading:'Planning',rows:keep([row('Datum / tijd:',data.planning),row('Werkdagen:',data.workDays),row('Verwachte uren:',data.hours)])},
+      {heading:'Planning & uitvoering',rows:keep([row('Datum / tijd:',data.planning),row('Werkdagen:',data.workDays),row('Gewerkte uren:',data.workedHours),row('Nog gepland:',data.plannedHours)])},
       {heading:'Financieel',rows:keep([row('Prijsafspraak:',data.priceType),row('Bedrag:',data.amount),row('Afhandeling:',data.payment)])}
     ];
-    const items=lines(data.items),notes=lines(data.notes);
-    if(items.length)sections.push({heading:'Mee te nemen',items});
+    const notes=lines(data.notes);
     if(notes.length)sections.push({heading:'Notities',notes});
     return sections.filter(s=>s.rows?.length||s.items?.length||s.notes?.length);
   }
@@ -63,19 +62,6 @@ window.JKJobLabel=(()=>{
         prepared.entries.push({kind:'row',name:row.name,text,h});
         prepared.height+=h;
       }
-      if(sec.items){
-        const colWidth=(PAGE_W-78)/2;
-        const count=Math.ceil(sec.items.length/2);
-        const left=sec.items.slice(0,count),right=sec.items.slice(count);
-        for(let i=0;i<count;i++){
-          font(ctx,body,false);
-          const l=left[i]?wrap(ctx,left[i],colWidth-30):[];
-          const r=right[i]?wrap(ctx,right[i],colWidth-30):[];
-          const h=Math.max(l.length,r.length,1)*lineHeight+6;
-          prepared.entries.push({kind:'item',left:l,right:r,h});
-          prepared.height+=h;
-        }
-      }
       if(sec.notes)for(const note of sec.notes){
         font(ctx,body,false);const t=wrap(ctx,note,PAGE_W-92);
         const h=t.length*lineHeight+4;
@@ -99,7 +85,7 @@ window.JKJobLabel=(()=>{
       const candidate=sectionsLayout(ctx,sections,size);
       if(candidate.contentHeight+114<=PAGE_H-18){layout=candidate;break;}
     }
-    if(!layout)throw Error('Te veel tekst voor één 4×6-sticker. Kort de notities of de meeneemlijst in en maak opnieuw een voorbeeld.');
+    if(!layout)throw Error('Te veel tekst voor één 4×6-sticker. Kort de notities of de planning in en maak opnieuw een voorbeeld.');
     ctx.fillStyle='#000';ctx.strokeStyle='#000';ctx.textBaseline='top';
     font(ctx,49,true);
     let h='JK WORKS';ctx.fillText(h,(PAGE_W-ctx.measureText(h).width)/2,13);
@@ -120,14 +106,6 @@ window.JKJobLabel=(()=>{
           font(ctx,layout.body,true);ctx.fillText(entry.name,x+10,cursor);
           font(ctx,layout.body,false);
           entry.text.forEach((line,i)=>ctx.fillText(line,x+layout.labelW,cursor+i*layout.lineHeight));
-        }else if(entry.kind==='item'){
-          for(let col=0;col<2;col++){
-            const chunks=col===0?entry.left:entry.right;
-            if(!chunks.length)continue;
-            const start=x+12+col*(w-24)/2;
-            ctx.lineWidth=1.2;ctx.strokeRect(start,cursor+2,layout.body-3,layout.body-3);
-            font(ctx,layout.body,false);chunks.forEach((line,i)=>ctx.fillText(line,start+layout.body+5,cursor+i*layout.lineHeight));
-          }
         }else if(entry.kind==='note'){
           font(ctx,layout.body,false);ctx.fillText('-',x+12,cursor);
           entry.text.forEach((line,i)=>ctx.fillText(line,x+31,cursor+i*layout.lineHeight));
