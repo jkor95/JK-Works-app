@@ -600,6 +600,54 @@ module.exports=async(browser,origin)=>{
   assert.equal(cleared.client.street,'Klantstraat 10','Klantadres blijft na uitvinken intact');
   await page.evaluate(async()=>{await JKDB.remove('jobs','address-job');await JKDB.remove('clients','address-client');});
   console.log('PASS: optioneel uitvoeringsadres klapt uit, bewaart los op klus, toont op detail en blijft weg van offerte/factuur');
+  // 4x6-label: bewerkbare printkopie zonder opgeslagen klus / factuur te wijzigen.
+  await page.evaluate(async()=>{
+    window.workLabelOriginal=JSON.stringify(await JKDB.get('jobs','fixed'));
+    window.workLabelOriginalClient=JSON.stringify(await JKDB.get('clients','client'));
+    await App.showJob('fixed');
+  });
+  assert.equal(await page.locator('#labelThisJob').count(),1,'Werkbonknop in klusdetails');
+  await page.locator('#labelThisJob').click();
+  assert.equal(await page.locator('#jobLabelPreview').count(),1);
+  await page.waitForFunction(()=>document.querySelector('#jobLabelPreview').naturalWidth===1200);
+  const initialImage=await page.locator('#jobLabelPreview').getAttribute('src');
+  assert.match(initialImage,/^data:image\/png;base64,/);
+  assert.equal(await page.locator('#jobLabelPreview').evaluate(img=>img.naturalHeight),1800,'Label staand 4x6');
+  await page.locator('#jobLabelForm [name=title]').fill('Montage kast - werkbonvariant');
+  await page.locator('#jobLabelForm [name=items]').fill('Kitspuit\nStanleymes\nHandschoenen\nExtra ladder');
+  await page.locator('#jobLabelForm [name=notes]').fill('Alleen eigen notitie\nNiet printen');
+  await page.locator('#jobLabelForm [name=notes]').fill('Alleen eigen notitie');
+  await page.locator('#jobLabelForm [name=payment]').fill('Betaalverzoek');
+  await page.locator('#jobLabelRefresh').click();
+  const updatedImage=await page.locator('#jobLabelPreview').getAttribute('src');
+  assert.notEqual(updatedImage,initialImage,'Bewerkingen komen in bijgewerkt afbeeldingsvoorbeeld');
+  assert.equal(await page.locator('#jobLabelError').isVisible(),false,'Geen renderfout');
+  assert.deepEqual(await page.evaluate(async()=>({
+    job:JSON.stringify(await JKDB.get('jobs','fixed')),client:JSON.stringify(await JKDB.get('clients','client'))
+  })),await page.evaluate(()=>({job:window.workLabelOriginal,client:window.workLabelOriginalClient})),'Werkbonwijzigingen wijzigen geen opgeslagen klus of klant');
+  await page.evaluate(()=>{
+    window.sharedLabelTest=null;
+    Object.defineProperty(navigator,'canShare',{configurable:true,value:files=>!!files.files?.length});
+    Object.defineProperty(navigator,'share',{configurable:true,value:async data=>{
+      const file=data.files?.[0];
+      window.sharedLabelTest={type:file?.type,name:file?.name,byteLength:file?.size};
+    }});
+  });
+  await page.locator('#jobLabelShare').click();
+  await page.waitForFunction(()=>!!window.sharedLabelTest);
+  const shared=await page.evaluate(()=>window.sharedLabelTest);
+  assert.equal(shared.type,'image/png','Deelkaart ontvangt PNG');
+  assert.match(shared.name,/^JK-Works-werkbon-/);
+  assert.ok(shared.byteLength>1500,'Deelkaart ontvangt echte PNG-bestandsbytes');
+  const downloadPromise=page.waitForEvent('download');
+  await page.locator('#jobLabelDownload').click();
+  const download=await downloadPromise;
+  assert.match(download.suggestedFilename(),/^JK-Works-werkbon-.+\.png$/,'De printerapp krijgt een PNG');
+  await page.locator('#jobLabelForm [name=notes]').fill('Bijzonder lange notitie\n'.repeat(180));
+  await page.locator('#jobLabelRefresh').click();
+  assert.equal(await page.locator('#jobLabelError').isVisible(),true,'Te lange werkbon wordt niet afgeknipt');
+  assert.equal(await page.locator('#jobLabelPreview').getAttribute('src'),null,'Geen misleidend afgeknipte afbeelding');
+  console.log('PASS: 4x6 staande monochrome PNG, meeneemlijst/notities bewerkbaar, preview, iOS-deelbestand en downloaden zonder gegevenswijziging');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');
  }finally{await context.close();}
