@@ -702,6 +702,36 @@ module.exports=async(browser,origin)=>{
   assert.match(labelFixtures.noPacking,/^data:image\/png/);
   assert.equal(await page.locator('#jobLabelForm [name=items]').count(),0,'Geen meeneemlijst na bewerken');
   console.log('PASS: werkelijk gewerkte vervangingsdagen, nog geplande dagen, automatische blijvende klusnummers, geen meeneemlijst, PNG-deling en behoud klant-/klusdata');
+  // iOS: minimaal 16px voorkomt automatische Safari-focuszoom, zonder pinch-zoom te blokkeren.
+  await page.evaluate(()=>App.editJob('fixed'));
+  await page.locator('#jobForm').waitFor();
+  for(const width of [390,430]){
+    await page.setViewportSize({width,height:844});
+    const values=await page.evaluate(()=>{
+      document.documentElement.classList.add('ios-standalone');
+      const frm=document.querySelector('#jobForm');
+      const selectors=['[name="title"]','[name="clientName"]','[name="agreedAmount"]','[name="dayDate"]','[name="dayStart"]','[name="email"]','[name="notes"]','[name="status"]','[name="pricingType"]'];
+      const inputs=selectors.map(sel=>{
+        const el=frm.querySelector(sel);
+        if(!el)throw Error('Ontbrekend mobiel invoerveld: '+sel);
+        const fontSize=parseFloat(getComputedStyle(el).fontSize);
+        el.focus({preventScroll:true});
+        const rect=el.getBoundingClientRect(),container=el.closest('.field')?.getBoundingClientRect();
+        return {selector:sel,fontSize,fits:!container||rect.right<=container.right+1};
+      });
+      const modal=document.querySelector('.modal');
+      return {inputs,viewport:window.innerWidth,bodyScroll:document.documentElement.scrollWidth,modalScroll:modal.scrollWidth,modalClient:modal.clientWidth,
+        scale:window.visualViewport?.scale||1,checkboxSize:parseFloat(getComputedStyle(frm.querySelector('#jobExecutionDifferent')).fontSize)};
+    });
+    assert.ok(values.inputs.every(i=>i.fontSize>=16),JSON.stringify(values.inputs));
+    assert.ok(values.inputs.every(i=>i.fits),'Invoervelden blijven binnen de formulierbreedte: '+JSON.stringify(values.inputs));
+    assert.ok(values.bodyScroll<=values.viewport+1,'Geen extra horizontale pagina-zoom/scroll bij '+width+'px');
+    assert.ok(values.modalScroll<=values.modalClient+1,'Klusformulier blijft binnen mobiel modal bij '+width+'px');
+    assert.ok(values.scale<=1.01,'Geen browserfocuszoom bij '+width+'px');
+  }
+  await page.setViewportSize({width:390,height:844});
+  await page.evaluate(()=>{document.documentElement.classList.remove('ios-standalone');App.renderJobs()});
+  console.log('PASS: mobiele tekst, cijfers, datums, tijden, selecties en notities minstens 16px zonder inzoomen of horizontale overflow');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');
  }finally{await context.close();}

@@ -1,3 +1,11 @@
+## v71.13.19 — geen automatische iPhone-zoom bij tekstinvoer
+- Mobiele webapp: alle gewone invulvelden (tekst, cijfers, datums, tijden, e-mail), meerregelige notities en keuzelijsten hebben nu minimaal **16 px invoertekst**, zodat iOS Safari bij focus niet automatisch op het veld inzoomt en de pagina op dezelfde breedte blijft.
+- Wijziging geldt bij **Klussen → Nieuwe klus / Bewerken**, werkbonvelden en overige formulieren op smalle schermen. Checkboxen, radioknoppen en sliders blijven normaal vormgegeven.
+- Invoervelden houden zich aan de scherm-/formulierbreedte; een te breed invulveld veroorzaakt geen horizontale vergroting.
+- De viewportinstellingen blijven toegankelijk: handmatig knijpen/zoomen (pinch-to-zoom) blijft mogelijk.
+- Browserregressies controleren de berekende lettergrootte bij focus op mobiele formuliervelden en het ontbreken van horizontale overflow op 390/430px.
+- Geen wijzigingen aan opgeslagen klussen, planning, betalingen, Supabase of PDF's; PWA-cache opnieuw opgebouwd.
+
 ## v71.13.18 — klusnummers per aanmaakjaar (K-JJJJ-NNN)
 - Het klusnummer op de staande 4×6-werkbon wordt automatisch **K-2026-001, K-2026-002, ...**, en gaat in een nieuw aanmaakjaar verder als **K-2027-001**.
 - Voor bestaande klussen worden eerdere eenvoudige nummers `K-001` eenmaal en in originele aanmaakvolgorde omgezet naar de nieuwe jaaropbouw. Al geldige jaarnummers worden behouden.
