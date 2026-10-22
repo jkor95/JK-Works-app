@@ -125,7 +125,27 @@ module.exports=async(browser,origin)=>{
   assert.match(await page.locator('#modalRoot .stats-comparison-summary').innerText(),/Ontvangen[\s\S]*200,00[\s\S]*Nog te ontvangen[\s\S]*50,00/);
   assert.doesNotMatch(await page.locator('#modalRoot').innerText(),/afgesproken|270,00/i,'Alleen ontvangen en nog te ontvangen zichtbaar in klantstatistieken');
   assert.equal(await combined.locator('.stats-client-hours-fill').count(),1);
-  assert.equal(await combined.locator('.stats-client-chart-fill').count(),1);
+  // Eén bedrag vóór en één bedrag ná de balk, allebei rechts.
+  const upper=combined.locator('.stats-client-money-label');
+  const lower=combined.locator('.stats-client-open-caption');
+  assert.match(await upper.innerText(),/Verdiensten[\s\S]*€ 200,00 ontvangen/,'Ontvangen rechts naast Verdiensten');
+  assert.doesNotMatch(await upper.innerText(),/open|nog te ontvangen|50,00/i,'Openstaand niet dubbel boven de balk');
+  assert.equal(await lower.count(),1,'Een afzonderlijk label onder de balk');
+  assert.equal(await lower.locator('span').count(),1,'Geen dubbele ontvangsten onder de balk');
+  assert.match(await lower.innerText(),/€ 50,00 nog te ontvangen/,'Alleen openstaand onder de balk');
+  assert.doesNotMatch(await lower.innerText(),/200,00|ontvangen(?!$)/i,'Ontvangen niet herhaald onder de balk');
+  const onlyReceived=await page.evaluate(()=>App.statsComparisonChartHtml([{label:'Volledig betaald',received:335,open:0,minutes:660}],true));
+  assert.match(onlyReceived,/€ 335,00 ontvangen/,'Bij volledig betaald blijft bovenlabel zichtbaar');
+  assert.doesNotMatch(onlyReceived,/stats-client-open-caption/,'Geen lege onderregel als niets openstaat');
+  const pos=await combined.evaluate(el=>{
+    const top=el.querySelector('.stats-client-money-label'),title=top.querySelector('span'),paid=top.querySelector('strong'),bar=el.querySelector('.stats-client-money-track'),unpaid=el.querySelector('.stats-client-open-caption span');
+    const a=title.getBoundingClientRect(),b=paid.getBoundingClientRect(),c=bar.getBoundingClientRect(),d=unpaid.getBoundingClientRect();
+    return {sameLine:Math.abs(a.top-b.top)<14,rightAligned:Math.abs(c.right-b.right)<3&&Math.abs(c.right-d.right)<3,below:d.top>=c.bottom};
+  });
+  assert.equal(pos.sameLine,true,'Titel Verdiensten en ontvangen staan op dezelfde regel');
+  assert.equal(pos.rightAligned,true,'Beide bedragen staan rechts langs de balk');
+  assert.equal(pos.below,true,'Openstaand staat onder de balk');
+    assert.equal(await combined.locator('.stats-client-chart-fill').count(),1);
   assert.equal(await combined.locator('.stats-client-chart-open').count(),1);
   const heights=await combined.evaluate(el=>({
     hours:getComputedStyle(el.querySelector('.stats-client-hours-track')).height,
