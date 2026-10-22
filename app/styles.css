@@ -385,3 +385,12 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 .stats-client-money-label strong{min-width:0;overflow-wrap:anywhere}
 .stats-client-open-caption{justify-content:flex-end;text-align:right}
 .stats-client-open-caption .stats-comparison-outstanding{display:block;margin-left:auto}
+
+
+/* Staande 4x6 zwart-wit werkbon: het voorbeeld is een PNG, niet een foto van de klus. */
+.job-label-actions{margin-bottom:12px;gap:8px}
+.job-label-actions button{flex:1 1 150px;white-space:normal}
+.job-label-preview{display:block;width:min(100%,350px);aspect-ratio:2/3;height:auto;object-fit:contain;margin:10px auto;border:1px solid var(--line);background:#fff}
+#jobLabelError{color:#a32222;font-weight:700;margin:10px 0}
+#jobLabelForm h3{font-size:16px;margin:14px 0 9px;border-bottom:1px solid var(--line);padding-bottom:6px}
+#jobLabelForm .field textarea{min-height:100px;white-space:pre-wrap}
