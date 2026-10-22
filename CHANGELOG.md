@@ -1,3 +1,11 @@
+## v71.13.18 — klusnummers per aanmaakjaar (K-JJJJ-NNN)
+- Het klusnummer op de staande 4×6-werkbon wordt automatisch **K-2026-001, K-2026-002, ...**, en gaat in een nieuw aanmaakjaar verder als **K-2027-001**.
+- Voor bestaande klussen worden eerdere eenvoudige nummers `K-001` eenmaal en in originele aanmaakvolgorde omgezet naar de nieuwe jaaropbouw. Al geldige jaarnummers worden behouden.
+- Het nummer wordt vastgelegd op de klus, blijft onveranderd bij wijzigen van de uitvoeringsdatum en springt niet terug door verwijderen van een andere klus.
+- De laatste uitgegeven positie wordt **per jaar** bijgehouden in de bestaande instellingenopslag, zodat een eerder uitgegeven nummer niet opnieuw wordt gebruikt.
+- Geen wijziging aan factuur- en offertenummers, betaalinformatie, uren, klantgegevens, PDF-documenten of Supabase-schema.
+- Automatische browsertests voor migratie van oude nummers, per-jaar teller, jaarovergang, stabiele nummers bij verschuivingen/verwijdering en behoud van bestaande jaarnummers.
+
 ## v71.13.17 — werkbon met gewerkte werkdagen, geen meeneemlijst en blijvende klusnummers
 - **Werkbon / label → Planning & uitvoering** vermeldt de werkelijk geregistreerde werkdagen en tijdvakken met voorrang boven de oorspronkelijke planning. Een al vervangen, verlopen plandag wordt niet meer dubbel afgedrukt. Onbevestigde automatisch voorgestelde uren gelden uitsluitend als planning. Toekomstige nog relevante werkdagen staan aanvullend als **Gepland** vermeld.
 - **Gewerkte uren** worden op de sticker berekend uit bevestigde netto uren na pauzes; **Nog geplande uren** staat afzonderlijk indien van toepassing. De urenregistratie in de klus zelf verandert niet. Datum/tijdregels blijven in de printeditor handmatig aanpasbaar.
