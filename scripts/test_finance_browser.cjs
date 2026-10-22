@@ -607,7 +607,7 @@ module.exports=async(browser,origin)=>{
   assert.equal(await page.locator('#labelThisJob').count(),1,'Werkbonknop in klusdetails');
   await page.locator('#labelThisJob').click();
   await page.locator('#jobLabelForm [name=number]').waitFor();
-  assert.match(await page.locator('#jobLabelForm [name=number]').inputValue(),/^K-\d{3,}$/,'Klusnummer automatisch ingevuld');
+  assert.match(await page.locator('#jobLabelForm [name=number]').inputValue(),/^K-2026-\d{3,}$/,'Klusnummer automatisch ingevuld met jaar');
   await page.evaluate(async()=>{
     window.workLabelOriginal=JSON.stringify(await JKDB.get('jobs','fixed'));
     window.workLabelOriginalClient=JSON.stringify(await JKDB.get('clients','client'));
@@ -664,15 +664,26 @@ module.exports=async(browser,origin)=>{
       [{jobId:one.id,date:'2026-10-24',from:'10:00',to:'13:00',minutes:180,autoFromJobSchedule:true,actualConfirmed:false}],
       '2026-10-21');
     const abc=[
-      {id:'job_m0_abc',title:'Oud'},
-      {id:'job_m1_abc',title:'Midden'},
-      {id:'job_m2_abc',title:'Nieuw'}
+      {id:'legacy-2025-a',title:'Eerste klus 2025',createdAt:'2025-02-01T10:00:00Z',jobNumber:'K-001'},
+      {id:'legacy-2025-b',title:'Tweede klus 2025',createdAt:'2025-06-01T10:00:00Z',jobNumber:'K-002'},
+      {id:'legacy-2026-a',title:'Eerste klus 2026',createdAt:'2026-01-02T10:00:00Z',jobNumber:'K-003'},
+      {id:'legacy-2026-b',title:'Tweede klus 2026',createdAt:'2026-04-02T10:00:00Z',jobNumber:'K-004'}
     ];
-    return Promise.resolve(JKJobLabelEditor.ensureJobNumbers([abc[2],abc[0],abc[1]],j=>j)).then(async numbered=>{
+    return JKJobLabelEditor.ensureJobNumbers([abc[3],abc[1],abc[2],abc[0]],j=>j).then(async numbered=>{
       const reversed=await JKJobLabelEditor.ensureJobNumbers(numbered.filter(j=>j.id!==abc[0].id),j=>j);
-      const future=await JKJobLabelEditor.ensureJobNumbers([...numbered,{id:'job_m3_abc'}],j=>j);
+      const future=await JKJobLabelEditor.ensureJobNumbers([...numbered,{id:'new-year-2027',createdAt:'2027-01-05T08:00:00Z'}],j=>j);
+      const moved=JKJobLabelEditor.jobYear({...numbered[2],date:'2028-02-20'});
+      const afterLastDeleted=await JKJobLabelEditor.ensureJobNumbers(
+        [{...numbered[2]},{id:'new-2026-after-deletion',createdAt:'2026-12-30T11:00:00Z'}],
+        j=>j,{'2026':2}
+      );
+      const preserved=await JKJobLabelEditor.ensureJobNumbers([
+        {id:'already-2026',createdAt:'2026-07-01',jobNumber:'K-2026-010'},
+        {id:'new-2026-late',createdAt:'2026-08-01'}
+      ],j=>j);
       const noPacking=JKJobLabel.render({...mixed,items:'Mag niet afdrukken'}).toDataURL('image/png').slice(0,32);
-      return {replaced,mixed,tentative,numbered:numbered.map(j=>[j.id,j.jobNumber]),reversed:reversed.map(j=>j.jobNumber),future:future.map(j=>j.jobNumber),noPacking};
+      return {replaced,mixed,tentative,numbered:numbered.map(j=>[j.id,j.jobNumber]),reversed:reversed.map(j=>j.jobNumber),
+        future:future.map(j=>j.jobNumber),moved,afterLastDeleted:afterLastDeleted.map(j=>j.jobNumber),preserved:preserved.map(j=>j.jobNumber),noPacking};
     });
   });
   assert.match(labelFixtures.replaced.planning,/Gewerkt.*20 okt\.? 2026.*08:30 - 16:00/,'Werkelijke dag vervangt verlopen geplande dag');
@@ -682,9 +693,12 @@ module.exports=async(browser,origin)=>{
   assert.equal(labelFixtures.mixed.plannedHours,'3 uur','Nog geplande uren afzonderlijk');
   assert.match(labelFixtures.tentative.planning,/Gepland/,'Onbevestigde automatische uren blijven uitsluitend planning');
   assert.equal(labelFixtures.tentative.workedHours,'','Onbevestigde uren zijn geen gewerkt uur');
-  assert.deepEqual(labelFixtures.numbered.map(x=>x[1]),['K-001','K-002','K-003'],'Chronologische automatische nummering');
-  assert.deepEqual(labelFixtures.reversed,['K-002','K-003'],'Nummers schuiven niet na verwijderen');
-  assert.deepEqual(labelFixtures.future,['K-001','K-002','K-003','K-004'],'Nieuwe klus krijgt het volgende nummer');
+  assert.deepEqual(labelFixtures.numbered.map(x=>x[1]),['K-2025-001','K-2025-002','K-2026-001','K-2026-002'],'Per jaar beginnen nummers bij 001, oude nummers worden chronologisch gemigreerd');
+  assert.deepEqual(labelFixtures.reversed,['K-2025-002','K-2026-001','K-2026-002'],'Nummers schuiven niet na verwijderen');
+  assert.deepEqual(labelFixtures.future,['K-2025-001','K-2025-002','K-2026-001','K-2026-002','K-2027-001'],'Het volgende jaar begint bij 001');
+  assert.equal(labelFixtures.moved,2026,'Veranderde uitvoeringsdatum verandert het klusjaar niet');
+  assert.deepEqual(labelFixtures.afterLastDeleted,['K-2026-001','K-2026-003'],'Na verwijderen van hoogste nummer gaat teller toch verder');
+  assert.deepEqual(labelFixtures.preserved,['K-2026-010','K-2026-011'],'Bestaande jaarcodes blijven behouden');
   assert.match(labelFixtures.noPacking,/^data:image\/png/);
   assert.equal(await page.locator('#jobLabelForm [name=items]').count(),0,'Geen meeneemlijst na bewerken');
   console.log('PASS: werkelijk gewerkte vervangingsdagen, nog geplande dagen, automatische blijvende klusnummers, geen meeneemlijst, PNG-deling en behoud klant-/klusdata');

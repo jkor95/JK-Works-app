@@ -77,11 +77,19 @@ const App = (() => {
   async function ensureWorkLabelJobNumbers(){
     if(!window.JKJobLabelEditor?.ensureJobNumbers)return await JKDB.all('jobs');
     const [jobs,counter]=await Promise.all([JKDB.all('jobs'),JKDB.get('settings','jobNumberCounter')]);
-    const stored=Math.max(0,Number(counter?.lastNumber)||0);
-    const missing=jobs.some(j=>!String(j.jobNumber||j.ticketNumber||j.number||'').trim());
-    const numbered=missing?await window.JKJobLabelEditor.ensureJobNumbers(jobs,item=>JKDB.put('jobs',item),stored+1):jobs;
-    const highest=Math.max(stored,...numbered.map(j=>Number(/^K-(\d+)$/i.exec(String(j.jobNumber||j.ticketNumber||j.number||''))?.[1]||0)));
-    if(highest>stored)await JKDB.put('settings',{...counter,id:'jobNumberCounter',lastNumber:highest});
+    const annual=/^K-(\d{4})-(\d{3,})$/i;
+    const missing=jobs.some(j=>!annual.test(String(j.jobNumber||j.ticketNumber||j.number||'')));
+    const numbered=missing?await window.JKJobLabelEditor.ensureJobNumbers(
+      jobs,item=>JKDB.put('jobs',item),counter?.lastByYear||{}
+    ):jobs;
+    const lastByYear={...(counter?.lastByYear||{})};
+    for(const job of numbered){
+      const match=annual.exec(String(job.jobNumber||job.ticketNumber||job.number||''));
+      if(!match)continue;
+      lastByYear[match[1]]=Math.max(Number(lastByYear[match[1]])||0,Number(match[2]));
+    }
+    const changed=Object.keys(lastByYear).some(y=>Number(lastByYear[y])!==Number(counter?.lastByYear?.[y]||0));
+    if(changed)await JKDB.put('settings',{...counter,id:'jobNumberCounter',lastByYear});
     return numbered;
   }
   function outstandingWorkDay(j,entries,now=new Date()){

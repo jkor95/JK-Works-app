@@ -15,31 +15,57 @@ window.JKJobLabelEditor=(()=>{
    const date=Date.parse(String(j.date||'').slice(0,10));
    return Number.isFinite(date)?date:Number.MAX_SAFE_INTEGER;
  };
- async function ensureJobNumbers(jobs,write,startingAt=1){
-   // Persist once, in original creation order; deleting or changing a date never renumbers an existing job.
+ // De aanmaakdatum bepaalt het klusjaar (niet de later wijzigbare uitvoeringsdatum).
+ const jobYear=j=>{
+   const raw=creationOrder(j);
+   const year=raw!==Number.MAX_SAFE_INTEGER?new Date(raw).getUTCFullYear():new Date().getFullYear();
+   return year>=2000&&year<=2100?year:new Date().getFullYear();
+ };
+ const annualPattern=/^K-(\d{4})-(\d{3,})$/i;
+ const savedNumber=j=>String(j?.jobNumber||j?.ticketNumber||j?.number||'').trim();
+ const hasAnnualNumber=j=>annualPattern.test(savedNumber(j));
+ const formatNumber=(year,index)=>'K-'+year+'-'+String(index).padStart(3,'0');
+ async function ensureJobNumbers(jobs,write,lastByYear={}){
+   // Eenmalige migratie van oude K-001-nummers; bestaande jaarcodes nooit hernummeren.
    const sorted=[...(jobs||[])].sort((a,b)=>creationOrder(a)-creationOrder(b)||String(a.id).localeCompare(String(b.id)));
-   const existing=new Set(sorted.map(j=>String(j.jobNumber||j.ticketNumber||j.number||'').trim().toUpperCase()).filter(Boolean));
-   const values=sorted.map(j=>Number(/^K-(\d+)$/i.exec(String(j.jobNumber||j.ticketNumber||j.number||''))?.[1]||0));
-   let next=Math.max(1,Number(startingAt)||1,Math.max(0,...values)+1);
+   const taken=new Set();
+   const nextByYear={};
+   for(const [key,value] of Object.entries(lastByYear||{})){
+     if(/^\d{4}$/.test(key))nextByYear[key]=Math.max(0,Math.floor(Number(value)||0));
+   }
+   for(const job of sorted){
+     const found=annualPattern.exec(savedNumber(job));
+     if(!found)continue;
+     const number=String(found[0]).toUpperCase();
+     taken.add(number);
+     nextByYear[found[1]]=Math.max(nextByYear[found[1]]||0,Number(found[2]));
+   }
    for(let i=0;i<sorted.length;i++){
      const job=sorted[i];
-     if(String(job.jobNumber||job.ticketNumber||job.number||'').trim())continue;
-     let label='K-'+String(next).padStart(3,'0');
-     while(existing.has(label)){next++;label='K-'+String(next).padStart(3,'0');}
-     existing.add(label);next++;
-     const updated={...job,jobNumber:label};
+     if(hasAnnualNumber(job))continue;
+     const year=jobYear(job),key=String(year);
+     let candidate;
+     do{
+       nextByYear[key]=(nextByYear[key]||0)+1;
+       candidate=formatNumber(year,nextByYear[key]);
+     }while(taken.has(candidate));
+     taken.add(candidate);
+     const updated={...job,jobNumber:candidate};
      sorted[i]=typeof write==='function'?(await write(updated))||updated:updated;
    }
    return sorted;
  }
  function jobNumber(jobs,job){
-   const assigned=String(job.jobNumber||job.ticketNumber||job.number||'').trim();
-   if(assigned)return assigned;
+   const assigned=savedNumber(job);
+   if(hasAnnualNumber(job))return assigned;
+   // Fallback bij een nog niet opgeslagen klus (normaliter krijgt deze bij bewaren direct een nummer).
+   const year=jobYear(job);
    const all=[...(jobs||[])];
    if(!all.some(j=>String(j.id)===String(job.id)))all.push(job);
-   all.sort((a,b)=>creationOrder(a)-creationOrder(b)||String(a.id).localeCompare(String(b.id)));
-   const order=all.findIndex(j=>String(j.id)===String(job.id))+1;
-   return 'K-'+String(Math.max(1,order)).padStart(3,'0');
+   const sameYear=all.filter(j=>jobYear(j)===year)
+     .sort((a,b)=>creationOrder(a)-creationOrder(b)||String(a.id).localeCompare(String(b.id)));
+   const index=sameYear.findIndex(j=>String(j.id)===String(job.id))+1;
+   return formatNumber(year,Math.max(1,index));
  }
  const fullDate=iso=>new Date(iso+'T12:00:00').toLocaleDateString('nl-NL',{day:'2-digit',month:'short',year:'numeric'});
  const timeLabel=row=>[row.from||row.startTime,row.to||row.endTime].filter(Boolean).join(' - ');
@@ -170,5 +196,5 @@ window.JKJobLabelEditor=(()=>{
    query('#jobLabelBack').addEventListener('click',()=>api.showJob(info.job.id));
    render();
  }
- return {open,defaultData,dataFromForm,pngBlobFromDataURL,ensureJobNumbers,jobNumber,actualPlanning};
+ return {open,defaultData,dataFromForm,pngBlobFromDataURL,ensureJobNumbers,jobNumber,jobYear,actualPlanning};
 })();
