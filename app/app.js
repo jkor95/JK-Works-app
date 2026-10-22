@@ -76,9 +76,13 @@ const App = (() => {
   function jobPlannedMinutes(j){return jobWorkDays(j).reduce((n,d)=>n+entryMinutes({date:d.date,from:d.startTime,to:d.endTime}),0);}
   async function ensureWorkLabelJobNumbers(){
     if(!window.JKJobLabelEditor?.ensureJobNumbers)return await JKDB.all('jobs');
-    const jobs=await JKDB.all('jobs');
-    if(jobs.every(j=>String(j.jobNumber||j.ticketNumber||j.number||'').trim()))return jobs;
-    return window.JKJobLabelEditor.ensureJobNumbers(jobs,item=>JKDB.put('jobs',item));
+    const [jobs,counter]=await Promise.all([JKDB.all('jobs'),JKDB.get('settings','jobNumberCounter')]);
+    const stored=Math.max(0,Number(counter?.lastNumber)||0);
+    const missing=jobs.some(j=>!String(j.jobNumber||j.ticketNumber||j.number||'').trim());
+    const numbered=missing?await window.JKJobLabelEditor.ensureJobNumbers(jobs,item=>JKDB.put('jobs',item),stored+1):jobs;
+    const highest=Math.max(stored,...numbered.map(j=>Number(/^K-(\d+)$/i.exec(String(j.jobNumber||j.ticketNumber||j.number||''))?.[1]||0)));
+    if(highest>stored)await JKDB.put('settings',{...counter,id:'jobNumberCounter',lastNumber:highest});
+    return numbered;
   }
   function outstandingWorkDay(j,entries,now=new Date()){
     return jobWorkDays(j).find(d=>{const end=jobPlannedEnd(d);return (end?end<=now:d.date<today())&&!entries.some(e=>e.jobId===j.id&&entryDate(e)===d.date&&(!e.autoFromJobSchedule||e.actualConfirmed));});
