@@ -1,3 +1,10 @@
+## v71.13.15 — bedragen per klant zonder herhaling, rechts uitgelijnd
+- **Meer → Statistieken → Per klant:** boven de geldbalk staat rechts op dezelfde regel als **Verdiensten** uitsluitend **€ … ontvangen**.
+- Alleen bij een werkelijk openstaand bedrag verschijnt direct **onder de geldbalk rechts** **€ … nog te ontvangen**. Geen tweede bedrag met ontvangen onder de balk, en openstaand wordt boven de balk niet meer herhaald.
+- De urenbalk, 14 px gelijke dikte, kleurverdeling en financiële berekeningen blijven ongewijzigd. Bewust afgeronde bedragen blijven buiten het openstaande bedrag.
+- Playwright-regressies controleren de boven- en onderregel, rechteruitlijning, een volledig betaalde klant zonder lege extra regel en behoud van de bestaande weergaven.
+- PWA-cacheversie bijgewerkt, geen Supabase- of klantgegevens aangepast.
+
 ## v71.13.14 — optioneel afwijkend uitvoeringsadres per klus
 - Bij **Klus bewerken / Nieuwe klus** staat onder de werkplanning het vakje **Uitvoering op ander adres dan klantadres**. Standaard uit; bij aanvinken klappen invulvelden voor **straat/huisnummer, postcode en plaats** uit.
 - Het afwijkende adres wordt uitsluitend in de klus bewaard als `executionAddress` en getoond bij de **klusdetails**. Bij uitvinken wordt het adres weer uit de klus gewist.
