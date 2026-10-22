@@ -602,19 +602,23 @@ module.exports=async(browser,origin)=>{
   console.log('PASS: optioneel uitvoeringsadres klapt uit, bewaart los op klus, toont op detail en blijft weg van offerte/factuur');
   // 4x6-label: bewerkbare printkopie zonder opgeslagen klus / factuur te wijzigen.
   await page.evaluate(async()=>{
-    window.workLabelOriginal=JSON.stringify(await JKDB.get('jobs','fixed'));
-    window.workLabelOriginalClient=JSON.stringify(await JKDB.get('clients','client'));
     await App.showJob('fixed');
   });
   assert.equal(await page.locator('#labelThisJob').count(),1,'Werkbonknop in klusdetails');
   await page.locator('#labelThisJob').click();
+  await page.locator('#jobLabelForm [name=number]').waitFor();
+  assert.match(await page.locator('#jobLabelForm [name=number]').inputValue(),/^K-\d{3,}$/,'Klusnummer automatisch ingevuld');
+  await page.evaluate(async()=>{
+    window.workLabelOriginal=JSON.stringify(await JKDB.get('jobs','fixed'));
+    window.workLabelOriginalClient=JSON.stringify(await JKDB.get('clients','client'));
+  });
+  assert.equal(await page.locator('#jobLabelForm [name=items]').count(),0,'Meeneemlijst niet meer in het bewerkscherm');
   assert.equal(await page.locator('#jobLabelPreview').count(),1);
   await page.waitForFunction(()=>document.querySelector('#jobLabelPreview').naturalWidth===1200);
   const initialImage=await page.locator('#jobLabelPreview').getAttribute('src');
   assert.match(initialImage,/^data:image\/png;base64,/);
   assert.equal(await page.locator('#jobLabelPreview').evaluate(img=>img.naturalHeight),1800,'Label staand 4x6');
   await page.locator('#jobLabelForm [name=title]').fill('Montage kast - werkbonvariant');
-  await page.locator('#jobLabelForm [name=items]').fill('Kitspuit\nStanleymes\nHandschoenen\nExtra ladder');
   await page.locator('#jobLabelForm [name=notes]').fill('Alleen eigen notitie\nNiet printen');
   await page.locator('#jobLabelForm [name=notes]').fill('Alleen eigen notitie');
   await page.locator('#jobLabelForm [name=payment]').fill('Betaalverzoek');
@@ -647,7 +651,43 @@ module.exports=async(browser,origin)=>{
   await page.locator('#jobLabelRefresh').click();
   assert.equal(await page.locator('#jobLabelError').isVisible(),true,'Te lange werkbon wordt niet afgeknipt');
   assert.equal(await page.locator('#jobLabelPreview').getAttribute('src'),null,'Geen misleidend afgeknipte afbeelding');
-  console.log('PASS: 4x6 staande monochrome PNG, meeneemlijst/notities bewerkbaar, preview, iOS-deelbestand en downloaden zonder gegevenswijziging');
+  const labelFixtures=await page.evaluate(()=>{
+    const f=(job,days,entries,today)=>JKJobLabelEditor.defaultData({job,days,entries,today,jobs:[job]});
+    const one={id:'job_lame_abc',title:'Dag verplaatst',status:'afgerond'};
+    const replaced=f(one,[{date:'2026-10-19',startTime:'09:00',endTime:'12:00'}],
+      [{jobId:one.id,date:'2026-10-20',from:'08:30',to:'16:00',minutes:420,actualConfirmed:true}],
+      '2026-10-21');
+    const mixed=f(one,[{date:'2026-10-19',startTime:'09:00',endTime:'12:00'},{date:'2026-10-24',startTime:'10:00',endTime:'13:00'}],
+      [{jobId:one.id,date:'2026-10-20',from:'08:30',to:'16:00',minutes:420,actualConfirmed:true}],
+      '2026-10-21');
+    const tentative=f(one,[{date:'2026-10-24',startTime:'10:00',endTime:'13:00'}],
+      [{jobId:one.id,date:'2026-10-24',from:'10:00',to:'13:00',minutes:180,autoFromJobSchedule:true,actualConfirmed:false}],
+      '2026-10-21');
+    const abc=[
+      {id:'job_m0_abc',title:'Oud'},
+      {id:'job_m1_abc',title:'Midden'},
+      {id:'job_m2_abc',title:'Nieuw'}
+    ];
+    return Promise.resolve(JKJobLabelEditor.ensureJobNumbers([abc[2],abc[0],abc[1]],j=>j)).then(async numbered=>{
+      const reversed=await JKJobLabelEditor.ensureJobNumbers(numbered.filter(j=>j.id!==abc[0].id),j=>j);
+      const future=await JKJobLabelEditor.ensureJobNumbers([...numbered,{id:'job_m3_abc'}],j=>j);
+      const noPacking=JKJobLabel.render({...mixed,items:'Mag niet afdrukken'}).toDataURL('image/png').slice(0,32);
+      return {replaced,mixed,tentative,numbered:numbered.map(j=>[j.id,j.jobNumber]),reversed:reversed.map(j=>j.jobNumber),future:future.map(j=>j.jobNumber),noPacking};
+    });
+  });
+  assert.match(labelFixtures.replaced.planning,/Gewerkt.*20 okt\.? 2026.*08:30 - 16:00/,'Werkelijke dag vervangt verlopen geplande dag');
+  assert.doesNotMatch(labelFixtures.replaced.planning,/19 okt|09:00/,'Vervallen plandag wordt niet afgebeeld');
+  assert.equal(labelFixtures.replaced.workedHours,'7 uur','Netto bevestigde uren op de bon');
+  assert.match(labelFixtures.mixed.planning,/Gepland.*24 okt\.? 2026.*10:00 - 13:00/,'Toekomstige resterende planning blijft');
+  assert.equal(labelFixtures.mixed.plannedHours,'3 uur','Nog geplande uren afzonderlijk');
+  assert.match(labelFixtures.tentative.planning,/Gepland/,'Onbevestigde automatische uren blijven uitsluitend planning');
+  assert.equal(labelFixtures.tentative.workedHours,'','Onbevestigde uren zijn geen gewerkt uur');
+  assert.deepEqual(labelFixtures.numbered.map(x=>x[1]),['K-001','K-002','K-003'],'Chronologische automatische nummering');
+  assert.deepEqual(labelFixtures.reversed,['K-002','K-003'],'Nummers schuiven niet na verwijderen');
+  assert.deepEqual(labelFixtures.future,['K-001','K-002','K-003','K-004'],'Nieuwe klus krijgt het volgende nummer');
+  assert.match(labelFixtures.noPacking,/^data:image\/png/);
+  assert.equal(await page.locator('#jobLabelForm [name=items]').count(),0,'Geen meeneemlijst na bewerken');
+  console.log('PASS: werkelijk gewerkte vervangingsdagen, nog geplande dagen, automatische blijvende klusnummers, geen meeneemlijst, PNG-deling en behoud klant-/klusdata');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');
  }finally{await context.close();}

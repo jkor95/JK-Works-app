@@ -74,6 +74,16 @@ const App = (() => {
   }
   function uniqueEntries(entries){return [...new Map((entries||[]).map(e=>[e.id,e])).values()];}
   function jobPlannedMinutes(j){return jobWorkDays(j).reduce((n,d)=>n+entryMinutes({date:d.date,from:d.startTime,to:d.endTime}),0);}
+  async function ensureWorkLabelJobNumbers(){
+    if(!window.JKJobLabelEditor?.ensureJobNumbers)return await JKDB.all('jobs');
+    const [jobs,counter]=await Promise.all([JKDB.all('jobs'),JKDB.get('settings','jobNumberCounter')]);
+    const stored=Math.max(0,Number(counter?.lastNumber)||0);
+    const missing=jobs.some(j=>!String(j.jobNumber||j.ticketNumber||j.number||'').trim());
+    const numbered=missing?await window.JKJobLabelEditor.ensureJobNumbers(jobs,item=>JKDB.put('jobs',item),stored+1):jobs;
+    const highest=Math.max(stored,...numbered.map(j=>Number(/^K-(\d+)$/i.exec(String(j.jobNumber||j.ticketNumber||j.number||''))?.[1]||0)));
+    if(highest>stored)await JKDB.put('settings',{...counter,id:'jobNumberCounter',lastNumber:highest});
+    return numbered;
+  }
   function outstandingWorkDay(j,entries,now=new Date()){
     return jobWorkDays(j).find(d=>{const end=jobPlannedEnd(d);return (end?end<=now:d.date<today())&&!entries.some(e=>e.jobId===j.id&&entryDate(e)===d.date&&(!e.autoFromJobSchedule||e.actualConfirmed));});
   }
@@ -923,7 +933,7 @@ const App = (() => {
         const clients=await JKDB.all('clients');let c=clients.find(c=>(r.email&&c.email&&c.email.toLowerCase()===String(r.email).toLowerCase())||(r.phone&&c.phone&&String(c.phone).replace(/\D/g,'')===String(r.phone).replace(/\D/g,'')));
         if(!c){c={id:JKDB.id('client'),name:r.company||r.name,attention:r.company?r.name:'',street:r.location||'',postal:'',city:'',phone:r.phone||'',email:r.email||'',notes:'Aangemaakt vanuit website-aanvraag'};await JKDB.put('clients',c);}
         const j={id:JKDB.id('job'),title:r.request_type||'Opdracht via website',clientId:c.id,clientName:c.name,attention:c.attention||'',street:r.location||c.street||'',postal:c.postal||'',city:c.city||'',phone:r.phone||c.phone||'',email:r.email||c.email||'',date:r.requested_date||today(),startTime:r.start_time?String(r.start_time).slice(0,5):'',endTime:r.end_time?String(r.end_time).slice(0,5):'',status:'gepland',notes:r.description||'',checklistId:'',checklistState:{},photoPolicy:/horeca|catering/i.test(r.request_type||'')?'none':'optional',paymentType:'invoice',hourlyRate:'',extraAmount:'',paymentPaid:false,quoteNeeded:makeQuote,sourceRequestId:r.id};
-        await JKDB.put('jobs',j);await ensureJobTimeEntry(j);await JKCloud.updateWebsiteRequest(r.id,{status:'converted'});closeModal();toast(makeQuote?'Klant en klus aangemaakt - offerte voorbereiden':'Klant en klus aangemaakt');
+        await JKDB.put('jobs',{...j,createdAt:new Date().toISOString()});await ensureWorkLabelJobNumbers();await ensureJobTimeEntry(j);await JKCloud.updateWebsiteRequest(r.id,{status:'converted'});closeModal();toast(makeQuote?'Klant en klus aangemaakt - offerte voorbereiden':'Klant en klus aangemaakt');
         if(makeQuote)createBusinessDoc('Offerte',{jobId:j.id,clientId:c.id,workDate:j.date});else showJob(j.id);
       }catch(e){alert('Aanvraag verwerken mislukt: '+(e.message||e));}
     };
@@ -995,7 +1005,10 @@ const App = (() => {
       $('#jobPhotoPolicy').value=!ch?'optional':name.includes('catering')||name.includes('horeca')?'none':'required';
     });
     $('#jobForm').addEventListener('submit',async e=>{e.preventDefault();let workDays;try{workDays=readWorkDays();}catch(error){alert(error.message);return;}const f=new FormData(e.target);let clientId=f.get('clientId'),client=clients.find(c=>c.id===clientId);const values={name:String(f.get('clientName')||'').trim(),attention:f.get('attention')||'',street:f.get('street')||'',postal:f.get('postal')||'',city:f.get('city')||'',phone:f.get('phone')||'',email:f.get('email')||''};if(client){Object.assign(client,values);await JKDB.put('clients',client);}else if(values.name){client={id:JKDB.id('client'),...values,notes:''};clientId=client.id;await JKDB.put('clients',client);}await freezeLegacyPayments(await refreshFinance(),j.id);const quoteWasNeeded=j.quoteNeeded===true;const oldSchedule=`${j.date||''}|${jobStartTime(j)}|${jobEndTime(j)}`;Object.assign(j,{title:f.get('title'),clientId:clientId||'',clientName:values.name,attention:values.attention,street:values.street,address:values.street,postal:values.postal,city:values.city,phone:values.phone,email:values.email,
-      executionAddress:f.get('hasExecutionAddress')==='on'?{street:String(f.get('executionStreet')||'').trim(),postal:String(f.get('executionPostal')||'').trim(),city:String(f.get('executionCity')||'').trim()}:null,workDays,date:workDays[0]?.date||'',startTime:workDays[0]?.startTime||'',endTime:workDays[0]?.endTime||'',status:f.get('status'),paymentType:f.get('paymentType')==='cash'?'cash':'invoice',hourlyRate:f.get('hourlyRate')||'',extraAmount:f.get('extraAmount')||'',paymentLedger:true,pricingType:f.get('pricingType'),agreedAmount:f.get('agreedAmount')===''?'':num(f.get('agreedAmount')),extraIncluded:f.get('extraIncluded')==='true',quoteNeeded:f.get('quoteNeeded')==='on',checklistId:f.get('checklistId'),photoPolicy:f.get('photoPolicy')||'optional',notes:f.get('notes')});const newSchedule=`${j.date||''}|${jobStartTime(j)}|${jobEndTime(j)}`;if(oldSchedule!==newSchedule)j.completionPromptHandledAt=null;await JKDB.put('jobs',j);
+      executionAddress:f.get('hasExecutionAddress')==='on'?{street:String(f.get('executionStreet')||'').trim(),postal:String(f.get('executionPostal')||'').trim(),city:String(f.get('executionCity')||'').trim()}:null,workDays,date:workDays[0]?.date||'',startTime:workDays[0]?.startTime||'',endTime:workDays[0]?.endTime||'',status:f.get('status'),paymentType:f.get('paymentType')==='cash'?'cash':'invoice',hourlyRate:f.get('hourlyRate')||'',extraAmount:f.get('extraAmount')||'',paymentLedger:true,pricingType:f.get('pricingType'),agreedAmount:f.get('agreedAmount')===''?'':num(f.get('agreedAmount')),extraIncluded:f.get('extraIncluded')==='true',quoteNeeded:f.get('quoteNeeded')==='on',checklistId:f.get('checklistId'),photoPolicy:f.get('photoPolicy')||'optional',notes:f.get('notes')});const newSchedule=`${j.date||''}|${jobStartTime(j)}|${jobEndTime(j)}`;if(oldSchedule!==newSchedule)j.completionPromptHandledAt=null;
+      if(!id&&!j.createdAt)j.createdAt=new Date().toISOString();
+      await JKDB.put('jobs',j);
+      if(!id)await ensureWorkLabelJobNumbers();
       if(!quoteWasNeeded&&j.quoteNeeded){
         const dismissedRow=await JKDB.get('settings','dismissedActions');
         if(dismissedRow?.items?.['quoteCreate:'+j.id]){
@@ -1073,7 +1086,7 @@ const App = (() => {
   async function repeatJob(id){
     const src=await JKDB.get('jobs',id);if(!src)return;
     modal(`${modalHead('Klus herhalen')}<form id="repeatJobForm"><div class="card"><h3>${esc(src.title||'Klus')}</h3><div class="muted small">${esc(src.clientName||'Geen klant')}</div></div><div class="form-grid"><div class="field"><label>Nieuwe datum</label><input type="date" name="date" required value="${today()}"></div><div class="field"><label>Starttijd</label><input type="time" name="startTime" value="${esc(jobStartTime(src))}"></div><div class="field"><label>Eindtijd</label><input type="time" name="endTime" value="${esc(jobEndTime(src))}"></div></div><p class="muted small">Klant, omschrijving, uurtarief, betaalwijze, checklist en foto-instelling worden overgenomen. Betaling en afronding beginnen opnieuw.</p><button class="primary" style="width:100%">Nieuwe klus maken</button></form>`);
-    $('#repeatJobForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),copy={...src,id:JKDB.id('job'),date:f.get('date'),startTime:f.get('startTime')||'',endTime:f.get('endTime')||'',status:'gepland',paymentPaid:false,paymentLedger:true,completionPromptHandledAt:null,autoTimeEntryId:null,checklistState:{},createdAt:new Date().toISOString()};delete copy._syncUpdatedAt;copy.workDays=[{id:JKDB.id('day'),date:copy.date,startTime:copy.startTime,endTime:copy.endTime}];await JKDB.put('jobs',copy);await ensureJobTimeEntry(copy);closeModal();toast('Herhaalde klus aangemaakt');renderJobs();});
+    $('#repeatJobForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),copy={...src,id:JKDB.id('job'),date:f.get('date'),startTime:f.get('startTime')||'',endTime:f.get('endTime')||'',status:'gepland',paymentPaid:false,paymentLedger:true,completionPromptHandledAt:null,autoTimeEntryId:null,checklistState:{},jobNumber:null,ticketNumber:null,number:null,createdAt:new Date().toISOString()};delete copy._syncUpdatedAt;copy.workDays=[{id:JKDB.id('day'),date:copy.date,startTime:copy.startTime,endTime:copy.endTime}];await JKDB.put('jobs',copy);await ensureWorkLabelJobNumbers();await ensureJobTimeEntry(copy);closeModal();toast('Herhaalde klus aangemaakt');renderJobs();});
   }
 
   const photoPhaseMeta={before:{label:'Voor',icon:'📷'},during:{label:'Tijdens',icon:'🔨'},after:{label:'Na',icon:'✅'}};
@@ -1140,13 +1153,18 @@ const App = (() => {
     const paymentCard=`<div class="section-title"><h2>Prijsafspraak & betaling</h2><span class="pill">${esc(jobPaymentLabel(j))}</span></div><div class="card">${jobFinanceHtml(j,entries,company)}<button class="primary" id="paymentsThisJob">Betalingen bekijken / registreren</button></div>`;
     modal(`${modalHead(j.title)}<div class="button-row"><button class="secondary" id="editThisJob">Bewerken</button><button class="secondary" id="repeatThisJob">↻ Herhalen</button><button class="primary" id="hoursThisJob">Uren & bedrag</button><button class="secondary" id="quoteThisJob">+ Offerte</button><button class="secondary" id="invoiceThisJob">+ Factuur</button><button class="secondary" id="calendarThisJob">📅 Google Agenda</button><button class="secondary" id="labelThisJob">🖨️ Werkbon / label</button></div><div class="card" style="margin-top:10px"><strong>${esc(c.name||j.clientName||'Geen klant')}</strong><div class="muted small">${nlDate(j.date)}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}${contact?'<br>'+contact:''}</div>${executionHtml}${j.notes?`<p class="small">${esc(j.notes)}</p>`:''}</div>${workDaysCard(j,entries)}${paymentCard}${jobExpensesHtml}<div class="section-title"><h2>Foto’s</h2><span class="muted small">${esc(photoPolicyText(policy))}</span></div>${photoNotice}<div class="job-photo-sections">${photoCards}</div><div class="section-title"><h2>Checklist</h2></div><div class="card">${checkHtml}</div><div class="section-title"><h2>Uren</h2><span class="muted small">${(entries.reduce((s,e)=>s+entryMinutes(e),0)/60).toFixed(2).replace('.',',')} u</span></div>${entries.length?`<div class="list">${entries.map(e=>`<div class="list-item clickable" data-time="${e.id}"><div class="main"><div class="title">${nlDate(entryDate(e))}</div><div class="sub">${esc(entryFrom(e))} - ${esc(entryTo(e))} · pauze ${num(e.breakMinutes)} min${e.autoFromJobSchedule&&!e.actualConfirmed?' · nog te bevestigen':''}${e.note?' · '+esc(e.note):''}</div></div><strong>${durationHM(entryMinutes(e))}</strong></div>`).join('')}</div>`:'<div class="empty">Nog geen uren.</div>'}`);
     $('#paymentsThisJob').addEventListener('click',()=>showPayments(id));
-    $('#labelThisJob').addEventListener('click',()=>{
+    $('#labelThisJob').addEventListener('click',async()=>{
+      const button=$('#labelThisJob');button.disabled=true;
       try{
+        const jobs=await ensureWorkLabelJobNumbers();
+        const numberedJob=jobs.find(item=>item.id===j.id)||j;
         window.JKJobLabelEditor.open({
-          job:j,client:c,check,finance:jobFinancial(j,entries,company),
-          days:jobWorkDays(j),minutes:jobPlannedMinutes(j),receipts:state.finance?.receipts||[]
+          job:numberedJob,client:c,finance:jobFinancial(j,entries,company),
+          days:jobWorkDays(numberedJob),entries:entries.map(e=>({...e,minutes:entryMinutes(e)})),
+          jobs, today:today(),receipts:state.finance?.receipts||[]
         },{modal,modalHead,downloadBlob,toast,showJob});
       }catch(e){console.error(e);alert('Werkbon openen mislukt: '+(e.message||e));}
+      finally{button.disabled=false;}
     });
     $('#addReceiptThisJob').addEventListener('click',()=>editExpense(null,{jobId:id,returnJobId:id}));
     $('#allReceiptsThisJob').addEventListener('click',async()=>{
