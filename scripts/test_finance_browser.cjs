@@ -675,10 +675,10 @@ module.exports=async(browser,origin)=>{
       return {replaced,mixed,tentative,numbered:numbered.map(j=>[j.id,j.jobNumber]),reversed:reversed.map(j=>j.jobNumber),future:future.map(j=>j.jobNumber),noPacking};
     });
   });
-  assert.match(labelFixtures.replaced.planning,/Gewerkt.*20 okt\\.? 2026.*08:30 - 16:00/,'Werkelijke dag vervangt verlopen geplande dag');
+  assert.match(labelFixtures.replaced.planning,/Gewerkt.*20 okt\.? 2026.*08:30 - 16:00/,'Werkelijke dag vervangt verlopen geplande dag');
   assert.doesNotMatch(labelFixtures.replaced.planning,/19 okt|09:00/,'Vervallen plandag wordt niet afgebeeld');
   assert.equal(labelFixtures.replaced.workedHours,'7 uur','Netto bevestigde uren op de bon');
-  assert.match(labelFixtures.mixed.planning,/Gepland.*24 okt\\.? 2026.*10:00 - 13:00/,'Toekomstige resterende planning blijft');
+  assert.match(labelFixtures.mixed.planning,/Gepland.*24 okt\.? 2026.*10:00 - 13:00/,'Toekomstige resterende planning blijft');
   assert.equal(labelFixtures.mixed.plannedHours,'3 uur','Nog geplande uren afzonderlijk');
   assert.match(labelFixtures.tentative.planning,/Gepland/,'Onbevestigde automatische uren blijven uitsluitend planning');
   assert.equal(labelFixtures.tentative.workedHours,'','Onbevestigde uren zijn geen gewerkt uur');
