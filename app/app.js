@@ -2234,9 +2234,9 @@ const App = (() => {
           <div class="stats-client-name">${esc(b.label)}</div>
           <div class="stats-comparison-label"><span>Uren</span><strong>${hoursLabel(hours(b))}</strong></div>
           <div class="stats-client-chart-track stats-client-hours-track" role="img" aria-label="${esc(hoursLabel(hours(b)))} gewerkt"><span class="stats-client-hours-fill" style="width:${hourScale}%"></span></div>
-          <div class="stats-comparison-label"><span>Verdiensten</span><strong>${money(received(b))} ontvangen${remaining(b)>0.005?` · ${money(remaining(b))} open`:``}</strong></div>
+          <div class="stats-comparison-label stats-client-money-label"><span>Verdiensten</span><strong>${money(received(b))} ontvangen</strong></div>
           <div class="stats-client-chart-track stats-client-money-track" role="img" aria-label="${esc(desc)}"><div class="stats-client-money-width" style="width:${financeScale}%"><span class="stats-client-chart-fill" style="width:${paid}%"></span>${unpaid>0?`<span class="stats-client-chart-open" style="width:${unpaid}%"></span>`:'' }</div></div>
-          <div class="stats-comparison-detail"><span>${money(received(b))} ontvangen</span>${remaining(b)>0.005?`<span class="stats-comparison-outstanding">${money(remaining(b))} nog te ontvangen</span>`:'' }</div>
+          ${remaining(b)>0.005?`<div class="stats-comparison-detail stats-client-open-caption"><span class="stats-comparison-outstanding">${money(remaining(b))} nog te ontvangen</span></div>`:'' }
         </div>`;
       }).join('')}</div></section>`;
     }
