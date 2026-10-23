@@ -178,6 +178,16 @@ module.exports=async(browser,origin)=>{
   assert.doesNotMatch(await page.locator('#modalRoot').innerText(),/afgesproken|270,00/i,'Jaar zonder afgesproken');
   await page.locator('[data-stat-mode="client"]').click();
   assert.match(await page.locator('#modalRoot .stats-client-combined').innerText(),/Fictieve klant/);
+  await page.locator('[data-stat-mode="payment"]').click();
+  assert.equal(await page.locator('#modalRoot [data-payment-group="cash"]').count(),1);
+  assert.equal(await page.locator('#modalRoot [data-payment-group="bank"]').count(),1);
+  assert.equal(await page.locator('#modalRoot .payment-invoice-values > div').count(),2);
+  assert.match(await page.locator('#modalRoot .payment-invoice-detail').innerText(),/Ontvangen via facturen[\s\S]*Waarvan ontvangen btw/);
+  assert.equal(await page.locator('#customerStatsYear').inputValue(),String(stats.fixtureYear));
+  assert.equal(await page.locator('#modalRoot .stats-comparison-summary').count(),0,'Nieuwe betaalwijze-tab vervangt niet de andere statistieken');
+  await page.locator('[data-stat-mode="client"]').click();
+  assert.match(await page.locator('#modalRoot .stats-client-combined').innerText(),/Fictieve klant/);
+
   console.log('PASS: uren per klant en uitsluitend ontvangen/openstaande verdiensten in klanten-, maand-, kwartaal- en jaaroverzichten');
   await page.evaluate(()=>App.generateAnnualInvoiceReport(fixtureYear));
   // Financial records use the unchanged existing cloud format and backup schema.
@@ -471,6 +481,49 @@ module.exports=async(browser,origin)=>{
   assert.equal(earnings.orphan.ownReceived,150,'Losse factuur: ook bonvergoeding uitsluiten');
   assert.equal(earnings.partial.ownReceived,100,'Deelbetaling niet verlagen met nog niet ontvangen materiaalvergoeding');
   assert.equal(earnings.tip.ownReceived,160,'Meerbetaling boven klussom hoort bij eigen inkomsten');
+
+  // Fictieve KOR-/21%-facturen, deelbetalingen, bank + betaalverzoek en
+  // voorschotbonnen: de factuurspecificatie is geen extra inkomstencategorie.
+  const methodFixture=await page.evaluate(()=>{
+    const year=fixtureYear, next=String(year+1);
+    const jobs=[
+      {id:'tax',date:year+'-02-01',pricingType:'fixed',agreedAmount:121,clientId:'client'},
+      {id:'cash',date:year+'-02-02',pricingType:'fixed',agreedAmount:70,paymentType:'cash'},
+      {id:'reimburse',date:year+'-02-03',pricingType:'fixed',agreedAmount:190,extraAmount:40,paymentType:'invoice'},
+      {id:'next',date:next+'-02-01',pricingType:'fixed',agreedAmount:30,paymentType:'cash'}
+    ];
+    const docs=[
+      {id:'tax-invoice',folder:'factuur',meta:{jobId:'tax',total:121,vatAmount:21,korApplied:false,workDate:year+'-02-01'}},
+      {id:'kor-invoice',folder:'factuur',meta:{jobId:'reimburse',total:190,vatAmount:0,korApplied:true,workDate:year+'-02-03',
+        lines:[{qty:1,price:150,description:'Werk'},{qty:1,price:40,description:'Bon',expenseId:'bon-1'}]}}
+    ];
+    const pay=[
+      {id:'tax-p1',kind:'jkPayment',invoiceId:'tax-invoice',amount:60.5,method:'card',date:year+'-02-15'},
+      {id:'tax-p2',kind:'jkPayment',jobId:'tax',amount:60.5,method:'bank',date:year+'-03-01'},
+      {id:'cash-p',kind:'jkPayment',jobId:'cash',amount:70,method:'cash',date:year+'-02-10'},
+      {id:'kor-p',kind:'jkPayment',invoiceId:'kor-invoice',amount:190,method:'bank',date:year+'-03-10'},
+      {id:'next-p',kind:'jkPayment',jobId:'next',amount:30,method:'cash',date:next+'-02-20'}
+    ];
+    const f=JKFinance.snapshot(jobs,docs,pay,j=>JKFinance.price(j,0,10),()=>true);
+    const yearly=App.paymentMethodOverview([],jobs,{},f,year);
+    const all=App.paymentMethodOverview([],jobs,{},f);
+    const partial=JKFinance.snapshot(jobs,docs,pay.filter(x=>x.id!=='tax-p2'),j=>JKFinance.price(j,0,10),()=>true);
+    const partialResult=App.paymentMethodOverview([],jobs,{},partial,year);
+    return {yearly,all,partialResult,original:JSON.stringify({jobs,docs,pay}),
+      sumEarned:App.financialEvents([],jobs,{},f).reduce((n,e)=>n+(e.received||0),0)};
+  });
+  assert.equal(methodFixture.yearly.cash,70,'Contant telt alleen contante ontvangsten');
+  assert.equal(methodFixture.yearly.bankAndRequest,271,'Bank en betaalverzoek samen, geen € 40 voorschotbon');
+  assert.equal(methodFixture.yearly.invoiceGross,311,'Factuurontvangsten inclusief btw, geen dubbeltelling van algemene klusbetaling');
+  assert.equal(methodFixture.yearly.invoiceVat,21,'Werkelijk ontvangen btw bij volledig betaalde 21%-factuur, KOR €0');
+  assert.equal(methodFixture.partialResult.invoiceGross,250.5,'Deelfactuur + KOR-factuur correct');
+  assert.equal(methodFixture.partialResult.invoiceVat,10.5,'Btw bij halfbetaalde factuur slechts half meegeteld');
+  assert.equal(methodFixture.all.cash,100,'Alle jaren samen telt contant 2027 ook mee');
+  assert.equal(methodFixture.yearly.cash+methodFixture.yearly.bankAndRequest,methodFixture.sumEarned-30,'Betaalwijzevergelijking gebruikt exact dezelfde eigen ontvangen verdiensten');
+  const methodHtml=await page.evaluate(()=>App.paymentMethodOverviewHtml({cash:70,bankAndRequest:271,other:0,unknown:0,invoiceGross:311,invoiceVat:21}));
+  assert.match(methodHtml,/Bank \+ betaalverzoek/);
+  assert.doesNotMatch(methodHtml,/data-payment-group="other"/,'Geen lege restcategorie');
+  console.log('PASS: contant apart, bank en betaalverzoek samen, btw naar betaalde factuurdelen, KOR nul en voorschotten uitgesloten');
 
   // Eigen verdiensten en openstaand volgen de LAATSTE uitvoerdag, nooit de betaling.
   const endDateStats=await page.evaluate(()=>{
