@@ -2099,6 +2099,44 @@ const App = (() => {
     }
     return result;
   }
+    // Eigen ontvangsten per betaalwijze: gebruik dezelfde methode als Statistieken.
+    // De factuurspecificatie is een subset, nooit extra bij het totaal optellen.
+    function paymentMethodOverview(entries,jobs,company,finance=state.finance,year=null){
+      const sums={cash:0,bankAndRequest:0,other:0,unknown:0,invoiceGross:0,invoiceVat:0};
+      const own=ownEarningsPayments(finance,jobs,entries,company);
+      const jobMap=new Map(jobs.map(j=>[String(j.id),j]));
+      const docMap=new Map((finance?.documents||[]).map(d=>[String(d.id),d]));
+      const isIncluded=date=>year===null||String(date||'').startsWith(String(year));
+      for(const p of finance?.receipts||[]){
+        const job=jobMap.get(String(p.resolvedJobId||p.jobId||''));
+        const doc=docMap.get(String(p.invoiceId||''));
+        const date=job?jobStatsDate(job,entries):doc?invoiceStatsDate(doc):'';
+        if(!isIncluded(date))continue;
+        const amount=Math.round(Math.max(0,num(own.get(p.id)))*100);
+        const method=String(p.method||'').toLowerCase();
+        const key=method==='cash'?'cash':method==='bank'||method==='card'?'bankAndRequest':method==='unknown'?'unknown':'other';
+        sums[key]+=amount;
+      }
+      // finance.document() wijst algemene klusbetalingen al aan facturen toe;
+      // niet nogmaals rechtstreeks alle betalingsregels optellen.
+      for(const d of finance?.documents||[]){
+        const job=jobMap.get(String(linkedInvoiceJobId(d)));
+        const date=job?jobStatsDate(job,entries):invoiceStatsDate(d);
+        if(!isIncluded(date))continue;
+        const total=Math.max(0,Math.round(num(d.meta?.total)*100));
+        if(!total)continue;
+        const paid=Math.min(total,Math.max(0,Math.round(num(finance.document(d).received)*100)));
+        sums.invoiceGross+=paid;
+        // Alleen btw uit het originele factuurrecord. KOR-facturen rekenen 0 btw;
+        // ontbrekende btw wordt niet alsnog verzonnen uit een standaardtarief.
+        const statedVat=d.meta?.vatAmount;
+        const knownVat=statedVat!=null&&statedVat!==''&&Number.isFinite(Number(statedVat));
+        const vat=d.meta?.korApplied===true?0:knownVat?
+          Math.min(total,Math.max(0,Math.round(Number(statedVat)*100))):0;
+        sums.invoiceVat+=Math.round(vat*paid/total);
+      }
+      return Object.fromEntries(Object.entries(sums).map(([key,cents])=>[key,cents/100]));
+    }
     function financialEvents(entries,jobs,company,finance=state.finance){
     const events=[],jobMap=new Map(jobs.map(j=>[String(j.id),j])),ownPaid=ownEarningsPayments(finance,jobs,entries,company);
     const incomeByJob=new Map();
