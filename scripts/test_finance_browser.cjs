@@ -838,7 +838,7 @@ module.exports=async(browser,origin)=>{
     try{JKJobLabel.render(snapshot)}finally{CanvasRenderingContext2D.prototype.fillText=previous;}
     return {snapshot,shown};
   });
-  assert.match(labelNumbers.snapshot.difference,/^\\+\\s*€\\s*75,00/,'Extra ontvangst toont positief verschil');
+  assert.match(labelNumbers.snapshot.difference,/^\+\s*€\s*75,00/,'Extra ontvangst toont positief verschil');
   for(const label of ['Gevraagd:','Ontvangen:','Verschil:'])assert.ok(labelNumbers.shown.includes(label),'Werkbon print aparte regel '+label);
   assert.equal(labelNumbers.shown.some(x=>x==='Bedrag:'),false,'Oude enkele bedragregel is verwijderd');
   const comparisons=await page.evaluate(()=>{
@@ -851,16 +851,16 @@ module.exports=async(browser,origin)=>{
       unknown:fn('Nog te bepalen','€ 75,00')
     };
   });
-  assert.match(comparisons.more,/^\\+\\s*€\\s*75,00/,'Meer ontvangen toont plus');
-  assert.match(comparisons.less,/^−\\s*€\\s*25,00/,'Minder ontvangen toont min');
-  assert.match(comparisons.equal,/€\\s*0,00/,'Gelijk ontvangen toont nulverschil');
-  assert.match(comparisons.decimals,/^\\+\\s*€\\s*50,25/,'Duizendtallen en centen correct');
+  assert.match(comparisons.more,/^\+\s*€\s*75,00/,'Meer ontvangen toont plus');
+  assert.match(comparisons.less,/^−\s*€\s*25,00/,'Minder ontvangen toont min');
+  assert.match(comparisons.equal,/€\s*0,00/,'Gelijk ontvangen toont nulverschil');
+  assert.match(comparisons.decimals,/^\+\s*€\s*50,25/,'Duizendtallen en centen correct');
   assert.equal(comparisons.unknown,'','Bij onbekende prijs geen fictief verschil');
   const beforeEdit=await page.locator('#jobLabelPreview').getAttribute('src');
   await page.locator('#jobLabelForm [name=requestedAmount]').fill('€ 100,00');
   await page.locator('#jobLabelRefresh').click();
   const edited=await page.evaluate(()=>JKJobLabelEditor.dataFromForm(document.querySelector('#jobLabelForm')));
-  assert.match(edited.difference,/^−\\s*€\\s*25,00/,'Bewerkte printafspraak geeft meteen minverschil');
+  assert.match(edited.difference,/^−\s*€\s*25,00/,'Bewerkte printafspraak geeft meteen minverschil');
   assert.notEqual(await page.locator('#jobLabelPreview').getAttribute('src'),beforeEdit,'Voorbeeld verandert na aanpassen bedragen');
   assert.match(await page.locator('#jobLabelPreview').getAttribute('src'),/^data:image\/png;base64,/,'Aangepaste werkbon rendert een PNG');
   assert.equal(await page.locator('#jobLabelPreview').evaluate(img=>img.naturalHeight),1800,'Werkbon blijft 4x6 portrait');
