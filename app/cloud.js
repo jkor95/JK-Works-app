@@ -84,7 +84,7 @@ const JKCloud = (() => {
     // v33: geen automatische sync op openen, focus, online worden of timer.
     // Synchronisatie gebeurt alleen na inloggen of wanneer de gebruiker op Sync drukt.
     window.addEventListener('online',scheduleNotificationProjection);
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')scheduleNotificationProjection();});
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')scheduleNotificationProjection();else publishNotificationProjection().catch(()=>{});});
     scheduleNotificationProjection();
     return true;
   }
@@ -460,5 +460,5 @@ const JKCloud = (() => {
   }
   async function pendingCount(){ return (await JKDB.all('syncQueue')).filter(q=>!LOCAL_ONLY_STORES.has(q.store)).length; }
   function status(){ return {available:available(),signedIn:isSignedIn(),email:user()?.email||'',syncing}; }
-  return {readBackupSnapshot,downloadBackupFile,withBackupRead,restoreProtected,getAccessToken:async()=>{const {data}=await client.auth.getSession();return data?.session?.access_token||null;},init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,publishNotificationProjection,queuePut,queueDelete,pruneCloudToLocal,pendingCount,getWebsiteContent,saveWebsiteContent,getWebsiteRequests,updateWebsiteRequest,downloadRequestPhoto,deleteWebsiteRequest};
+  return {readBackupSnapshot,downloadBackupFile,withBackupRead,restoreProtected,getAccessToken:async()=>{const {data}=await client.auth.getSession();return data?.session?.access_token||null;},init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,publishNotificationProjection,hasPushSubscription:subscribedForPush,queuePut,queueDelete,pruneCloudToLocal,pendingCount,getWebsiteContent,saveWebsiteContent,getWebsiteRequests,updateWebsiteRequest,downloadRequestPhoto,deleteWebsiteRequest};
 })();
