@@ -107,6 +107,11 @@ window.JKJobLabelEditor=(()=>{
      card:'Betaalverzoek',cash:'Contant',bank:'Bankoverschrijving',other:'Anders'
    }[payments[payments.length-1].method]||'Anders'):(job.paymentType==='cash'?'Contant':'Factuur');
    const priceLabel=({fixed:'Vaste prijs',manual:'Handmatig bedrag',hourly:'Op uurbasis'})[job.pricingType]||'Op uurbasis';
+   // Bij een kosteloze klus met een vrijwillige betaling is de oorspronkelijke
+   // afspraak 0 euro. Vermeld de werkelijk ontvangen vergoeding op de werkbon,
+   // maar doe niet alsof de prijsafspraak achteraf is verhoogd.
+   const receivedInstead=finance&&!finance.pending&&Number(finance.agreed)===0&&Number(finance.received)>0;
+   const amountValue=receivedInstead?finance.received:finance?.agreed;
    return {
      number:jobNumber(jobs,job),
      status:job.status||'',title:job.title||'',
@@ -115,7 +120,7 @@ window.JKJobLabelEditor=(()=>{
      executionAddress:joinAddress(address.street,address.postal,address.city),
      planning:schedule.planning,workDays:schedule.workDays?String(schedule.workDays):'',
      workedHours:hourText(schedule.workedMinutes),plannedHours:hourText(schedule.plannedMinutes),
-     priceType:priceLabel,amount:finance?.pending?'':(finance?.agreed!=null?new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(finance.agreed):''),
+     priceType:priceLabel,amountLabel:receivedInstead?'Ontvangen:':'Bedrag:',amount:finance?.pending?'':(amountValue!=null?new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(amountValue):''),
      payment,
      notes:String(job.notes||'')
    };
@@ -128,7 +133,7 @@ window.JKJobLabelEditor=(()=>{
  }
  function dataFromForm(form){
    const f=new FormData(form),result={};
-   for(const key of ['number','status','title','client','contact','phone','clientAddress','executionAddress','planning','workDays','workedHours','plannedHours','priceType','amount','payment','notes']){
+   for(const key of ['number','status','title','client','contact','phone','clientAddress','executionAddress','planning','workDays','workedHours','plannedHours','priceType','amountLabel','amount','payment','notes']){
      result[key]=String(f.get(key)||'').trim();
    }
    return result;
@@ -148,7 +153,7 @@ window.JKJobLabelEditor=(()=>{
      '<h3>Adressen</h3>'+input('clientAddress','Klantadres',data.clientAddress)+input('executionAddress','Uitvoeringsadres (optioneel)',data.executionAddress)+
      '<h3>Planning en uitvoering</h3>'+area('planning','Werkelijk gewerkt en nog gepland',data.planning,'Geregistreerde werkdagen krijgen voorrang; je kunt de printtekst aanpassen.')+
      input('workDays','Aantal werkdagen',data.workDays)+input('workedHours','Gewerkte uren',data.workedHours)+input('plannedHours','Nog geplande uren',data.plannedHours)+
-     '<h3>Financieel</h3>'+input('priceType','Prijsafspraak',data.priceType)+input('amount','Klusbedrag',data.amount)+input('payment','Betaalwijze / afhandeling',data.payment)+
+     '<h3>Financieel</h3>'+input('priceType','Prijsafspraak',data.priceType)+input('amountLabel','Omschrijving bedrag op werkbon',data.amountLabel)+input('amount',data.amountLabel==='Ontvangen:'?'Ontvangen bedrag':'Klusbedrag',data.amount)+input('payment','Betaalwijze / afhandeling',data.payment)+
      '<h3>Notities</h3>'+area('notes','Notities voor werkbon',data.notes,'Eén notitie per regel. Verwijder regels die niet op de werkbon mogen komen.')+
      '</form></div>';
    api.modal(api.modalHead('Werkbon voor 4×6-label')+
