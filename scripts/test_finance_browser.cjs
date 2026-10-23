@@ -826,9 +826,42 @@ module.exports=async(browser,origin)=>{
   assert.match(giftDetail,/€\s*0,00[\s\S]*€\s*75,00[\s\S]*Status:\s*Betaald/,'Details tonen afgesproken €0, ontvangen €75 en Betaald');
   assert.doesNotMatch(giftDetail,/Status:\s*Deels betaald/,'Geen deels betaald bij nul openstaand');
   await page.locator('#labelThisJob').click();
-  await page.locator('#jobLabelForm [name=amount]').waitFor();
-  assert.match(await page.locator('#jobLabelForm [name=amount]').inputValue(),/75,00/,'Werkbon krijgt ontvangen €75 in plaats van afgesproken €0');
-  assert.equal(await page.locator('#jobLabelForm [name=amountLabel]').inputValue(),'Ontvangen:','Staat op werkbon expliciet als ontvangen bedrag');
+  await page.locator('#jobLabelForm [name=requestedAmount]').waitFor();
+  assert.match(await page.locator('#jobLabelForm [name=requestedAmount]').inputValue(),/0,00/,'Op werkbon blijft €0 gevraagd staan');
+  assert.match(await page.locator('#jobLabelForm [name=receivedAmount]').inputValue(),/75,00/,'Op werkbon staat daarnaast €75 ontvangen');
+  const labelNumbers=await page.evaluate(()=>{
+    const form=document.querySelector('#jobLabelForm');
+    const snapshot=JKJobLabelEditor.dataFromForm(form);
+    const shown=[];
+    const previous=CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText=function(text,...args){shown.push(String(text));return previous.call(this,text,...args);};
+    try{JKJobLabel.render(snapshot)}finally{CanvasRenderingContext2D.prototype.fillText=previous;}
+    return {snapshot,shown};
+  });
+  assert.match(labelNumbers.snapshot.difference,/^\\+\\s*€\\s*75,00/,'Extra ontvangst toont positief verschil');
+  for(const label of ['Gevraagd:','Ontvangen:','Verschil:'])assert.ok(labelNumbers.shown.includes(label),'Werkbon print aparte regel '+label);
+  assert.equal(labelNumbers.shown.some(x=>x==='Bedrag:'),false,'Oude enkele bedragregel is verwijderd');
+  const comparisons=await page.evaluate(()=>{
+    const fn=JKJobLabelEditor.differenceText;
+    return {
+      more:fn('€ 0,00','€ 75,00'),
+      less:fn('€ 100,00','€ 75,00'),
+      equal:fn('€ 75,00','€ 75,00'),
+      decimals:fn('€ 1.200,50','€ 1.250,75'),
+      unknown:fn('Nog te bepalen','€ 75,00')
+    };
+  });
+  assert.match(comparisons.more,/^\\+\\s*€\\s*75,00/,'Meer ontvangen toont plus');
+  assert.match(comparisons.less,/^−\\s*€\\s*25,00/,'Minder ontvangen toont min');
+  assert.match(comparisons.equal,/€\\s*0,00/,'Gelijk ontvangen toont nulverschil');
+  assert.match(comparisons.decimals,/^\\+\\s*€\\s*50,25/,'Duizendtallen en centen correct');
+  assert.equal(comparisons.unknown,'','Bij onbekende prijs geen fictief verschil');
+  const beforeEdit=await page.locator('#jobLabelPreview').getAttribute('src');
+  await page.locator('#jobLabelForm [name=requestedAmount]').fill('€ 100,00');
+  await page.locator('#jobLabelRefresh').click();
+  const edited=await page.evaluate(()=>JKJobLabelEditor.dataFromForm(document.querySelector('#jobLabelForm')));
+  assert.match(edited.difference,/^−\\s*€\\s*25,00/,'Bewerkte printafspraak geeft meteen minverschil');
+  assert.notEqual(await page.locator('#jobLabelPreview').getAttribute('src'),beforeEdit,'Voorbeeld verandert na aanpassen bedragen');
   assert.match(await page.locator('#jobLabelPreview').getAttribute('src'),/^data:image\/png;base64,/,'Aangepaste werkbon rendert een PNG');
   assert.equal(await page.locator('#jobLabelPreview').evaluate(img=>img.naturalHeight),1800,'Werkbon blijft 4x6 portrait');
   const giftAfter=await page.evaluate(async()=>({job:await JKDB.get('jobs','gift-job'),payment:await JKDB.get('settings','gift-pay')}));
@@ -841,7 +874,7 @@ module.exports=async(browser,origin)=>{
     j=>JKFinance.price(j,0,0)).job({id:'partial-gift-test',pricingType:'fixed',agreedAmount:100}));
   assert.equal(notPaid.paid,false,'Deels betaald blijft voor normale schuld van €25');
   assert.equal(notPaid.balance,25);
-  console.log('PASS: nulprijs en vrijwillige €75 is Betaald, 2,5 uur behouden, 4x6 werkbon toont Ontvangen €75 zonder prijswijziging');
+  console.log('PASS: nulprijs en vrijwillige €75 is Betaald, 2,5 uur behouden; 4x6 werkbon gevraagd/ontvangen/verschil met plus/min, geen prijswijziging');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');
  }finally{await context.close();}
