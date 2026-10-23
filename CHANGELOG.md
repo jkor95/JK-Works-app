@@ -1,3 +1,12 @@
+## v71.13.21 — ontvangen per betaalwijze en factuur-btw
+- **Klussen → overzicht bovenaan:** behoud de bestaande klikbare **Openstaand**-kaart. Toon daaronder **Contant** afzonderlijk en **Bank + betaalverzoek** als één totaal, gebaseerd op daadwerkelijk geregistreerde betaalwijzen (niet alleen op klussoort).
+- Direct daaronder staat een kleiner onderdeel **Via facturen (specificatie)** met **Ontvangen via facturen** en **Waarvan ontvangen btw**. De twee factuurwaarden worden niet bovenop de bedragen per betaalwijze geteld.
+- **Meer → Statistieken → Betaalwijze:** nieuw tabblad naast Per klant, Per maand, Per kwartaal en Per jaar; met kalenderjaarfilter. De bestaande klant- en periodestaven blijven intact.
+- Eigen inkomsten per betaalwijze gebruiken exact dezelfde netto-uitgaven-correctie als de eerdere verdienstenstatistieken: voorgeschoten bonnetjes, extra kosten en afgeronde/afgeboekte verschillen zijn geen eigen verdiensten.
+- **Factuurontvangsten** tonen betaalde factuurbedragen inclusief eventuele btw. Algemene klusbetalingen die al op facturen zijn gealloceerd worden slechts één keer meegenomen. **Ontvangen btw** wordt naar rato berekend op werkelijk ontvangen factuurbetalingen, nooit op onbetaalde bedragen. Bij KOR is btw € 0; ontbrekende btw wordt niet geraden.
+- In statistieken blijft de **uitvoeringsdatum** van de klus (of de werkdatum van een losse factuur) leidend, niet de datum van betaling. Oude betalingen met onbekende betaalwijze blijven als afzonderlijke restcategorie herkenbaar.
+- Alle bedragen zijn uitsluitend uitleesoverzichten: geen wijzigingen aan boekingen, betaalmethoden, facturen of Supabase. Browserregressies uitgebreid voor combinaties van bank/betaalverzoek, contant, volledige/deelbetalingen, btw en KOR.
+
 ## v71.13.20 — achtergrondpush zonder app openen, zonder volledige autosynchronisatie
 - **Oorzaak:** iOS-toestemming en de Supabase-cron werken, maar nieuwe klus-/documentacties bleven uitsluitend in de lokale handmatige syncwachtrij. De server zag deze veranderingen niet en de app toonde pas een lokale melding bij openen.
 - **Fix:** wanneer een echt Web Push-abonnement bestaat, publiceert JK Works een **kleine actuele meldingsprojectie** via het bestaande, door RLS beveiligde `app_records`-account. De projectie bevat alleen planning en actievelden, documentstatussen, fotocategorieën en meldingsvoorkeuren. Geen namen, klusteksten, foto-inhoud, PDF-bestanden, berichten, bedragen of notities.

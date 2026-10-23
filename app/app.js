@@ -960,10 +960,9 @@ const App = (() => {
     const orphanOpen=state.finance.documents.filter(d=>isUnassignedInvoice(d)&&state.finance.document(d).open>0);
     const visible=state.jobPaymentFilter==='open'?openJobs:state.jobPaymentFilter==='invoice'?invoiceJobs:state.jobPaymentFilter==='cash'?cashJobs:jobs;
     const openTotal=jobs.reduce((sum,j)=>sum+jobFinancial(j,entries,company).open,0)+orphanOpen.reduce((sum,d)=>sum+state.finance.document(d).open,0);
-    const sumReceived=list=>list.reduce((sum,j)=>sum+jobFinancial(j,entries,company).received,0);
-    const invoiceReceived=sumReceived(invoiceJobs)+state.finance.documents.filter(isUnassignedInvoice).reduce((sum,d)=>sum+state.finance.document(d).received,0);
+    const paymentSummary=paymentMethodOverview(entries,allJobs,company);
     $('#view').innerHTML=`<div class="button-row"><button class="primary" id="newJob">+ Nieuwe klus</button></div>
-      <div class="card job-totals"><div class="kpi-row"><button type="button" class="kpi job-open-filter" id="jobOpenFilter" aria-pressed="${state.jobPaymentFilter==='open'}"><strong id="jobOpenTotal">${money(openTotal)}</strong><span>Openstaand bedrag · bekijken →</span></button><div class="kpi"><strong id="jobCashTotal">${money(sumReceived(cashJobs))}</strong><span>Totaal contant</span></div><div class="kpi"><strong id="jobInvoiceTotal">${money(invoiceReceived)}</strong><span>Totaal factuur</span></div></div></div>
+      <div class="card job-totals"><div class="kpi-row"><button type="button" class="kpi job-open-filter" id="jobOpenFilter" aria-pressed="${state.jobPaymentFilter==='open'}"><strong id="jobOpenTotal">${money(openTotal)}</strong><span>Openstaand bedrag · bekijken →</span></button></div>${paymentMethodOverviewHtml(paymentSummary,{compact:true,title:'Ontvangen per betaalwijze'})}</div>
       ${['open','all'].includes(state.jobPaymentFilter)&&orphanOpen.length?`<div class="card"><h3>Open facturen zonder klus</h3>${orphanOpen.map(d=>`<button type="button" class="secondary" data-unassigned-invoice="${esc(d.id)}">${esc(d.meta?.number||d.filename||'Factuur')} · nog ${money(state.finance.document(d).open)}</button>`).join('')}</div>`:''}
       <div class="tabs" style="margin-top:12px"><button class="tab ${state.jobPaymentFilter==='all'?'active':''}" data-jpf="all">Alles</button><button class="tab ${state.jobPaymentFilter==='invoice'?'active':''}" data-jpf="invoice">Factuur</button><button class="tab ${state.jobPaymentFilter==='cash'?'active':''}" data-jpf="cash">Contant</button><button class="tab ${state.jobPaymentFilter==='open'?'active':''}" data-jpf="open">Openstaand</button></div>
       <div class="section-title"><h2>${state.jobPaymentFilter==='open'?'Openstaande klussen':'Klussen'}</h2></div>${visible.length?`<div class="list">${visible.map(j=>{const f=jobFinancial(j,entries,company),unpaid=f.open>0;return `<div class="list-item clickable job-payment-row ${unpaid?'payment-unpaid':'payment-paid'}" data-job="${esc(j.id)}"><div class="main"><div class="job-row-heading"><div class="title">${esc(j.title)}</div><span class="pill job-status ${j.status==='afgerond'?'success':'warn'}">${esc(j.status||'open')}</span></div><div class="sub">${esc(j.clientName||'Geen klant')} · ${jobWorkDays(j).length>1?jobWorkDays(j).length+' werkdagen · '+nlDate(j.date):nlDate(j.date)||'geen datum'}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}</div>${unpaid?`<div class="job-payment-badge"><span class="pill danger">Nog te ontvangen: ${money(f.open)}</span></div>`:''}</div></div>`}).join('')}</div>`:'<div class="empty">Geen klussen in deze selectie.</div>'}
@@ -2099,6 +2098,64 @@ const App = (() => {
     }
     return result;
   }
+    // Eigen ontvangsten per betaalwijze: gebruik dezelfde methode als Statistieken.
+    // De factuurspecificatie is een subset, nooit extra bij het totaal optellen.
+    function paymentMethodOverview(entries,jobs,company,finance=state.finance,year=null){
+      const sums={cash:0,bankAndRequest:0,other:0,unknown:0,invoiceGross:0,invoiceVat:0};
+      const own=ownEarningsPayments(finance,jobs,entries,company);
+      const jobMap=new Map(jobs.map(j=>[String(j.id),j]));
+      const docMap=new Map((finance?.documents||[]).map(d=>[String(d.id),d]));
+      const isIncluded=date=>year===null||String(date||'').startsWith(String(year));
+      for(const p of finance?.receipts||[]){
+        const job=jobMap.get(String(p.resolvedJobId||p.jobId||''));
+        const doc=docMap.get(String(p.invoiceId||''));
+        const date=job?jobStatsDate(job,entries):doc?invoiceStatsDate(doc):'';
+        if(!isIncluded(date))continue;
+        const amount=Math.round(Math.max(0,num(own.get(p.id)))*100);
+        const method=String(p.method||'').toLowerCase();
+        const key=method==='cash'?'cash':method==='bank'||method==='card'?'bankAndRequest':method==='unknown'?'unknown':'other';
+        sums[key]+=amount;
+      }
+      // finance.document() wijst algemene klusbetalingen al aan facturen toe;
+      // niet nogmaals rechtstreeks alle betalingsregels optellen.
+      for(const d of finance?.documents||[]){
+        const job=jobMap.get(String(linkedInvoiceJobId(d)));
+        const date=job?jobStatsDate(job,entries):invoiceStatsDate(d);
+        if(!isIncluded(date))continue;
+        const total=Math.max(0,Math.round(num(d.meta?.total)*100));
+        if(!total)continue;
+        const paid=Math.min(total,Math.max(0,Math.round(num(finance.document(d).received)*100)));
+        sums.invoiceGross+=paid;
+        // Alleen btw uit het originele factuurrecord. KOR-facturen rekenen 0 btw;
+        // ontbrekende btw wordt niet alsnog verzonnen uit een standaardtarief.
+        const statedVat=d.meta?.vatAmount;
+        const knownVat=statedVat!=null&&statedVat!==''&&Number.isFinite(Number(statedVat));
+        const vat=d.meta?.korApplied===true?0:knownVat?
+          Math.min(total,Math.max(0,Math.round(Number(statedVat)*100))):0;
+        sums.invoiceVat+=Math.round(vat*paid/total);
+      }
+      return Object.fromEntries(Object.entries(sums).map(([key,cents])=>[key,cents/100]));
+    }
+    function paymentMethodOverviewHtml(summary,{compact=false,title='Ontvangen per betaalwijze'}={}){
+      const items=[
+        ['Contant',summary.cash,'cash'],
+        ['Bank + betaalverzoek',summary.bankAndRequest,'bank']
+      ];
+      if(summary.other>0.005)items.push(['Anders',summary.other,'other']);
+      if(summary.unknown>0.005)items.push(['Betaalwijze onbekend',summary.unknown,'unknown']);
+      const rows=items.map(([label,amount,key])=>
+        '<div class="payment-method-box" data-payment-group="'+key+'"><span>'+esc(label)+'</span><strong>'+money(amount)+'</strong></div>'
+      ).join('');
+      return '<section class="payment-method-breakdown'+(compact?' compact':'')+'" aria-label="'+esc(title)+'">'+
+        (compact?'':'<h3>'+esc(title)+'</h3>')+
+        '<div class="payment-method-main">'+rows+'</div>'+
+        '<div class="payment-invoice-detail" aria-label="Factuurontvangsten en btw, geen extra inkomsten">'+
+          '<span class="payment-invoice-heading">Via facturen (specificatie)</span>'+
+          '<div class="payment-invoice-values">'+
+            '<div><span>Ontvangen via facturen</span><strong>'+money(summary.invoiceGross)+'</strong></div>'+
+            '<div><span>Waarvan ontvangen btw</span><strong>'+money(summary.invoiceVat)+'</strong></div>'+
+          '</div></div></section>';
+    }
     function financialEvents(entries,jobs,company,finance=state.finance){
     const events=[],jobMap=new Map(jobs.map(j=>[String(j.id),j])),ownPaid=ownEarningsPayments(finance,jobs,entries,company);
     const incomeByJob=new Map();
@@ -2297,20 +2354,22 @@ const App = (() => {
     if(!years.includes(new Date().getFullYear()))years.unshift(new Date().getFullYear());
     let customerYear=new Date().getFullYear();
     const draw=()=>{
-      const customerMode=mode==='client';
+      const customerMode=mode==='client',methodMode=mode==='payment';
       const periods={month:'laatste 12 maanden',quarter:'laatste 8 kwartalen',year:'alle kalenderjaren'};
-      const buckets=customerMode?customerStatBuckets(entries,jobs,clients,company,customerYear):periodBuckets(entries,jobs,company,mode);
-      const content=statsComparisonHtml(buckets,customerMode,customerMode?'in '+customerYear:periods[mode])+statsComparisonChartHtml(buckets,customerMode);
+      const buckets=customerMode?customerStatBuckets(entries,jobs,clients,company,customerYear):methodMode?[]:periodBuckets(entries,jobs,company,mode);
+      const content=methodMode?paymentMethodOverviewHtml(paymentMethodOverview(entries,jobs,company,state.finance,customerYear),{title:'Betaalwijzen · '+customerYear}):
+        statsComparisonHtml(buckets,customerMode,customerMode?'in '+customerYear:periods[mode])+statsComparisonChartHtml(buckets,customerMode);
       const undated=financialEvents(entries,jobs,company).reduce((n,event)=>n+(event.undatedReceived||0),0);
       modal(`${modalHead('Statistieken')}<div class="tabs stats-tabs" aria-label="Statistieken per periode">
         <button type="button" class="tab ${customerMode?'active':''}" data-stat-mode="client">Per klant</button>
         <button type="button" class="tab ${mode==='month'?'active':''}" data-stat-mode="month">Per maand</button>
         <button type="button" class="tab ${mode==='quarter'?'active':''}" data-stat-mode="quarter">Per kwartaal</button>
         <button type="button" class="tab ${mode==='year'?'active':''}" data-stat-mode="year">Per jaar</button>
+        <button type="button" class="tab ${methodMode?'active':''}" data-stat-mode="payment">Betaalwijze</button>
       </div>
-      ${customerMode?`<div class="field stat-year-field"><label for="customerStatsYear">Kalenderjaar</label><select id="customerStatsYear">${years.map(y=>`<option value="${y}" ${y===customerYear?'selected':''}>${y}</option>`).join('')}</select></div>`:''}
-      ${content}<p class="muted small stats-comparison-note">Rood toont alleen wat bij Klussen of Facturen daadwerkelijk nog openstaat.</p>
-      ${undated>0?`<p class="muted small stats-undated">Zonder uitvoerdatum (niet ingedeeld): ${money(undated)}</p>`:''}`);
+      ${customerMode||methodMode?`<div class="field stat-year-field"><label for="customerStatsYear">Kalenderjaar</label><select id="customerStatsYear">${years.map(y=>`<option value="${y}" ${y===customerYear?'selected':''}>${y}</option>`).join('')}</select></div>`:''}
+      ${content}${methodMode?'<p class="muted small">Contant en bank + betaalverzoek zijn eigen ontvangsten zonder voorgeschoten kosten. Factuurontvangsten (inclusief eventuele btw) zijn een aparte specificatie en tellen niet opnieuw mee. Alle bedragen volgen de uitvoeringsdatum.</p>':'<p class="muted small stats-comparison-note">Rood toont alleen wat bij Klussen of Facturen daadwerkelijk nog openstaat.</p>'}
+      ${!methodMode&&undated>0?`<p class="muted small stats-undated">Zonder uitvoerdatum (niet ingedeeld): ${money(undated)}</p>`:''}`);
       $$('[data-stat-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.statMode;draw()}));
       $('#customerStatsYear')?.addEventListener('change',e=>{customerYear=Number(e.target.value);draw()});
     };

@@ -4,7 +4,7 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 module.exports=async(browser,origin)=>{
  const root=path.join(__dirname,'..'),cloudSource=(await fs.readFile(path.join(root,'app/cloud.js'),'utf8')).replace('return {readBackupSnapshot,','return {encodeRecord,decodeRecord,readBackupSnapshot,');
- const source=(await fs.readFile(path.join(root,'app/app.js'),'utf8')).replace('return {init,go};','return {init,go,state,editJob,showJob,showDocument,showPayments,renderJobs,renderDashboard,refreshFinance,jobMinutes,jobFinancial,financialEvents,periodBuckets,customerStatBuckets,simpleStatsChartHtml,statsComparisonChartHtml,showClientHistory,showTimeStats,generateAnnualInvoiceReport,createBusinessDoc,setInvoiceJobLink};').replace("document.addEventListener('DOMContentLoaded',()=>App.init());",'');
+ const source=(await fs.readFile(path.join(root,'app/app.js'),'utf8')).replace('return {init,go};','return {init,go,state,editJob,showJob,showDocument,showPayments,renderJobs,renderDashboard,refreshFinance,jobMinutes,jobFinancial,financialEvents,periodBuckets,customerStatBuckets,simpleStatsChartHtml,statsComparisonChartHtml,paymentMethodOverview,paymentMethodOverviewHtml,showClientHistory,showTimeStats,generateAnnualInvoiceReport,createBusinessDoc,setInvoiceJobLink};').replace("document.addEventListener('DOMContentLoaded',()=>App.init());",'');
  const context=await browser.newContext({serviceWorkers:'block',viewport:{width:390,height:844}}),page=await context.newPage(),errors=[],writes=[];
  page.setDefaultTimeout(15000);
  await page.clock.setFixedTime(new Date('2026-10-21T10:00:00Z'));
@@ -178,6 +178,16 @@ module.exports=async(browser,origin)=>{
   assert.doesNotMatch(await page.locator('#modalRoot').innerText(),/afgesproken|270,00/i,'Jaar zonder afgesproken');
   await page.locator('[data-stat-mode="client"]').click();
   assert.match(await page.locator('#modalRoot .stats-client-combined').innerText(),/Fictieve klant/);
+  await page.locator('[data-stat-mode="payment"]').click();
+  assert.equal(await page.locator('#modalRoot [data-payment-group="cash"]').count(),1);
+  assert.equal(await page.locator('#modalRoot [data-payment-group="bank"]').count(),1);
+  assert.equal(await page.locator('#modalRoot .payment-invoice-values > div').count(),2);
+  assert.match(await page.locator('#modalRoot .payment-invoice-detail').innerText(),/Ontvangen via facturen[\s\S]*Waarvan ontvangen btw/);
+  assert.equal(await page.locator('#customerStatsYear').inputValue(),String(stats.fixtureYear));
+  assert.equal(await page.locator('#modalRoot .stats-comparison-summary').count(),0,'Nieuwe betaalwijze-tab vervangt niet de andere statistieken');
+  await page.locator('[data-stat-mode="client"]').click();
+  assert.match(await page.locator('#modalRoot .stats-client-combined').innerText(),/Fictieve klant/);
+
   console.log('PASS: uren per klant en uitsluitend ontvangen/openstaande verdiensten in klanten-, maand-, kwartaal- en jaaroverzichten');
   await page.evaluate(()=>App.generateAnnualInvoiceReport(fixtureYear));
   // Financial records use the unchanged existing cloud format and backup schema.
@@ -322,14 +332,14 @@ module.exports=async(browser,origin)=>{
   // Agreement amounts only become outstanding when BOTH status and all planned end times qualify.
   await page.evaluate(()=>App.renderJobs());
   const numeric=async selector=>Number((await page.locator(selector).innerText()).replace(/[^0-9,-]/g,'').replace(',','.'));
-  const baseline={open:await numeric('#jobOpenTotal'),cash:await numeric('#jobCashTotal'),invoice:await numeric('#jobInvoiceTotal')};
+  const baseline={open:await numeric('#jobOpenTotal'),cash:await numeric('.job-totals [data-payment-group="cash"] strong'),bank:await numeric('.job-totals [data-payment-group="bank"] strong'),invoice:await numeric('.job-totals .payment-invoice-values > div:first-child strong')};
   const recordsBefore=await page.evaluate(async()=>JSON.stringify({hours:await JKDB.all('timeEntries'),docs:await JKDB.all('documents'),payments:(await JKDB.all('settings')).filter(r=>r.kind==='jkPayment')}));
   await page.evaluate(async()=>{
     await JKDB.putLocal('jobs',{id:'settlement',clientId:'client',clientName:'Fictieve klant',title:'Vaste afspraak later klaar',pricingType:'fixed',agreedAmount:150,paymentType:'invoice',status:'gepland',date:'2026-10-01',workDays:[{date:'2026-10-01',startTime:'08:00',endTime:'16:00'},{date:'2026-10-25',startTime:'08:00',endTime:'16:00'}]});
     await JKDB.putLocal('jobs',{id:'settlement-cash',title:'Contante afspraak',pricingType:'fixed',agreedAmount:200,paymentType:'cash',status:'open',date:'2026-10-01'});
     await App.renderJobs();
   });
-  assert.equal(await numeric('#jobOpenTotal'),baseline.open);assert.equal(await numeric('#jobCashTotal'),baseline.cash);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice);
+  assert.equal(await numeric('#jobOpenTotal'),baseline.open);assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash);assert.equal(await numeric('.job-totals .payment-invoice-values > div:first-child strong'),baseline.invoice);
   const setSettlement=async changes=>page.evaluate(async changes=>{const j=await JKDB.get('jobs','settlement');await JKDB.putLocal('jobs',{...j,...changes});await App.renderJobs();},changes);
   const settlementMetrics=()=>page.evaluate(()=>App.state.finance.job(App.state.finance.jobs.find(j=>j.id==='settlement')));
   await setSettlement({status:'afgerond'});assert.equal((await settlementMetrics()).open,0,'Completed alone is insufficient with a future workday');assert.equal((await settlementMetrics()).agreed,150);assert.equal((await settlementMetrics()).paid,false);
@@ -340,14 +350,24 @@ module.exports=async(browser,origin)=>{
   assert.equal((await settlementMetrics()).open,150);assert.equal(await numeric('#jobOpenTotal'),baseline.open+150);
   await page.evaluate(()=>App.renderDashboard());assert.equal(await numeric('#dashOpenPayments strong'),baseline.open+150);
   await page.evaluate(()=>App.renderJobs());
-  for(const filter of ['cash','invoice','all']){await page.locator(`[data-jpf="${filter}"]`).click();await page.waitForFunction(value=>document.querySelector(`[data-jpf="${value}"]`).classList.contains('active'),filter);assert.equal(await numeric('#jobOpenTotal'),baseline.open+150);assert.equal(await numeric('#jobCashTotal'),baseline.cash);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice);}
+  for(const filter of ['cash','invoice','all']){await page.locator(`[data-jpf="${filter}"]`).click();await page.waitForFunction(value=>document.querySelector(`[data-jpf="${value}"]`).classList.contains('active'),filter);assert.equal(await numeric('#jobOpenTotal'),baseline.open+150);assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash);assert.equal(await numeric('.job-totals .payment-invoice-values > div:first-child strong'),baseline.invoice);}
   for(const width of [390,1024]){
     await page.setViewportSize({width,height:844});
-    const layout=await page.locator('.job-totals').evaluate(e=>{const cards=[...e.querySelectorAll('.kpi')],boxes=cards.map(c=>c.getBoundingClientRect()),style=getComputedStyle(cards[0]);return {fits:e.scrollWidth<=e.clientWidth,center:style.textAlign,color:style.color,bg:style.backgroundColor,others:cards.slice(1).map(c=>getComputedStyle(c).backgroundColor),fullWidth:boxes[0].width>boxes[1].width*1.9,below:boxes.slice(1).every(b=>b.top>=boxes[0].bottom),note:e.querySelectorAll('p').length};});
-    assert.ok(layout.fits&&layout.fullWidth&&layout.below);assert.equal(layout.center,'center');assert.equal(layout.bg,'rgb(254, 228, 226)');assert.equal(layout.color,'rgb(180, 35, 24)');assert.deepEqual(layout.others,['rgb(255, 255, 255)','rgb(255, 255, 255)']);assert.equal(layout.note,0);
+    const layout=await page.locator('.job-totals').evaluate(e=>{
+      const open=e.querySelector('.job-open-filter'),methods=[...e.querySelectorAll('.payment-method-box')],
+        invoice=e.querySelector('.payment-invoice-detail'),style=getComputedStyle(open),
+        cash=methods[0].getBoundingClientRect(),bank=methods[1].getBoundingClientRect();
+      const first=open.getBoundingClientRect(),last=invoice.getBoundingClientRect();
+      return {fits:e.scrollWidth<=e.clientWidth,center:style.textAlign,color:style.color,bg:style.backgroundColor,
+        fullWidth:first.width>Math.max(cash.width,bank.width)*1.9,below:cash.top>=first.bottom&&Math.abs(cash.top-bank.top)<2,
+        invoiceBelow:last.top>=cash.bottom&&last.top>=bank.bottom,note:e.querySelectorAll('p').length};
+    });
+    assert.ok(layout.fits&&layout.fullWidth&&layout.below&&layout.invoiceBelow);
+    assert.equal(layout.center,'center');assert.equal(layout.bg,'rgb(254, 228, 226)');
+    assert.equal(layout.color,'rgb(180, 35, 24)');assert.equal(layout.note,0);
   }await page.setViewportSize({width:390,height:844});
   const preserved=await page.evaluate(async()=>JSON.stringify({hours:await JKDB.all('timeEntries'),docs:await JKDB.all('documents'),payments:(await JKDB.all('settings')).filter(r=>r.kind==='jkPayment')}));assert.equal(preserved,recordsBefore,'Changing settlement status never rewrites hours, invoices or payments');
-  await page.evaluate(async()=>{await JKDB.putLocal('settings',{id:'settlement-payment',kind:'jkPayment',jobId:'settlement',amount:100,date:'2026-10-21',method:'bank'});await App.renderJobs();});assert.equal((await settlementMetrics()).open,50);assert.equal((await settlementMetrics()).received,100);assert.equal((await settlementMetrics()).paid,false);assert.equal(await numeric('#jobOpenTotal'),baseline.open+50);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice+100);
+  await page.evaluate(async()=>{await JKDB.putLocal('settings',{id:'settlement-payment',kind:'jkPayment',jobId:'settlement',amount:100,date:'2026-10-21',method:'bank'});await App.renderJobs();});assert.equal((await settlementMetrics()).open,50);assert.equal((await settlementMetrics()).received,100);assert.equal((await settlementMetrics()).paid,false);assert.equal(await numeric('#jobOpenTotal'),baseline.open+50);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+100);
   await page.evaluate(()=>App.editJob('settlement'));await page.locator('#addWorkDay').click();await page.locator('[name=dayDate]').last().fill('2026-10-27');await saveJob();await page.evaluate(()=>App.renderJobs());assert.equal((await settlementMetrics()).open,0);assert.equal((await settlementMetrics()).balance,50);assert.equal((await settlementMetrics()).received,100);assert.equal(await numeric('#jobOpenTotal'),baseline.open);
   // Exact end boundary and overnight work use Europe/Amsterdam, including an untimed date.
   await setSettlement({status:'afgerond',workDays:[{date:'2026-10-20',startTime:'20:00',endTime:'02:00'}]});
@@ -365,12 +385,13 @@ module.exports=async(browser,origin)=>{
     await JKDB.putLocal('settings',{id:'received-orphan-payment',kind:'jkPayment',invoiceId:'received-orphan',amount:30,date:'2026-10-21',method:'bank'});
     await App.renderJobs();
   });
-  assert.equal(await numeric('#jobCashTotal'),baseline.cash+50);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice+130);assert.equal(await numeric('#jobOpenTotal'),baseline.open+50,'Only orphan invoice remainder is newly outstanding');
+  assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash+50);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+130);
+  assert.equal(await numeric('.job-totals .payment-invoice-values > div:first-child strong'),baseline.invoice+130);assert.equal(await numeric('#jobOpenTotal'),baseline.open+50,'Only orphan invoice remainder is newly outstanding');
   await page.evaluate(async()=>{const p=await JKDB.get('settings','settlement-payment');await JKDB.putLocal('settings',{...p,invoiceId:'received-linked',amount:150});await App.renderJobs();});
-  assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice+180,'Moving and editing the same payment through its linked invoice never duplicates received totals');assert.equal(await numeric('#jobCashTotal'),baseline.cash+50);
-  await page.evaluate(async()=>{const p=await JKDB.get('settings','received-cash');await JKDB.putLocal('settings',{...p,voided:true});await App.renderJobs();});assert.equal(await numeric('#jobCashTotal'),baseline.cash);assert.equal(await numeric('#jobInvoiceTotal'),baseline.invoice+180);
+  assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+180);assert.equal(await numeric('.job-totals .payment-invoice-values > div:first-child strong'),baseline.invoice+180,'Moving and editing the same payment through its linked invoice never duplicates received totals');assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash+50);
+  await page.evaluate(async()=>{const p=await JKDB.get('settings','received-cash');await JKDB.putLocal('settings',{...p,voided:true});await App.renderJobs();});assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+180);assert.equal(await numeric('.job-totals .payment-invoice-values > div:first-child strong'),baseline.invoice+180);
   console.log('PASS: uitsluitend ontvangen contant/factuur, deelbetalingen, onbetaalde afspraken uitgesloten, gekoppelde/losse facturen, wijzigen en verwijderen; gecentreerd rood openstaand en witte totalen zonder toelichting');
-  console.log('PASS: compacte drie klustotalen; openstaand uitsluitend afgerond én laatste einde voorbij; dashboard, filters, toekomst/heropenen, deelbetaling, nachtwerk/middernacht en bytegelijk behoud uren/facturen/betalingen');
+  console.log('PASS: compact klussaldo en betaalwijzeverdeling met factuur/btw-specificatie; openstaand uitsluitend afgerond én laatste einde voorbij; dashboard, filters, toekomst/heropenen, deelbetaling, nachtwerk/middernacht en bytegelijk behoud uren/facturen/betalingen');
   // Issue #35: clickable outstanding filter, rounding without creating revenue and reversible settlement.
   await page.evaluate(async()=>{
     await JKDB.putLocal('jobs',{id:'issue35',title:'Afronding bij montage',clientName:'Proefklant',date:'2026-10-01',status:'afgerond',pricingType:'fixed',agreedAmount:105,hourlyRate:15,paymentType:'cash'});
@@ -460,6 +481,49 @@ module.exports=async(browser,origin)=>{
   assert.equal(earnings.orphan.ownReceived,150,'Losse factuur: ook bonvergoeding uitsluiten');
   assert.equal(earnings.partial.ownReceived,100,'Deelbetaling niet verlagen met nog niet ontvangen materiaalvergoeding');
   assert.equal(earnings.tip.ownReceived,160,'Meerbetaling boven klussom hoort bij eigen inkomsten');
+
+  // Fictieve KOR-/21%-facturen, deelbetalingen, bank + betaalverzoek en
+  // voorschotbonnen: de factuurspecificatie is geen extra inkomstencategorie.
+  const methodFixture=await page.evaluate(()=>{
+    const year=fixtureYear, next=String(year+1);
+    const jobs=[
+      {id:'tax',date:year+'-02-01',pricingType:'fixed',agreedAmount:121,clientId:'client'},
+      {id:'cash',date:year+'-02-02',pricingType:'fixed',agreedAmount:70,paymentType:'cash'},
+      {id:'reimburse',date:year+'-02-03',pricingType:'fixed',agreedAmount:190,extraAmount:40,extraIncluded:true,paymentType:'invoice'},
+      {id:'next',date:next+'-02-01',pricingType:'fixed',agreedAmount:30,paymentType:'cash'}
+    ];
+    const docs=[
+      {id:'tax-invoice',folder:'factuur',meta:{jobId:'tax',total:121,vatAmount:21,korApplied:false,workDate:year+'-02-01'}},
+      {id:'kor-invoice',folder:'factuur',meta:{jobId:'reimburse',total:190,vatAmount:0,korApplied:true,workDate:year+'-02-03',
+        lines:[{qty:1,price:150,description:'Werk'},{qty:1,price:40,description:'Bon',expenseId:'bon-1'}]}}
+    ];
+    const pay=[
+      {id:'tax-p1',kind:'jkPayment',invoiceId:'tax-invoice',amount:60.5,method:'card',date:year+'-02-15'},
+      {id:'tax-p2',kind:'jkPayment',jobId:'tax',amount:60.5,method:'bank',date:year+'-03-01'},
+      {id:'cash-p',kind:'jkPayment',jobId:'cash',amount:70,method:'cash',date:year+'-02-10'},
+      {id:'kor-p',kind:'jkPayment',invoiceId:'kor-invoice',amount:190,method:'bank',date:year+'-03-10'},
+      {id:'next-p',kind:'jkPayment',jobId:'next',amount:30,method:'cash',date:next+'-02-20'}
+    ];
+    const f=JKFinance.snapshot(jobs,docs,pay,j=>JKFinance.price(j,0,10),()=>true);
+    const yearly=App.paymentMethodOverview([],jobs,{},f,year);
+    const all=App.paymentMethodOverview([],jobs,{},f);
+    const partial=JKFinance.snapshot(jobs,docs,pay.filter(x=>x.id!=='tax-p2'),j=>JKFinance.price(j,0,10),()=>true);
+    const partialResult=App.paymentMethodOverview([],jobs,{},partial,year);
+    return {yearly,all,partialResult,original:JSON.stringify({jobs,docs,pay}),
+      sumEarned:App.financialEvents([],jobs,{},f).reduce((n,e)=>n+(e.received||0),0)};
+  });
+  assert.equal(methodFixture.yearly.cash,70,'Contant telt alleen contante ontvangsten');
+  assert.equal(methodFixture.yearly.bankAndRequest,271,'Bank en betaalverzoek samen, geen € 40 voorschotbon');
+  assert.equal(methodFixture.yearly.invoiceGross,311,'Factuurontvangsten inclusief btw, geen dubbeltelling van algemene klusbetaling');
+  assert.equal(methodFixture.yearly.invoiceVat,21,'Werkelijk ontvangen btw bij volledig betaalde 21%-factuur, KOR €0');
+  assert.equal(methodFixture.partialResult.invoiceGross,250.5,'Deelfactuur + KOR-factuur correct');
+  assert.equal(methodFixture.partialResult.invoiceVat,10.5,'Btw bij halfbetaalde factuur slechts half meegeteld');
+  assert.equal(methodFixture.all.cash,100,'Alle jaren samen telt contant 2027 ook mee');
+  assert.equal(methodFixture.yearly.cash+methodFixture.yearly.bankAndRequest,methodFixture.sumEarned-30,'Betaalwijzevergelijking gebruikt exact dezelfde eigen ontvangen verdiensten');
+  const methodHtml=await page.evaluate(()=>App.paymentMethodOverviewHtml({cash:70,bankAndRequest:271,other:0,unknown:0,invoiceGross:311,invoiceVat:21}));
+  assert.match(methodHtml,/Bank \+ betaalverzoek/);
+  assert.doesNotMatch(methodHtml,/data-payment-group="other"/,'Geen lege restcategorie');
+  console.log('PASS: contant apart, bank en betaalverzoek samen, btw naar betaalde factuurdelen, KOR nul en voorschotten uitgesloten');
 
   // Eigen verdiensten en openstaand volgen de LAATSTE uitvoerdag, nooit de betaling.
   const endDateStats=await page.evaluate(()=>{
