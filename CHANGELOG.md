@@ -1,3 +1,10 @@
+## v71.13.24 — werkbon toont gevraagd, ontvangen en verschil afzonderlijk
+- De 4×6 inch zwart-wit werkbon toont in het onderdeel **Financieel** altijd afzonderlijke regels **Gevraagd**, **Ontvangen** en **Verschil**, naast de bestaande prijsafspraak en betaalwijze.
+- Bij **€ 0 gevraagd en € 75 ontvangen** staat **Verschil: + € 75,00**. Bij **€ 100 gevraagd en € 75 ontvangen** staat **Verschil: − € 25,00**. Bij gelijke bedragen staat **€ 0,00**. Bij een nog onbekende prijs wordt geen verschil verzonnen.
+- In de werkboneditor zijn **Gevraagd bedrag** en **Ontvangen bedrag** los aanpasbaar voor de afdruk; het plus/minverschil wordt automatisch opnieuw berekend bij **Voorbeeld bijwerken**, **Delen** en **PNG downloaden**. Ook eurotekens, Nederlandse getalnotatie en centen worden verwerkt.
+- De werkbon blijft een portret-PNG van **1200 × 1800 pixels** zonder grijze balken of meeneemlijst. Klusgegevens, de betaalhistorie, facturen, echte openstaande bedragen en btw-statistieken worden niet gewijzigd.
+- Browserregressies testen de plus-, min-, nul- en onbekende-prijsgevallen, aanpassen van printbedragen en daadwerkelijke canvasregels **Gevraagd / Ontvangen / Verschil**.
+
 ## v71.13.23 — vrijwillige betaling bij gratis klus correct als Betaald en op werkbon
 - Bij een klus met **€ 0,00 afgesproken** en een daadwerkelijk geregistreerde betaling (bijvoorbeeld **€ 75,00** bij familiehulp) wordt de betaalstatus voortaan **Betaald**, zodra er geen saldo meer openstaat. Geen foutieve status **Deels betaald** meer uitsluitend vanwege de nulprijs.
 - De oorspronkelijke prijsafspraak blijft **€ 0,00**, de werkelijk ontvangen vergoeding blijft **€ 75,00**, **Nog te ontvangen € 0,00**; de bestaande betaalregistratie, gekoppelde uren en eigen-inkomstenstatistieken worden niet kunstmatig aangepast.
