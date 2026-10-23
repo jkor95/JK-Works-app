@@ -948,6 +948,44 @@ const App = (() => {
     $('#requestQuote').addEventListener('click',()=>convertRequest(true));
   }
 
+  // Uitsluitend voor het interne printoverzicht. Gebruik EXACT dezelfde echte
+  // openstanden als het tabblad Openstaand, inclusief losse facturen.
+  function openPaymentLabelData(jobs,orphanInvoices,entries,company,finance=state.finance){
+    const rows=[];
+    const timeEntries=uniqueEntries(entries||[]);
+    for(const job of jobs||[]){
+      const due=jobFinancial(job,timeEntries,company).open;
+      if(!(due>0.005))continue;
+      const actual=timeEntries.filter(e=>e.jobId===job.id&&entryMinutes(e)>0 &&
+        (!e.autoFromJobSchedule||e.actualConfirmed))
+        .sort((a,b)=>entryDate(a).localeCompare(entryDate(b))||entryFrom(a).localeCompare(entryFrom(b)));
+      const plans=jobWorkDays(job);
+      const days=actual.length?actual.map(e=>({date:entryDate(e),start:entryFrom(e),end:entryTo(e)})):
+        plans.map(d=>({date:d.date,start:d.startTime||'',end:d.endTime||''}));
+      const dateText=days.length?[...new Set(days.map(d=>nlDate(d.date)))].join(', '):nlDate(job.date||'');
+      const times=days.map(d=>[d.start,d.end].filter(Boolean).join(' - ')).filter(Boolean).join('; ');
+      rows.push({id:'job:'+job.id,client:job.clientName||'Onbekende klant',
+        job:job.title||'Klus',date:dateText,times,amount:money(due),
+        sortDate:actual.length?entryDate(actual[0]):plans[0]?.date||job.date||''});
+    }
+    for(const invoice of orphanInvoices||[]){
+      const due=finance.document(invoice).open;
+      if(!(due>0.005))continue;
+      const meta=invoice.meta||{},client=meta.client||{};
+      const date=meta.workDate||meta.date||meta.issueDate||'';
+      rows.push({id:'invoice:'+invoice.id,
+        client:client.name||meta.clientName||invoice.clientName||'Onbekende klant',
+        job:'Factuur '+(meta.number||invoice.filename||invoice.id),
+        date:date?nlDate(String(date).slice(0,10)):'',times:'',amount:money(due),sortDate:String(date).slice(0,10)});
+    }
+    return rows.sort((a,b)=>(a.sortDate||'9999').localeCompare(b.sortDate||'9999')||
+      a.client.localeCompare(b.client,'nl')||a.job.localeCompare(b.job,'nl'));
+  }
+  async function showOpenPaymentLabel(jobs,orphanInvoices,entries,company){
+    if(!window.JKOpenPaymentsEditor?.open)throw Error('Openstaande werkbon is niet geladen. Vernieuw de webapp.');
+    const data=openPaymentLabelData(jobs,orphanInvoices,entries,company);
+    window.JKOpenPaymentsEditor.open({items:data},{modal,modalHead,downloadBlob,toast,closeModal});
+  }
   async function renderJobs(){
     await refreshFinance();title('Klussen');
     const [allJobs,entries,company]=await Promise.all([JKDB.all('jobs'),JKDB.all('timeEntries'),JKDB.get('settings','company')]);
@@ -962,10 +1000,11 @@ const App = (() => {
       <div class="card job-totals"><div class="kpi-row"><button type="button" class="kpi job-open-filter" id="jobOpenFilter" aria-pressed="${state.jobPaymentFilter==='open'}"><strong id="jobOpenTotal">${money(openTotal)}</strong><span>Openstaand bedrag · bekijken →</span></button></div>${paymentMethodOverviewHtml(paymentSummary,{compact:true,title:'Ontvangen per betaalwijze'})}</div>
       ${['open','all'].includes(state.jobPaymentFilter)&&orphanOpen.length?`<div class="card"><h3>Open facturen zonder klus</h3>${orphanOpen.map(d=>`<button type="button" class="secondary" data-unassigned-invoice="${esc(d.id)}">${esc(d.meta?.number||d.filename||'Factuur')} · nog ${money(state.finance.document(d).open)}</button>`).join('')}</div>`:''}
       <div class="tabs" style="margin-top:12px"><button class="tab ${state.jobPaymentFilter==='all'?'active':''}" data-jpf="all">Alles</button><button class="tab ${state.jobPaymentFilter==='invoice'?'active':''}" data-jpf="invoice">Factuur</button><button class="tab ${state.jobPaymentFilter==='cash'?'active':''}" data-jpf="cash">Contant</button><button class="tab ${state.jobPaymentFilter==='open'?'active':''}" data-jpf="open">Openstaand</button></div>
-      <div class="section-title"><h2>${state.jobPaymentFilter==='open'?'Openstaande klussen':'Klussen'}</h2></div>${visible.length?`<div class="list">${visible.map(j=>{const f=jobFinancial(j,entries,company),unpaid=f.open>0;return `<div class="list-item clickable job-payment-row ${unpaid?'payment-unpaid':'payment-paid'}" data-job="${esc(j.id)}"><div class="main"><div class="job-row-heading"><div class="title">${esc(j.title)}</div><span class="pill job-status ${j.status==='afgerond'?'success':'warn'}">${esc(j.status||'open')}</span></div><div class="sub">${esc(j.clientName||'Geen klant')} · ${jobWorkDays(j).length>1?jobWorkDays(j).length+' werkdagen · '+nlDate(j.date):nlDate(j.date)||'geen datum'}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}</div>${unpaid?`<div class="job-payment-badge"><span class="pill danger">Nog te ontvangen: ${money(f.open)}</span></div>`:''}</div></div>`}).join('')}</div>`:'<div class="empty">Geen klussen in deze selectie.</div>'}
+      <div class="section-title"><h2>${state.jobPaymentFilter==='open'?'Openstaande klussen':'Klussen'}</h2></div>${state.jobPaymentFilter==='open'&&(openJobs.length||orphanOpen.length)?'<button type="button" class="secondary" id="openPaymentsPrint" style="margin-bottom:12px">🖨️ Openstaand overzicht / label</button>':''}${visible.length?`<div class="list">${visible.map(j=>{const f=jobFinancial(j,entries,company),unpaid=f.open>0;return `<div class="list-item clickable job-payment-row ${unpaid?'payment-unpaid':'payment-paid'}" data-job="${esc(j.id)}"><div class="main"><div class="job-row-heading"><div class="title">${esc(j.title)}</div><span class="pill job-status ${j.status==='afgerond'?'success':'warn'}">${esc(j.status||'open')}</span></div><div class="sub">${esc(j.clientName||'Geen klant')} · ${jobWorkDays(j).length>1?jobWorkDays(j).length+' werkdagen · '+nlDate(j.date):nlDate(j.date)||'geen datum'}${jobTimeLabel(j)?' · '+esc(jobTimeLabel(j)):''}</div>${unpaid?`<div class="job-payment-badge"><span class="pill danger">Nog te ontvangen: ${money(f.open)}</span></div>`:''}</div></div>`}).join('')}</div>`:'<div class="empty">Geen klussen in deze selectie.</div>'}
       ${state.jobPaymentFilter==='open'?'<button type="button" class="secondary" id="showAllJobs">Alles tonen</button>':''}`;
     $$('[data-unassigned-invoice]').forEach(b=>b.addEventListener('click',()=>showDocument(b.dataset.unassignedInvoice)));
     $('#newJob').addEventListener('click',()=>editJob());
+    $('#openPaymentsPrint')?.addEventListener('click',()=>{try{showOpenPaymentLabel(openJobs,orphanOpen,entries,company)}catch(e){alert('Werkbon openen mislukt: '+(e.message||e));}});
     $$('[data-job]').forEach(x=>x.addEventListener('click',()=>showJob(x.dataset.job)));
     $('#jobOpenFilter').addEventListener('click',()=>{state.jobPaymentFilter=state.jobPaymentFilter==='open'?'all':'open';renderJobs()});
     $('#showAllJobs')?.addEventListener('click',()=>{state.jobPaymentFilter='all';renderJobs()});

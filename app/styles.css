@@ -427,3 +427,16 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 .job-totals .payment-method-breakdown{margin-bottom:0}
 .job-totals .payment-method-box strong{font-size:17px}
 @media(max-width:420px){.payment-method-box strong{font-size:17px}.payment-method-box{padding:10px}.payment-invoice-values{gap:8px}}
+
+
+/* Interne 4x6 openstaande-betalingenbon: minimaal printvriendelijke zwart-wit PNG. */
+.open-label-row{border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0;min-width:0}
+.open-label-row>.checkline{display:flex;align-items:center;gap:8px;margin:0 0 10px}
+.open-label-row .form-grid{min-width:0}
+.open-label-row:not(:has([name="include"]:checked)){opacity:.65}
+.open-label-preview-wrap{background:#fff;border-radius:10px;max-width:380px;margin:8px auto}
+.open-label-pages{justify-content:space-between;align-items:center;gap:7px;flex-wrap:nowrap}
+.open-label-pages button{flex:0 1 125px;min-width:0}
+#openLabelPageCount{text-align:center;font-variant-numeric:tabular-nums}
+.open-label-summary{font-size:14px;font-weight:700;margin:4px 0 12px}
+#openLabelError{color:#ae2e24;font-weight:700;margin:10px 0}
