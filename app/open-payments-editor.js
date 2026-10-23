@@ -86,15 +86,17 @@ window.JKOpenPaymentsEditor=(()=>{
      if(!render())return;
      // Synchronously build files: iOS needs navigator.share in the originating tap.
      const files=canvases.map((canvas,i)=>new File([bytesFromDataURL(canvas.toDataURL('image/png'))],filename(i),{type:'image/png'}));
-     if(navigator.share&&(!navigator.canShare||navigator.canShare({files}))){
-       try{navigator.share({files}).catch(error=>{
+     const shareFiles=navigator.canShare&&navigator.canShare({files})?files:
+       navigator.canShare&&navigator.canShare({files:[files[pageIndex]]})?[files[pageIndex]]:[];
+     if(navigator.share&&shareFiles.length){
+       try{navigator.share({files:shareFiles}).catch(error=>{
          if(error?.name==='AbortError')return;
          message.hidden=false;message.textContent='Delen lukte niet. Download de afbeeldingen één voor één of probeer de deelknop opnieuw.';
        });}catch{
          message.hidden=false;message.textContent='Delen is niet beschikbaar. Download de afbeeldingen één voor één.';
        }
      }else{
-       message.hidden=false;message.textContent='Meerdere afbeeldingen delen wordt niet ondersteund. Download elke pagina via Huidige PNG downloaden.';
+       message.hidden=false;message.textContent='Afbeeldingen delen wordt hier niet ondersteund. Download elke pagina via Huidige PNG downloaden.';
      }
    });
    $('#openLabelBack').addEventListener('click',()=>api.closeModal());
