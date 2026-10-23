@@ -13,7 +13,7 @@ window.JKJobLabel=(()=>{
       {heading:'Klant',rows:keep([row('Bedrijf / naam:',data.client),row('Contact:',data.contact),row('Telefoon:',data.phone)])},
       {heading:'Adressen',rows:keep([row('Klantadres:',data.clientAddress),row('Uitvoering:',data.executionAddress)])},
       {heading:'Planning & uitvoering',rows:keep([row('Datum / tijd:',data.planning),row('Werkdagen:',data.workDays),row('Gewerkte uren:',data.workedHours),row('Nog gepland:',data.plannedHours)])},
-      {heading:'Financieel',rows:keep([row('Prijsafspraak:',data.priceType),row(data.amountLabel||'Bedrag:',data.amount),row('Afhandeling:',data.payment)])}
+      {heading:'Financieel',rows:keep([row('Prijsafspraak:',data.priceType),row('Gevraagd:',data.requestedAmount),row('Ontvangen:',data.receivedAmount),row('Verschil:',data.difference),row('Afhandeling:',data.payment)])}
     ];
     const notes=lines(data.notes);
     if(notes.length)sections.push({heading:'Notities',notes});

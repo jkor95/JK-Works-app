@@ -107,11 +107,11 @@ window.JKJobLabelEditor=(()=>{
      card:'Betaalverzoek',cash:'Contant',bank:'Bankoverschrijving',other:'Anders'
    }[payments[payments.length-1].method]||'Anders'):(job.paymentType==='cash'?'Contant':'Factuur');
    const priceLabel=({fixed:'Vaste prijs',manual:'Handmatig bedrag',hourly:'Op uurbasis'})[job.pricingType]||'Op uurbasis';
-   // Bij een kosteloze klus met een vrijwillige betaling is de oorspronkelijke
-   // afspraak 0 euro. Vermeld de werkelijk ontvangen vergoeding op de werkbon,
-   // maar doe niet alsof de prijsafspraak achteraf is verhoogd.
-   const receivedInstead=finance&&!finance.pending&&Number(finance.agreed)===0&&Number(finance.received)>0;
-   const amountValue=receivedInstead?finance.received:finance?.agreed;
+   // Printprijs en ontvangst blijven afzonderlijk. Dit wijzigt nooit
+   // de opgeslagen prijsafspraak of betaalhistorie van de klus.
+   const euro=value=>new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(value);
+   const requestedAmount=finance?.pending?'Nog te bepalen':(finance?.agreed!=null?euro(finance.agreed):'');
+   const receivedAmount=euro(finance?.received||0);
    return {
      number:jobNumber(jobs,job),
      status:job.status||'',title:job.title||'',
@@ -120,8 +120,7 @@ window.JKJobLabelEditor=(()=>{
      executionAddress:joinAddress(address.street,address.postal,address.city),
      planning:schedule.planning,workDays:schedule.workDays?String(schedule.workDays):'',
      workedHours:hourText(schedule.workedMinutes),plannedHours:hourText(schedule.plannedMinutes),
-     priceType:priceLabel,amountLabel:receivedInstead?'Ontvangen:':'Bedrag:',amount:finance?.pending?'':(amountValue!=null?new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(amountValue):''),
-     payment,
+     priceType:priceLabel,requestedAmount,receivedAmount,payment,
      notes:String(job.notes||'')
    };
  }
@@ -131,11 +130,32 @@ window.JKJobLabelEditor=(()=>{
  function area(name,label,value,tip){
    return '<div class="field"><label for="jobLabel-'+name+'">'+escapeHTML(label)+'</label><textarea id="jobLabel-'+name+'" name="'+name+'" rows="4">'+escapeHTML(value)+'</textarea>'+(tip?'<small class="muted">'+escapeHTML(tip)+'</small>':'')+'</div>';
  }
+ // Parseer invoer als centen: "€ 1.234,50", "1234.50" of "75".
+ // Bij een onbepaald bedrag wordt geen fictief verschil berekend.
+ function amountInCents(value){
+   let text=String(value==null?'':value).replace(/[\s\u00a0\u202f€]/g,'').trim();
+   if(!text||!/^-?[0-9][0-9.,]*$/.test(text))return null;
+   if(text.includes(',')&&text.includes('.')){
+     const decimal=text.lastIndexOf(',')>text.lastIndexOf('.')?',':'.';
+     text=decimal===','?text.replace(/\./g,'').replace(',','.'):text.replace(/,/g,'');
+   }else if(text.includes(','))text=text.replace(',', '.');
+   else if(/^-?\d{1,3}(\.\d{3})+$/.test(text))text=text.replace(/\./g,'');
+   const parsed=Number(text);
+   return Number.isFinite(parsed)?Math.round(parsed*100):null;
+ }
+ function differenceText(requested,received){
+   const asked=amountInCents(requested),got=amountInCents(received);
+   if(asked===null||got===null)return '';
+   const diff=got-asked;
+   const euro=new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(Math.abs(diff)/100);
+   return (diff>0?'+ ':diff<0?'− ':'')+euro;
+ }
  function dataFromForm(form){
    const f=new FormData(form),result={};
-   for(const key of ['number','status','title','client','contact','phone','clientAddress','executionAddress','planning','workDays','workedHours','plannedHours','priceType','amountLabel','amount','payment','notes']){
+   for(const key of ['number','status','title','client','contact','phone','clientAddress','executionAddress','planning','workDays','workedHours','plannedHours','priceType','requestedAmount','receivedAmount','payment','notes']){
      result[key]=String(f.get(key)||'').trim();
    }
+   result.difference=differenceText(result.requestedAmount,result.receivedAmount);
    return result;
  }
  function pngBlobFromDataURL(dataURL){
@@ -153,7 +173,8 @@ window.JKJobLabelEditor=(()=>{
      '<h3>Adressen</h3>'+input('clientAddress','Klantadres',data.clientAddress)+input('executionAddress','Uitvoeringsadres (optioneel)',data.executionAddress)+
      '<h3>Planning en uitvoering</h3>'+area('planning','Werkelijk gewerkt en nog gepland',data.planning,'Geregistreerde werkdagen krijgen voorrang; je kunt de printtekst aanpassen.')+
      input('workDays','Aantal werkdagen',data.workDays)+input('workedHours','Gewerkte uren',data.workedHours)+input('plannedHours','Nog geplande uren',data.plannedHours)+
-     '<h3>Financieel</h3>'+input('priceType','Prijsafspraak',data.priceType)+input('amountLabel','Omschrijving bedrag op werkbon',data.amountLabel)+input('amount',data.amountLabel==='Ontvangen:'?'Ontvangen bedrag':'Klusbedrag',data.amount)+input('payment','Betaalwijze / afhandeling',data.payment)+
+     '<h3>Financieel</h3>'+input('priceType','Prijsafspraak',data.priceType)+input('requestedAmount','Gevraagd bedrag',data.requestedAmount)+input('receivedAmount','Ontvangen bedrag',data.receivedAmount)+
+     '<p class="muted small">De werkbon toont Gevraagd en Ontvangen apart. Bij verschil wordt automatisch + of − getoond. Wijzigingen gelden alleen voor deze afdruk.</p>'+input('payment','Betaalwijze / afhandeling',data.payment)+
      '<h3>Notities</h3>'+area('notes','Notities voor werkbon',data.notes,'Eén notitie per regel. Verwijder regels die niet op de werkbon mogen komen.')+
      '</form></div>';
    api.modal(api.modalHead('Werkbon voor 4×6-label')+
@@ -201,5 +222,5 @@ window.JKJobLabelEditor=(()=>{
    query('#jobLabelBack').addEventListener('click',()=>api.showJob(info.job.id));
    render();
  }
- return {open,defaultData,dataFromForm,pngBlobFromDataURL,ensureJobNumbers,jobNumber,jobYear,actualPlanning};
+ return {open,defaultData,dataFromForm,differenceText,pngBlobFromDataURL,ensureJobNumbers,jobNumber,jobYear,actualPlanning};
 })();
