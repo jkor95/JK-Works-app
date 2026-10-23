@@ -116,6 +116,71 @@ async function serverTests(){
  assert.equal(notifications[0].title,'JK Works – Testmelding');assert.equal(notifications[0].opts.body,'Je pushmeldingen werken! ✅');assert.equal(notifications[0].opts.renotify,false);
  listeners.push({data:{json:()=>({title:'Nieuwe klantaanvraag',body:'Fictieve aanvraag'})},waitUntil:p=>{completion=p;}});await completion;
  assert.equal(notifications[1].title,'JK Works - Nieuwe klantaanvraag');assert.equal(notifications[1].opts.renotify,true);
+ // Privacy en veiligheid van de cliënt: geen volledige documenten/foto's synchroniseren
+ // om een achtergrondmelding mogelijk te maken, en gewone syncQueue intact houden.
+ const emitted=[],mutations=[];
+ const records={
+  jobs:[{id:'job-projection',title:'GEHEIME_KLUSTITEL',clientName:'GEHEIME_KLANT',
+   date:'2026-10-24',startTime:'10:00',endTime:'16:00',workDays:[{date:'2026-10-24',startTime:'10:00',endTime:'16:00'}],
+   quoteNeeded:true,notes:'GEHEIME_NOTITIE'}],
+  documents:[{id:'document-projection',filename:'GEHEIME_FACTUUR.pdf',folder:'factuur',
+   blob:{privateBlob:'GEHEIME_PDF'},meta:{jobId:'job-projection',sent:true,paid:false,deadline:'2026-10-31',total:500}}],
+  jobPhotos:[{id:'photo-projection',jobId:'job-projection',phase:'before',blob:{privateBlob:'GEHEIME_FOTO'}}],
+  timeEntries:[{id:'entry-projection',jobId:'job-projection',date:'2026-10-24',from:'10:00',to:'16:00',note:'GEHEIME_UURNOTITIE'}],
+  settings:[{id:'notificationPrefs',hours:true,photos:true,quoteCreate:true},
+   {id:'dismissedActions',items:{'hours:job-old':true}}],
+  syncQueue:[],deleteMarkers:[]
+ };
+ let subscription=true,protectedRestore=false;
+ const client={
+  auth:{getSession:async()=>({data:{session:{user:{id:'alice'}}}}),onAuthStateChange:()=>{}},
+  from:table=>({upsert:async value=>{
+   assert.equal(table,'app_records','Meldingsgegevens gebruiken bestaande RLS-afgeschermde tabel');
+   emitted.push(value);return {error:null};
+  }})
+ };
+ const notificationMock={permission:'granted'};
+ const local={window:{
+   supabase:{createClient:()=>client},PushManager:function(){},Notification:notificationMock,
+   addEventListener:()=>{}},
+  document:{visibilityState:'visible',addEventListener:()=>{},dispatchEvent:()=>{}},
+  navigator:{onLine:true,serviceWorker:{ready:Promise.resolve({pushManager:{getSubscription:async()=>subscription?{endpoint:'fixture'}:null}})}},
+  Notification:notificationMock,
+  JKDB:{stores:Object.keys(records),get:async(store,id)=>{
+   if(store==='settings'&&id==='backupRestoreGuard')return protectedRestore?{active:true}:null;
+   return (records[store]||[]).find(x=>x.id===id)||null;
+  },all:async store=>records[store]||[],
+  putLocal:async(store,row)=>{mutations.push([store,row.id]);records[store].push(row);}},
+  CustomEvent:class{constructor(type){this.type=type;}},
+  console:{warn:()=>{}},setTimeout:()=>0,clearTimeout:()=>{},
+  Blob,Date,Promise,Map,Set,JSON,Math,Intl
+ };
+ const cloud=vm.runInNewContext(fs.readFileSync(path.join(root,'app/cloud.js'),'utf8')+'\n;JKCloud;',local);
+ assert.equal(await cloud.init(),true);
+ await cloud.queuePut('jobs',{id:'job-projection'});
+ assert.equal(records.syncQueue.length,1,'Bestaande handmatige sync-wachtrij blijft aanwezig');
+ const projectionResult=await cloud.publishNotificationProjection();
+ assert.equal(projectionResult.sent,true);
+ assert.equal(emitted.length,1);
+ const snap=emitted[0];
+ assert.equal(snap.store,'notificationSnapshot');
+ assert.equal(snap.record_id,'active');
+ assert.equal(snap.user_id,'alice');
+ const body=JSON.stringify(snap.data);
+ for(const secret of ['GEHEIME_KLUSTITEL','GEHEIME_KLANT','GEHEIME_NOTITIE','GEHEIME_FACTUUR','GEHEIME_PDF','GEHEIME_FOTO','GEHEIME_UURNOTITIE'])
+  assert.ok(!body.includes(secret),'Meldingsprojectie bevat geen '+secret);
+ assert.equal(snap.data.records.filter(r=>r.store==='jobs').length,1);
+ assert.equal(snap.data.records.find(r=>r.store==='jobs').data.quoteNeeded,true);
+ assert.equal(snap.data.records.find(r=>r.store==='documents').data.meta.deadline,'2026-10-31');
+ assert.equal(records.syncQueue.length,1,'Geen handmatige wachtrij opgeruimd tijdens projectie');
+ assert.equal(mutations.filter(x=>x[0]!=='syncQueue').length,0,'Geen lokale administratieve records gewijzigd');
+ subscription=false;
+ assert.equal((await cloud.publishNotificationProjection()).skipped,true,'Geen automatische upload als echte push uitstaat');
+ assert.equal(emitted.length,1);
+ subscription=true;protectedRestore=true;
+ assert.equal((await cloud.publishNotificationProjection()).skipped,true,'Back-up/herstelbeveiliging blokkeert serverprojectie');
+ assert.equal(emitted.length,1);
+ console.log('PASS: privé meldingsprojectie zonder foto's/PDF/klanttekst, zonder wijziging van handmatige sync en beschermd herstel');
  console.log('PASS: Edge-auth, uitsluitend eigen apparaten, serververtraging 30 s, blijvende deduplicatie, geen herhaalpoging bij onzekere verzending, bestaande webhook/planning en achtergrond-serviceworker');
 }
 async function browserTests(browser,origin){
