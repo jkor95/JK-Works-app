@@ -1,3 +1,12 @@
+## v71.13.25 — 4×6 werkbon van alle openstaande betalingen
+- **Klussen → Openstaand:** bij de openstaande klussen verschijnt de knop **🖨️ Openstaand overzicht / label**. De bon gebruikt exact de bestaande financiële openstanden uit Klussen, inclusief losse openstaande facturen zonder klus die ook in het totaalsaldo vallen. Reeds betaalde en bewust afgeronde/afgeboekte bedragen worden niet opnieuw als schuld getoond.
+- Op iedere post staan **naam/klant, klusomschrijving of factuur, werkdatum en werkelijke uren (of geplande tijden indien nog niet gewerkt)** en het openstaande bedrag. Sortering is van oud naar nieuw. Ontbrekende gegevens worden niet verzonnen.
+- **Eigen printeditor:** verander de titel, vink ongewenste posten uit of bewerk namen, teksten, datums, tijden en bedragen uitsluitend voor de afbeelding. Het geselecteerde totaal wordt direct bijgewerkt; geen wijzigingen in klussen, betaalstatussen of facturen.
+- **Thermische labels:** volledig zwart op wit, **1200 × 1800 PNG**, portrait 4″ × 6″. Automatische paginering bij meer regels; op de laatste sticker komt **TOTAAL OPENSTAAND** voor alle geselecteerde regels. Iedere pagina heeft een paginanummer.
+- **iPhone:** deel één of meerdere afbeeldingen via de native deelkaart (o.a. **Bewaar afbeelding** of een labelprinter-app). Met de knop **Huidige PNG downloaden** kun je de pagina's ook één voor één opslaan. Lange regels worden netjes afgebroken of leveren een duidelijke foutmelding bij extreme invoer.
+- Modules functioneren offline via PWA-cache. Browserregressies controleren het nieuwe Openstaand-tabblad, printkeuzes, niet wijzigen van de administratie, correcte opgetelde bedragen en de meerdere pagina's met eindtotaal.
+- Geen wijzigingen aan de opgeslagen financiële administratie, inkomensstatistieken, Supabase of de individuele werkbonfunctie.
+
 ## v71.13.24 — werkbon toont gevraagd, ontvangen en verschil afzonderlijk
 - De 4×6 inch zwart-wit werkbon toont in het onderdeel **Financieel** altijd afzonderlijke regels **Gevraagd**, **Ontvangen** en **Verschil**, naast de bestaande prijsafspraak en betaalwijze.
 - Bij **€ 0 gevraagd en € 75 ontvangen** staat **Verschil: + € 75,00**. Bij **€ 100 gevraagd en € 75 ontvangen** staat **Verschil: − € 25,00**. Bij gelijke bedragen staat **€ 0,00**. Bij een nog onbekende prijs wordt geen verschil verzonnen.
