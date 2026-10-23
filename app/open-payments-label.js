@@ -51,7 +51,7 @@ window.JKOpenPaymentsLabel=(()=>{
    const textW=W-72;
    const client=wrap(ctx,row.client,textW,21,true),title=wrap(ctx,row.job,textW,18,false);
    const schedule=wrap(ctx,[row.date,row.times].filter(Boolean).join(' · '),textW,16,false);
-   const height=15+client.length*24+title.length*21+schedule.length*19+36+10;
+   const height=client.length*24+title.length*21+schedule.length*19+55;
    return {row,client,title,schedule,height};
  }
  function canvasPage(){
@@ -65,20 +65,24 @@ window.JKOpenPaymentsLabel=(()=>{
  function pages(data){
    const rows=selectedRows(data),scratch=canvasPage().ctx;
    const layouts=rows.map(r=>itemLayout(scratch,r));
-   const groups=[],maxY=H-97; // reserve space for grand total on the final page
+   const title=clean(data.title)||'OPENSTAANDE BETALINGEN';
+   const heading=wrap(scratch,title,W-60,30,true);
+   if(heading.length>2)throw Error('De bon-titel is te lang. Maak deze korter.');
+   const headerBottom=23+heading.length*35+31+10+25;
+   const capacity=H-12-headerBottom-85; // total always fits on the last sticker
+   const groups=[];
    let group=[],used=0;
    for(const item of layouts){
-     if(item.height>maxY-127)throw Error('Eén regel is te lang. Kort de klantnaam, klus of tijden in.');
-     if(group.length&&used+item.height+9>maxY-127){groups.push(group);group=[];used=0;}
-     group.push(item);used+=item.height+9;
+     if(item.height>capacity)throw Error('Eén regel is te lang. Kort de klantnaam, klus of tijden in.');
+     if(group.length&&used+item.height>capacity){groups.push(group);group=[];used=0;}
+     group.push(item);used+=item.height;
    }
    if(group.length)groups.push(group);
-   const total=rows.reduce((n,r)=>n+r.amount,0),title=clean(data.title)||'OPENSTAANDE BETALINGEN';
+   const total=rows.reduce((n,r)=>n+r.amount,0);
    return groups.map((group,i)=>{
      const {canvas,ctx}=canvasPage();
      let y=23;
      const heading=wrap(ctx,title,W-60,30,true);
-     if(heading.length>3)throw Error('De bon-titel is te lang. Maak deze korter.');
      for(const h of heading){font(ctx,30,true);ctx.fillText(h,30,y);y+=35;}
      font(ctx,14,false);ctx.fillText('JK WORKS DORDRECHT',30,y+1);y+=31;
      ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(30,y);ctx.lineTo(W-30,y);ctx.stroke();y+=10;
