@@ -86,7 +86,7 @@ window.JKOpenPaymentsEditor=(()=>{
      if(!render())return;
      // Synchronously build files: iOS needs navigator.share in the originating tap.
      const files=canvases.map((canvas,i)=>new File([bytesFromDataURL(canvas.toDataURL('image/png'))],filename(i),{type:'image/png'}));
-     const shareFiles=navigator.canShare&&navigator.canShare({files})?files:
+     const shareFiles=!navigator.canShare||navigator.canShare({files})?files:
        navigator.canShare&&navigator.canShare({files:[files[pageIndex]]})?[files[pageIndex]]:[];
      if(navigator.share&&shareFiles.length){
        try{navigator.share({files:shareFiles}).catch(error=>{
