@@ -2138,8 +2138,8 @@ const App = (() => {
         ['Contant',summary.cash,'cash'],
         [compact?'Bank':'Bank + betaalverzoek',summary.bankAndRequest,'bank']
       ];
-      if(summary.other>0.005)items.push(['Anders',summary.other,'other']);
-      if(summary.unknown>0.005)items.push(['Betaalwijze onbekend',summary.unknown,'unknown']);
+      if(!compact&&summary.other>0.005)items.push(['Anders',summary.other,'other']);
+      if(!compact&&summary.unknown>0.005)items.push(['Betaalwijze onbekend',summary.unknown,'unknown']);
       const rows=items.map(([label,amount,key])=>
         '<div class="payment-method-box" data-payment-group="'+key+'"><span>'+esc(label)+'</span><strong>'+money(amount)+'</strong></div>'
       ).join('');
