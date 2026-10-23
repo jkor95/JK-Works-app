@@ -1,3 +1,10 @@
+## v71.13.23 — vrijwillige betaling bij gratis klus correct als Betaald en op werkbon
+- Bij een klus met **€ 0,00 afgesproken** en een daadwerkelijk geregistreerde betaling (bijvoorbeeld **€ 75,00** bij familiehulp) wordt de betaalstatus voortaan **Betaald**, zodra er geen saldo meer openstaat. Geen foutieve status **Deels betaald** meer uitsluitend vanwege de nulprijs.
+- De oorspronkelijke prijsafspraak blijft **€ 0,00**, de werkelijk ontvangen vergoeding blijft **€ 75,00**, **Nog te ontvangen € 0,00**; de bestaande betaalregistratie, gekoppelde uren en eigen-inkomstenstatistieken worden niet kunstmatig aangepast.
+- **Werkbon / 4×6-sticker:** wanneer de afgesproken prijs nul is maar er een vergoeding ontvangen is, verschijnt **Ontvangen: € 75,00** in plaats van **Bedrag: € 0,00**. In de printeditor zijn omschrijving en bedrag nog aanpasbaar, zonder de opgeslagen klus te wijzigen.
+- Een reguliere klus van € 100 met slechts € 75 ontvangen blijft wel **Deels betaald** zolang € 25 openstaat. Ook een handmatig nog onbekende prijs wordt niet per ongeluk Betaald.
+- Browserregressie: 2,5 uur bevestigd gewerkt, prijs € 0, ontvangen € 75, open € 0, status Betaald en staande PNG-sticker met € 75; geen gegevensverlies, betaalregistraties of Supabase-schemawijziging.
+
 ## v71.13.22 — minder knoppen op Dashboard, korter Klussenoverzicht
 - **Klussen → overzicht:** verberg uitsluitend het kleine blok **Via facturen (specificatie)** met factuurontvangsten en ontvangen btw. De klikbare **Openstaand**-kaart en de twee blokjes **Contant** en **Bank** blijven behouden.
 - **Bank** is alleen het kortere *label* voor de gecombineerde ontvangsten per bankoverschrijving en betaalverzoek; bestaande betaalmethoden en bedragen blijven ongewijzigd.
