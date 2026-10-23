@@ -67,7 +67,7 @@ module.exports=async(browser,origin)=>{
   // De nieuwe Openstaand-knop gebruikt dezelfde echte schuld (geen afboekingen).
   await page.locator('[data-jpf="open"]').click();
   await page.locator('#openPaymentsPrint').click();
-  await page.locator('#openLabelPreview').waitFor();
+  await page.waitForFunction(()=>document.querySelector('#openLabelPreview')?.naturalWidth===1200);
   assert.equal(await page.locator('#openLabelPreview').evaluate(img=>img.naturalWidth),1200);
   assert.equal(await page.locator('#openLabelPreview').evaluate(img=>img.naturalHeight),1800);
   assert.match(await page.locator('#openLabelSummary').innerText(),/50,00/,'Openstaand label gebruikt bestaande €50 schuld');
@@ -86,6 +86,19 @@ module.exports=async(browser,origin)=>{
   assert.notEqual(await page.locator('#openLabelSummary').innerText(),initialTotal,'Handmatig aangepast printbedrag wijzigt voorbeeldtotaal');
   await firstRow.locator('[name="amount"]').fill(savedAmount);
   await page.locator('#openLabelRefresh').click();
+  await page.evaluate(()=>{
+    window.openLabelShared=null;
+    Object.defineProperty(navigator,'canShare',{configurable:true,value:x=>Array.isArray(x.files)&&x.files.length>0});
+    Object.defineProperty(navigator,'share',{configurable:true,value:async x=>{
+      window.openLabelShared={count:x.files.length,type:x.files[0].type,bytes:x.files[0].size};
+    }});
+  });
+  await page.locator('#openLabelShare').click();
+  await page.waitForFunction(()=>!!window.openLabelShared);
+  const sharedLabel=await page.evaluate(()=>window.openLabelShared);
+  assert.equal(sharedLabel.count,1,'Eén werkbon als losse PNG via iPhone-deelkaart');
+  assert.equal(sharedLabel.type,'image/png');
+  assert.ok(sharedLabel.bytes>1500,'Deelkaart krijgt echte afdrukbare PNG-bytes');
   const pngDownload=page.waitForEvent('download');
   await page.locator('#openLabelDownload').click();
   assert.match((await pngDownload).suggestedFilename(),/JK-Works-openstaand-\d{4}-\d{2}-\d{2}-01\.png/);
