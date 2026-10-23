@@ -4,7 +4,7 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 module.exports=async(browser,origin)=>{
  const root=path.join(__dirname,'..'),cloudSource=(await fs.readFile(path.join(root,'app/cloud.js'),'utf8')).replace('return {readBackupSnapshot,','return {encodeRecord,decodeRecord,readBackupSnapshot,');
- const source=(await fs.readFile(path.join(root,'app/app.js'),'utf8')).replace('return {init,go};','return {init,go,state,editJob,showJob,showDocument,showPayments,renderJobs,renderDashboard,refreshFinance,jobMinutes,jobFinancial,financialEvents,periodBuckets,customerStatBuckets,simpleStatsChartHtml,statsComparisonChartHtml,paymentMethodOverview,paymentMethodOverviewHtml,showClientHistory,showTimeStats,generateAnnualInvoiceReport,createBusinessDoc,setInvoiceJobLink};').replace("document.addEventListener('DOMContentLoaded',()=>App.init());",'');
+ const source=(await fs.readFile(path.join(root,'app/app.js'),'utf8')).replace('return {init,go};','return {init,go,state,editJob,showJob,showDocument,showPayments,renderJobs,renderDashboard,refreshFinance,jobMinutes,jobFinancial,financialEvents,periodBuckets,customerStatBuckets,simpleStatsChartHtml,statsComparisonChartHtml,paymentMethodOverview,paymentMethodOverviewHtml,openPaymentLabelData,showClientHistory,showTimeStats,generateAnnualInvoiceReport,createBusinessDoc,setInvoiceJobLink};').replace("document.addEventListener('DOMContentLoaded',()=>App.init());",'');
  const context=await browser.newContext({serviceWorkers:'block',viewport:{width:390,height:844}}),page=await context.newPage(),errors=[],writes=[];
  page.setDefaultTimeout(15000);
  await page.clock.setFixedTime(new Date('2026-10-21T10:00:00Z'));
@@ -64,7 +64,69 @@ module.exports=async(browser,origin)=>{
   assert.equal(await page.locator('#view .finance-kpis').count(),0,'Klussenoverzicht heeft geen detailkaarten');
   assert.equal(await page.locator('#view .jobs-summary-card').count(),0,'Klussenoverzicht heeft geen uitgebreide samenvatting');
   const row=page.locator('[data-job=fixed]');assert.match(await row.innerText(),/Montage kast/);assert.match(await row.innerText(),/Fictieve klant/);assert.doesNotMatch(await row.innerText(),/Berekende urenwaarde|Referentie-uurtarief|Effectief/);assert.match(await row.innerText(),/50,00/);
-  await row.click();await page.locator('#paymentsThisJob').waitFor();
+  // De nieuwe Openstaand-knop gebruikt dezelfde echte schuld (geen afboekingen).
+  await page.locator('[data-jpf="open"]').click();
+  await page.locator('#openPaymentsPrint').click();
+  await page.locator('#openLabelPreview').waitFor();
+  assert.equal(await page.locator('#openLabelPreview').evaluate(img=>img.naturalWidth),1200);
+  assert.equal(await page.locator('#openLabelPreview').evaluate(img=>img.naturalHeight),1800);
+  assert.match(await page.locator('#openLabelSummary').innerText(),/50,00/,'Openstaand label gebruikt bestaande €50 schuld');
+  assert.match(await page.locator('#openLabelForm').innerText(),/Fictieve klant/);
+  assert.match(await page.locator('#openLabelForm').innerText(),/Montage kast/);
+  assert.equal(await page.locator('#openLabelForm [name="include"]').count()>0,true);
+  const beforeWorklabel=await page.evaluate(async()=>JSON.stringify({jobs:await JKDB.all('jobs'),payments:(await JKDB.all('settings')).filter(x=>x.kind==='jkPayment')}));
+  await page.locator('#openLabelTitle').fill('Openstaand - eigen overzicht');
+  await page.locator('#openLabelRefresh').click();
+  assert.match(await page.locator('#openLabelPageCount').innerText(),/Pagina 1 van 1/);
+  const initialTotal=await page.locator('#openLabelSummary').innerText();
+  const firstRow=page.locator('[data-open-label-row]').first();
+  const savedAmount=await firstRow.locator('[name="amount"]').inputValue();
+  await firstRow.locator('[name="amount"]').fill('€ 25,00');
+  await page.locator('#openLabelRefresh').click();
+  assert.notEqual(await page.locator('#openLabelSummary').innerText(),initialTotal,'Handmatig aangepast printbedrag wijzigt voorbeeldtotaal');
+  await firstRow.locator('[name="amount"]').fill(savedAmount);
+  await page.locator('#openLabelRefresh').click();
+  const pngDownload=page.waitForEvent('download');
+  await page.locator('#openLabelDownload').click();
+  assert.match((await pngDownload).suggestedFilename(),/JK-Works-openstaand-\d{4}-\d{2}-\d{2}-01\.png/);
+  const unchangedWorklabel=await page.evaluate(async()=>JSON.stringify({jobs:await JKDB.all('jobs'),payments:(await JKDB.all('settings')).filter(x=>x.kind==='jkPayment')}));
+  assert.equal(unchangedWorklabel,beforeWorklabel,'Printeditor verandert geen klussen of betalingen');
+  await page.locator('#openLabelBack').click();
+  // Veel open posten passen automatisch op meerdere losse 4x6 PNG-stickers.
+  const pagesFixture=await page.evaluate(()=>{
+    const raw=Array.from({length:16},(_,i)=>({id:'j-'+i,include:true,
+      client:'Klant '+(i+1),job:'Kluswerk / evenement '+(i+1),
+      date:'01-10-2026',times:'10:00 - 16:00',amount:'€ 12,50'}));
+    const total=JKOpenPaymentsLabel.selectedRows({items:raw}).reduce((sum,row)=>sum+row.amount,0);
+    const written=[];let page=0;
+    const original=CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText=function(value,...args){
+      if(String(value).startsWith('PAGINA '))page++;
+      written.push([page,String(value)]);
+      return original.call(this,value,...args);
+    };
+    let canvases;
+    try{canvases=JKOpenPaymentsLabel.pages({title:'Openstaande betalingen Kade32',items:raw});}
+    finally{CanvasRenderingContext2D.prototype.fillText=original;}
+    const withoutFirst=JKOpenPaymentsLabel.selectedRows({items:raw.map((r,i)=>({...r,include:i>0}))});
+    let invalid=false;
+    try{JKOpenPaymentsLabel.pages({items:raw.map(r=>({...r,include:false}))});}catch(e){invalid=/minimaal één/.test(e.message);}
+    return {total,pageCount:canvases.length,dims:canvases.map(c=>[c.width,c.height]),
+      lines:written,pageLabels:written.filter(x=>x[1].startsWith('PAGINA ')).map(x=>x[1]),
+      subtotal:withoutFirst.reduce((sum,r)=>sum+r.amount,0),invalid};
+  });
+  assert.equal(pagesFixture.total,20000,'16 fictieve posten van €12,50 tellen op tot €200,00');
+  assert.ok(pagesFixture.pageCount>1,'Groot overzicht wordt in meerdere stickers opgesplitst');
+  assert.ok(pagesFixture.dims.every(dim=>dim[0]===1200&&dim[1]===1800));
+  assert.deepEqual(pagesFixture.pageLabels,Array.from({length:pagesFixture.pageCount},(_,i)=>'PAGINA '+(i+1)+' / '+pagesFixture.pageCount));
+  const overallTotals=pagesFixture.lines.filter(x=>x[1]==='TOTAAL OPENSTAAND');
+  assert.equal(overallTotals.length,1,'Grand total precies eenmaal op de serie');
+  assert.equal(overallTotals[0][0],pagesFixture.pageCount,'Grand total staat op laatste sticker');
+  assert.ok(pagesFixture.lines.some(x=>/200,00/.test(x[1])),'Totaal €200,00 zichtbaar');
+  assert.equal(pagesFixture.subtotal,18750,'Uitvinken verlaagt afdruktotaal zonder betaling te wijzigen');
+  assert.equal(pagesFixture.invalid,true,'Lege selectie kan niet worden opgeslagen');
+  await page.locator('[data-jpf="all"]').click();
+  await page.locator('[data-job=fixed]').click();await page.locator('#paymentsThisJob').waitFor();
   for(const label of ['Gewerkt','Afgesproken','Ontvangen','Nog te ontvangen'])assert.ok((await page.locator('#modalRoot').innerText()).includes(label),label+' zichtbaar in compacte kluskaart');
   for(const label of ['Referentie-uurtarief','Gefactureerd incl. btw','Effectief afgesproken / uur'])assert.ok(!(await page.locator('#modalRoot').innerText()).includes(label),label+' verborgen in compacte kluskaart');
   await page.evaluate(()=>App.createBusinessDoc('Factuur',{jobId:'fixed'}));
