@@ -189,7 +189,7 @@ assert.match(appHtml,/open-payments-label\.js\?v=71\.13\.25/);
 assert.match(appHtml,/open-payments-editor\.js\?v=71\.13\.25/);
 assert.match(pwaWorker,/open-payments-label\.js/);
 assert.match(pwaWorker,/open-payments-editor\.js/);
-assert.match(appSource,/id="openPaymentsPrint"/);
+assert.match(read("app/app.js"),/id="openPaymentsPrint"/);
 assert.match(pwaWorker,/job-label\.js/);
 assert.match(pwaWorker,/job-label-editor\.js/);
 assert.match(appHtml, /website-editor\.js\?v=71\.8\.9/);
