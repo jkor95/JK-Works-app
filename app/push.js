@@ -17,7 +17,14 @@ const JKPush=(()=>{
    let sub=await reg.pushManager.getSubscription();
    if(sub&&JSON.stringify(Array.from(new Uint8Array(sub.options.applicationServerKey||[])))!==JSON.stringify(Array.from(bytes(publicKey)))){await sub.unsubscribe();sub=null;}
    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytes(publicKey)});
-   await api('subscribe',sub.toJSON());return true;
+   await api('subscribe',sub.toJSON());
+   // Pushregistratie is bevestigd. Publiceer meteen de huidige actiegegevens,
+   // ook als oude wijzigingen nog bewust in de handmatige sync-wachtrij staan.
+   if(window.JKCloud?.publishNotificationProjection){
+     const result=await JKCloud.publishNotificationProjection();
+     if(result?.failed)console.warn('Meldingsgegevens moeten nog opnieuw worden bijgewerkt.');
+   }
+   return true;
  }
  async function unsubscribe(){const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();if(sub){await api('unsubscribe',{endpoint:sub.endpoint});await sub.unsubscribe();}}
  async function status(){if(!('PushManager' in window))return 'Push niet ondersteund op dit apparaat.';const reg=await navigator.serviceWorker.ready;return await reg.pushManager.getSubscription()?'Dit apparaat heeft een pushabonnement. Controleer of de server is geactiveerd.':'Push nog niet ingeschakeld op dit apparaat.';}

@@ -1,3 +1,13 @@
+## v71.13.20 — achtergrondpush zonder app openen, zonder volledige autosynchronisatie
+- **Oorzaak:** iOS-toestemming en de Supabase-cron werken, maar nieuwe klus-/documentacties bleven uitsluitend in de lokale handmatige syncwachtrij. De server zag deze veranderingen niet en de app toonde pas een lokale melding bij openen.
+- **Fix:** wanneer een echt Web Push-abonnement bestaat, publiceert JK Works een **kleine actuele meldingsprojectie** via het bestaande, door RLS beveiligde `app_records`-account. De projectie bevat alleen planning en actievelden, documentstatussen, fotocategorieën en meldingsvoorkeuren. Geen namen, klusteksten, foto-inhoud, PDF-bestanden, berichten, bedragen of notities.
+- De bestaande **jk-push**-Edge Function gebruikt de actuele projectie in plaats van eventueel verouderde handmatig gesynchroniseerde records. De bestaande **pg_cron**-controle iedere vijf minuten blijft actief en kan notificaties versturen wanneer de app gesloten/vergrendeld is.
+- Publiceren gebeurt na relevante wijzigingen, opnieuw bij online/aanmelden/zichtbaarheid en direct na **Push inschakelen**. Bij het sluiten van de app wordt een laatste verzendpoging gedaan.
+- **Geen dubbele meldingen:** bij een actief achtergrondpushabonnement wordt de lokale `showNotification`-melding bij opnieuw openen niet nog eens aangemaakt.
+- De gewone synchronisatie blijft **handmatig** en de bestaande `syncQueue` blijft behouden. Beschermd herstel blijft blokkeren, en zonder toegestane echte push worden geen meldingsgegevens automatisch gepubliceerd.
+- Getest met fictieve server- en browsergegevens: actuele projectie boven oude cloudrecords, serverpush met gesloten app, herhaalcontrole zonder dubbele meldingen, geen opname van privégegevens of bestanden en behoud van de handmatige wachtrij.
+- Live iPhone-ontvangst is nog afhankelijk van iOS-meldingstoestemming, bereik en daadwerkelijk geactiveerd abonnement; test via **Meer → Meldingen → Test pushmelding versturen** met de app gesloten.
+
 ## v71.13.19 — geen automatische iPhone-zoom bij tekstinvoer
 - Mobiele webapp: alle gewone invulvelden (tekst, cijfers, datums, tijden, e-mail), meerregelige notities en keuzelijsten hebben nu minimaal **16 px invoertekst**, zodat iOS Safari bij focus niet automatisch op het veld inzoomt en de pagina op dezelfde breedte blijft.
 - Wijziging geldt bij **Klussen → Nieuwe klus / Bewerken**, werkbonvelden en overige formulieren op smalle schermen. Checkboxen, radioknoppen en sliders blijven normaal vormgegeven.
