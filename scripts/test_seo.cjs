@@ -179,6 +179,7 @@ assert.match(appStyles, /padding-top:env\(safe-area-inset-top,0px\)/);
 assert.match(appStyles, /\.we-v714\.we-pwa-safe-area \.we-shell\{height:100%;min-height:0\}/);
 assert.doesNotMatch(read('site.css'), /we-pwa-safe-area/);
 assert.match(appHtml, /styles\.css\?v=71\.13\.23/);
+assert.match(appHtml,/finance\.js\?v=71\.13\.23/,'De gewijzigde betaalstatuscode krijgt een nieuwe versiebestandsnaam op iOS');
 assert.match(appStyles,/iOS Safari zoomt naar tekstvelden/);
 assert.match(appStyles,/font-size:16px !important/);
 assert.doesNotMatch(appHtml,/user-scalable=no|maximum-scale=1/);
