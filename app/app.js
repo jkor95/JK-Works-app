@@ -2354,20 +2354,22 @@ const App = (() => {
     if(!years.includes(new Date().getFullYear()))years.unshift(new Date().getFullYear());
     let customerYear=new Date().getFullYear();
     const draw=()=>{
-      const customerMode=mode==='client';
+      const customerMode=mode==='client',methodMode=mode==='payment';
       const periods={month:'laatste 12 maanden',quarter:'laatste 8 kwartalen',year:'alle kalenderjaren'};
-      const buckets=customerMode?customerStatBuckets(entries,jobs,clients,company,customerYear):periodBuckets(entries,jobs,company,mode);
-      const content=statsComparisonHtml(buckets,customerMode,customerMode?'in '+customerYear:periods[mode])+statsComparisonChartHtml(buckets,customerMode);
+      const buckets=customerMode?customerStatBuckets(entries,jobs,clients,company,customerYear):methodMode?[]:periodBuckets(entries,jobs,company,mode);
+      const content=methodMode?paymentMethodOverviewHtml(paymentMethodOverview(entries,jobs,company,state.finance,customerYear),{title:'Betaalwijzen · '+customerYear}):
+        statsComparisonHtml(buckets,customerMode,customerMode?'in '+customerYear:periods[mode])+statsComparisonChartHtml(buckets,customerMode);
       const undated=financialEvents(entries,jobs,company).reduce((n,event)=>n+(event.undatedReceived||0),0);
       modal(`${modalHead('Statistieken')}<div class="tabs stats-tabs" aria-label="Statistieken per periode">
         <button type="button" class="tab ${customerMode?'active':''}" data-stat-mode="client">Per klant</button>
         <button type="button" class="tab ${mode==='month'?'active':''}" data-stat-mode="month">Per maand</button>
         <button type="button" class="tab ${mode==='quarter'?'active':''}" data-stat-mode="quarter">Per kwartaal</button>
         <button type="button" class="tab ${mode==='year'?'active':''}" data-stat-mode="year">Per jaar</button>
+        <button type="button" class="tab ${methodMode?'active':''}" data-stat-mode="payment">Betaalwijze</button>
       </div>
-      ${customerMode?`<div class="field stat-year-field"><label for="customerStatsYear">Kalenderjaar</label><select id="customerStatsYear">${years.map(y=>`<option value="${y}" ${y===customerYear?'selected':''}>${y}</option>`).join('')}</select></div>`:''}
-      ${content}<p class="muted small stats-comparison-note">Rood toont alleen wat bij Klussen of Facturen daadwerkelijk nog openstaat.</p>
-      ${undated>0?`<p class="muted small stats-undated">Zonder uitvoerdatum (niet ingedeeld): ${money(undated)}</p>`:''}`);
+      ${customerMode||methodMode?`<div class="field stat-year-field"><label for="customerStatsYear">Kalenderjaar</label><select id="customerStatsYear">${years.map(y=>`<option value="${y}" ${y===customerYear?'selected':''}>${y}</option>`).join('')}</select></div>`:''}
+      ${content}${methodMode?'<p class="muted small">Contant en bank + betaalverzoek zijn eigen ontvangsten zonder voorgeschoten kosten. Factuurontvangsten (inclusief eventuele btw) zijn een aparte specificatie en tellen niet opnieuw mee. Alle bedragen volgen de uitvoeringsdatum.</p>':'<p class="muted small stats-comparison-note">Rood toont alleen wat bij Klussen of Facturen daadwerkelijk nog openstaat.</p>'}
+      ${!methodMode&&undated>0?`<p class="muted small stats-undated">Zonder uitvoerdatum (niet ingedeeld): ${money(undated)}</p>`:''}`);
       $$('[data-stat-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.statMode;draw()}));
       $('#customerStatsYear')?.addEventListener('change',e=>{customerYear=Number(e.target.value);draw()});
     };
