@@ -121,8 +121,6 @@ window.JKJobLabelEditor=(()=>{
      planning:schedule.planning,workDays:schedule.workDays?String(schedule.workDays):'',
      workedHours:hourText(schedule.workedMinutes),plannedHours:hourText(schedule.plannedMinutes),
      priceType:priceLabel,requestedAmount,receivedAmount,payment,
-
-     payment,
      notes:String(job.notes||'')
    };
  }
@@ -135,7 +133,7 @@ window.JKJobLabelEditor=(()=>{
  // Parseer invoer als centen: "€ 1.234,50", "1234.50" of "75".
  // Bij een onbepaald bedrag wordt geen fictief verschil berekend.
  function amountInCents(value){
-   let text=String(value==null?'':value).replace(/[\\s\u00a0\u202f€]/g,'').trim();
+   let text=String(value==null?'':value).replace(/[\s\u00a0\u202f€]/g,'').trim();
    if(!text||!/^-?[0-9][0-9.,]*$/.test(text))return null;
    if(text.includes(',')&&text.includes('.')){
      const decimal=text.lastIndexOf(',')>text.lastIndexOf('.')?',':'.';
@@ -147,10 +145,10 @@ window.JKJobLabelEditor=(()=>{
  }
  function differenceText(requested,received){
    const asked=amountInCents(requested),got=amountInCents(received);
-   if(asked===null||got===null||asked===got)return '';
+   if(asked===null||got===null)return '';
    const diff=got-asked;
    const euro=new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(Math.abs(diff)/100);
-   return (diff>0?'+ ':'− ')+euro;
+   return (diff>0?'+ ':diff<0?'− ':'')+euro;
  }
  function dataFromForm(form){
    const f=new FormData(form),result={};
