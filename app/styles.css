@@ -410,3 +410,20 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
   .field,.form-grid,.modal,.modal form{min-width:0}
   .field input,.field textarea,.field select{max-width:100%}
 }
+
+/* v71.13.21: betalingen op één regel per methode, factuur/btw er compact onder. */
+.payment-method-breakdown{display:grid;gap:10px;min-width:0;margin:12px 0}
+.payment-method-breakdown h3{margin:0 0 2px;font-size:15px}
+.payment-method-main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.payment-method-box{display:flex;flex-direction:column;gap:6px;justify-content:center;background:#fff;border:1px solid var(--line);padding:12px;border-radius:13px;min-width:0}
+.payment-method-box span{color:var(--muted);font-size:12px;font-weight:700}
+.payment-method-box strong{font-variant-numeric:tabular-nums;font-size:20px;overflow-wrap:anywhere}
+.payment-invoice-detail{padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);min-width:0}
+.payment-invoice-heading{display:block;font-size:11px;font-weight:800;color:var(--muted);margin:0 0 8px}
+.payment-invoice-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.payment-invoice-values>div{min-width:0;display:flex;flex-direction:column;gap:3px}
+.payment-invoice-values span{color:var(--muted);font-size:11px;font-weight:700}
+.payment-invoice-values strong{font-variant-numeric:tabular-nums;font-size:15px;overflow-wrap:anywhere}
+.job-totals .payment-method-breakdown{margin-bottom:0}
+.job-totals .payment-method-box strong{font-size:17px}
+@media(max-width:420px){.payment-method-box strong{font-size:17px}.payment-method-box{padding:10px}.payment-invoice-values{gap:8px}}
