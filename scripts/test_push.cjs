@@ -166,9 +166,9 @@ async function serverTests(){
  assert.equal(snap.store,'notificationSnapshot');
  assert.equal(snap.record_id,'active');
  assert.equal(snap.user_id,'alice');
- const body=JSON.stringify(snap.data);
+ const snapshotString=JSON.stringify(snap.data);
  for(const secret of ['GEHEIME_KLUSTITEL','GEHEIME_KLANT','GEHEIME_NOTITIE','GEHEIME_FACTUUR','GEHEIME_PDF','GEHEIME_FOTO','GEHEIME_UURNOTITIE'])
-  assert.ok(!body.includes(secret),'Meldingsprojectie bevat geen '+secret);
+  assert.ok(!snapshotString.includes(secret),'Meldingsprojectie bevat geen '+secret);
  assert.equal(snap.data.records.filter(r=>r.store==='jobs').length,1);
  assert.equal(snap.data.records.find(r=>r.store==='jobs').data.quoteNeeded,true);
  assert.equal(snap.data.records.find(r=>r.store==='documents').data.meta.deadline,'2026-10-31');
