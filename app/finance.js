@@ -71,7 +71,9 @@ const JKFinance = (() => {
       const received=euro(receipts.filter(r=>r.resolvedJobId===j.id).reduce((s,r)=>s+cents(r.amount),0));
       const waived=euro(jobWaived.get(j.id)||0),total=Math.max(cents(p.agreed),cents(invoiced));
       const balance=euro(Math.max(0,total-cents(received)-cents(waived))),settlementReady=readyForSettlement(j);
-      return {...p,invoiced,received,waived,balance,settlementReady,open:settlementReady?balance:0,paid:!p.pending&&total>0&&cents(received)>0&&cents(balance)===0};
+      // A voluntary payment on a zero-priced job is paid in full: no debt exists.
+      // Pending/manual prices stay pending and unpaid balances stay unpaid.
+      return {...p,invoiced,received,waived,balance,settlementReady,open:settlementReady?balance:0,paid:!p.pending&&cents(received)>0&&cents(balance)===0};
     };
     return {jobs:js,documents:docs,stored,writeoffs,receipts,job,document};
   }
