@@ -489,7 +489,7 @@ module.exports=async(browser,origin)=>{
     const jobs=[
       {id:'tax',date:year+'-02-01',pricingType:'fixed',agreedAmount:121,clientId:'client'},
       {id:'cash',date:year+'-02-02',pricingType:'fixed',agreedAmount:70,paymentType:'cash'},
-      {id:'reimburse',date:year+'-02-03',pricingType:'fixed',agreedAmount:190,extraAmount:40,paymentType:'invoice'},
+      {id:'reimburse',date:year+'-02-03',pricingType:'fixed',agreedAmount:190,extraAmount:40,extraIncluded:true,paymentType:'invoice'},
       {id:'next',date:next+'-02-01',pricingType:'fixed',agreedAmount:30,paymentType:'cash'}
     ];
     const docs=[
