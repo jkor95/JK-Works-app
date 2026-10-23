@@ -803,6 +803,45 @@ module.exports=async(browser,origin)=>{
   await page.setViewportSize({width:390,height:844});
   await page.evaluate(()=>{document.documentElement.classList.remove('ios-standalone');App.renderJobs()});
   console.log('PASS: mobiele tekst, cijfers, datums, tijden, selecties en notities minstens 16px zonder inzoomen of horizontale overflow');
+  // Vrijwillige vergoeding bij klus van €0 (bijv. familie): correct Betaald,
+  // originele afspraak blijft nul en werkbon toont het ontvangen bedrag.
+  await page.evaluate(async()=>{
+    await JKDB.putLocal('jobs',{id:'gift-job',title:'Familieklus zonder rekening',date:'2026-10-20',status:'afgerond',
+      pricingType:'fixed',agreedAmount:0,paymentType:'cash',clientName:'Fictieve familie'});
+    await JKDB.putLocal('timeEntries',{id:'gift-work',jobId:'gift-job',date:'2026-10-20',
+      from:'09:30',to:'12:00',breakMinutes:0,actualConfirmed:true});
+    await JKDB.putLocal('settings',{id:'gift-pay',kind:'jkPayment',jobId:'gift-job',
+      amount:75,date:'2026-10-20',method:'cash'});
+    await App.refreshFinance();
+  });
+  const gift=await page.evaluate(async()=>{
+    const job=await JKDB.get('jobs','gift-job'),f=App.state.finance.job(job);
+    return {agreed:f.agreed,received:f.received,open:f.open,balance:f.balance,paid:f.paid,
+      minutes:App.jobMinutes(job,await JKDB.all('timeEntries'))};
+  });
+  assert.deepEqual(gift,{agreed:0,received:75,open:0,balance:0,paid:true,minutes:150},
+    'Ontvangen gift bij gratis 2,5-uurs klus is volledig betaald zonder prijsafspraak te wijzigen');
+  await page.evaluate(()=>App.showJob('gift-job'));
+  const giftDetail=await page.locator('#modalRoot').innerText();
+  assert.match(giftDetail,/€\s*0,00[\s\S]*€\s*75,00[\s\S]*Status:\s*Betaald/,'Details tonen afgesproken €0, ontvangen €75 en Betaald');
+  assert.doesNotMatch(giftDetail,/Status:\s*Deels betaald/,'Geen deels betaald bij nul openstaand');
+  await page.locator('#labelThisJob').click();
+  await page.locator('#jobLabelForm [name=amount]').waitFor();
+  assert.match(await page.locator('#jobLabelForm [name=amount]').inputValue(),/75,00/,'Werkbon krijgt ontvangen €75 in plaats van afgesproken €0');
+  assert.equal(await page.locator('#jobLabelForm [name=amountLabel]').inputValue(),'Ontvangen:','Staat op werkbon expliciet als ontvangen bedrag');
+  assert.match(await page.locator('#jobLabelPreview').getAttribute('src'),/^data:image\/png;base64,/,'Aangepaste werkbon rendert een PNG');
+  assert.equal(await page.locator('#jobLabelPreview').evaluate(img=>img.naturalHeight),1800,'Werkbon blijft 4x6 portrait');
+  const giftAfter=await page.evaluate(async()=>({job:await JKDB.get('jobs','gift-job'),payment:await JKDB.get('settings','gift-pay')}));
+  assert.equal(giftAfter.job.agreedAmount,0,'Prijsafspraak blijft echt nul na labelbewerking');
+  assert.equal(giftAfter.payment.amount,75,'Ontvangen gift blijft correct geboekt');
+  // Een normale afgesproken prijs met een echte restschuld mag niet ineens betaald zijn.
+  const notPaid=await page.evaluate(()=>JKFinance.snapshot(
+    [{id:'partial-gift-test',pricingType:'fixed',agreedAmount:100}],[],
+    [{id:'partial-payment',kind:'jkPayment',jobId:'partial-gift-test',amount:75,method:'cash'}],
+    j=>JKFinance.price(j,0,0)).job({id:'partial-gift-test',pricingType:'fixed',agreedAmount:100}));
+  assert.equal(notPaid.paid,false,'Deels betaald blijft voor normale schuld van €25');
+  assert.equal(notPaid.balance,25);
+  console.log('PASS: nulprijs en vrijwillige €75 is Betaald, 2,5 uur behouden, 4x6 werkbon toont Ontvangen €75 zonder prijswijziging');
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(await page.evaluate(()=>alerts),[]);
   console.log('PASS: flexibele prijzen, 17u/€170/€150, deelbetalingen via beide routes, alle PDF-/btw-varianten, 20 uur, extra kosten, maand/jaar/klant, legacybehoud, bevestigde uren, sync- en back-upformaat');
  }finally{await context.close();}
