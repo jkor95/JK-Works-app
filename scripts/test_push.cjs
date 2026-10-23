@@ -180,7 +180,7 @@ async function serverTests(){
  subscription=true;protectedRestore=true;
  assert.equal((await cloud.publishNotificationProjection()).skipped,true,'Back-up/herstelbeveiliging blokkeert serverprojectie');
  assert.equal(emitted.length,1);
- console.log('PASS: privé meldingsprojectie zonder foto's/PDF/klanttekst, zonder wijziging van handmatige sync en beschermd herstel');
+ console.log("PASS: privé meldingsprojectie zonder foto's/PDF/klanttekst, zonder wijziging van handmatige sync en beschermd herstel");
  console.log('PASS: Edge-auth, uitsluitend eigen apparaten, serververtraging 30 s, blijvende deduplicatie, geen herhaalpoging bij onzekere verzending, bestaande webhook/planning en achtergrond-serviceworker');
 }
 async function browserTests(browser,origin){
