@@ -164,9 +164,14 @@ async function runActionChecks(){
  let sent=0,checked=0;
  for(const [userId,userSubs] of grouped){
   // Geen stille wijziging aan lokaal niet-gesynchroniseerde appgegevens.
-  const {data:records,error:re}=await db.from('app_records').select('store,data').eq('user_id',userId).in('store',['jobs','documents','jobPhotos','timeEntries','settings']);
+  const {data:records,error:re}=await db.from('app_records').select('store,record_id,data').eq('user_id',userId).in('store',['jobs','documents','jobPhotos','timeEntries','settings','notificationSnapshot']);
   if(re){console.error('Actiecontrole: gegevens niet beschikbaar');continue;}
-  const active=actionsFor(records||[]),keys=new Set(active.map(a=>a.key));
+  // Actuele privacy-arme projectie krijgt voorrang boven volledige records die
+  // bewust pas bij handmatige synchronisatie worden bijgewerkt.
+  const projection=(records||[]).find(r=>r.store==='notificationSnapshot'&&r.record_id==='active'&&
+    r.data?.schema===1&&Array.isArray(r.data.records));
+  const actionRecords=projection?projection.data.records:records||[];
+  const active=actionsFor(actionRecords),keys=new Set(active.map(a=>a.key));
   const {data:previous,error:pe}=await db.from('jk_push_action_state').select('action_key,active').eq('user_id',userId);
   const {data:snoozes,error:snoozeError}=await db.from('jk_push_action_snoozes').select('action_key,due_at,status').eq('user_id',userId).eq('status','pending');
   if(snoozeError){console.error('Uitgestelde acties niet beschikbaar');continue;}
