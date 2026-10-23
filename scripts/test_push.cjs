@@ -8,6 +8,7 @@ const edgeSource=fs.readFileSync(path.join(root,'supabase/functions/jk-push/inde
 function edge(options={}){
  let now=Date.parse('2026-10-14T12:00:00Z'),handler;
  const timers=[],background=[],sent=[],queries=[],rows=[];
+ const appRecords=options.appRecords||[],userStates=options.userStates||[],actionStates=options.actionStates||[],snoozeRecords=options.snoozeRecords||[];
  const webhookSecret=randomUUID();
  const subscriptions=[{user_id:'alice',endpoint:'https://push.invalid/alice-1',subscription:{endpoint:'https://push.invalid/alice-1'}},{user_id:'alice',endpoint:'https://push.invalid/alice-2',subscription:{endpoint:'https://push.invalid/alice-2'}},{user_id:'bob',endpoint:'https://push.invalid/bob',subscription:{endpoint:'https://push.invalid/bob'}}];
  class Clock extends Date{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}}
@@ -17,10 +18,22 @@ function edge(options={}){
    try{
     queries.push({table,operation});
     if(table==='jk_push_test_requests'&&options.missingTable)return Promise.resolve(resolve({data:null,error:{code:'42P01'}}));
-    const dataSource=table==='jk_push_subscriptions'?subscriptions:table==='jk_push_test_requests'?rows:[];
+    const dataSource=table==='jk_push_subscriptions'?subscriptions:
+      table==='jk_push_test_requests'?rows:table==='app_records'?appRecords:
+      table==='jk_push_user_state'?userStates:table==='jk_push_action_state'?actionStates:
+      table==='jk_push_action_snoozes'?snoozeRecords:[];
     if(operation==='insert'){
      if(rows.some(r=>r.user_id===value.user_id&&r.request_id===value.request_id))return Promise.resolve(resolve({data:null,error:{code:'23505'}}));
      rows.push(structuredClone(value));return Promise.resolve(resolve({data:null,error:null}));
+    }
+    if(operation==='upsert'){
+     const batch=Array.isArray(value)?value:[value];
+     for(const item of batch){
+      const ix=dataSource.findIndex(x=>table==='jk_push_action_state'?x.user_id===item.user_id&&x.action_key===item.action_key:
+       table==='jk_push_user_state'?x.user_id===item.user_id:false);
+      if(ix<0)dataSource.push({...item});else Object.assign(dataSource[ix],item);
+     }
+     return Promise.resolve(resolve({data:null,error:null}));
     }
     const matches=dataSource.filter(r=>filters.every(f=>f(r))).slice(0,limit);
     if(operation==='update')for(const r of matches)Object.assign(r,value);
@@ -38,7 +51,7 @@ function edge(options={}){
   ...(options.noBackground?{}:{EdgeRuntime:{waitUntil:promise=>{background.push(promise);}}})};
  vm.runInNewContext(stripTypeScriptTypes(edgeSource.replace(/^import .*;\n/gm,'')),context);
  const call=async(body,token='fixture-session',extra={})=>handler(new Request('https://fixture.invalid',{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...extra},body:JSON.stringify(body)}));
- return {call,rows,subscriptions,background,sent,queries,webhookSecret,advance:ms=>{now+=ms;for(const t of timers.splice(0)){if(t.at<=now)t.callback();else timers.push(t);}}};
+ return {call,rows,subscriptions,appRecords,userStates,actionStates,background,sent,queries,webhookSecret,advance:ms=>{now+=ms;for(const t of timers.splice(0)){if(t.at<=now)t.callback();else timers.push(t);}}};
 }
 async function serverTests(){
  const e=edge(),requestId=randomUUID(),body={action:'test',requestId,user_id:'bob',subscription:{endpoint:'https://push.invalid/bob'},title:'injected'};
@@ -73,6 +86,28 @@ async function serverTests(){
  assert.equal(old.status,200);assert.equal(webhook.sent.length,3);assert.ok(webhook.sent.every(x=>x.payload.title==='Nieuwe klantaanvraag'));
  assert.equal((await edge().call({action:'scheduled-actions'},null)).status,401);
  const scheduled=edge();assert.equal((await scheduled.call({action:'scheduled-actions'},null,{'x-jk-push-secret':scheduled.webhookSecret})).status,200);assert.equal(scheduled.sent.length,0);
+ // Gesloten app: actuele privacy-arme projectie wint van verouderde volledige
+ // cloudrecords; de cron ziet daardoor nieuwe acties zonder een geopende app.
+ const projected=edge({
+  userStates:[{user_id:'alice'}],
+  appRecords:[
+   {user_id:'alice',store:'jobs',record_id:'stale',data:{id:'stale',status:'gepland'}},
+   {user_id:'alice',store:'notificationSnapshot',record_id:'active',data:{schema:1,records:[
+    {store:'jobs',data:{id:'job-privacy',status:'afgerond',date:'2026-10-13',paymentType:'cash',quoteNeeded:true}},
+    {store:'settings',data:{id:'notificationPrefs',hours:true,quoteCreate:true}},
+    {store:'settings',data:{id:'dismissedActions',items:{}}}
+   ]}}
+  ]
+ });
+ const result=await projected.call({action:'scheduled-actions'},null,{'x-jk-push-secret':projected.webhookSecret});
+ assert.equal(result.status,200);
+ assert.equal((await result.json()).notificationsSent,4,'Twee nieuwe acties op twee eigen apparaten');
+ assert.deepEqual(projected.sent.map(x=>x.payload.body).sort(),[
+  'Offerte opmaken: klus','Offerte opmaken: klus','Uren controleren: klus','Uren controleren: klus'
+ ],'Nieuwe actie zichtbaar vanuit privacyprojectie, zonder klantdetails');
+ await projected.call({action:'scheduled-actions'},null,{'x-jk-push-secret':projected.webhookSecret});
+ assert.equal(projected.sent.length,4,'Volgende cron stuurt geen dubbele push');
+ assert.ok(projected.queries.some(q=>q.table==='app_records'),'Server controleert de actuele projectie');
  // Run the real serviceworker with no open browser window.
  const listeners={},notifications=[];
  vm.runInNewContext(fs.readFileSync(path.join(root,'app/service-worker.js'),'utf8'),{self:{addEventListener:(type,callback)=>{listeners[type]=callback;},registration:{showNotification:async(title,opts)=>{notifications.push({title,opts});}}}});
