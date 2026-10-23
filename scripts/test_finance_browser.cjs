@@ -322,6 +322,11 @@ module.exports=async(browser,origin)=>{
   await page.evaluate(()=>App.editJob('badge'));await page.locator('[name=dayDate]').first().fill('2026-10-26');await page.locator('[name=status]').selectOption('gepland');await saveJob();await page.evaluate(()=>App.renderJobs());
   assert.equal(await badgeRow.locator('.danger').count(),0);assert.equal(await badgeRow.locator('.job-status').innerText(),'gepland');
   await page.evaluate(()=>App.renderDashboard());
+  assert.equal(await page.locator('#view #clientsDash').count(),0,'Klanten niet meer als dashboardknop');
+  assert.equal(await page.locator('#view .quick[data-go="gear"]').count(),0,'Materiaal niet meer als dashboardknop');
+  for(const id of ['#newJobDash','#addHours','#newQuote','#newInvoice','#timeStatsDash'])assert.equal(await page.locator('#view '+id).count(),1,'Overige dashboardknop blijft: '+id);
+  assert.equal(await page.locator('.bottom-nav [data-route="gear"]').count(),1,'Materiaal blijft via hoofdnavigatie bereikbaar');
+  assert.equal(await page.locator('.bottom-nav [data-route="more"]').count(),1,'Klanten blijven via Meer bereikbaar');
   const dashboardGap=await page.evaluate(()=>document.querySelector('.dashboard-first-title').getBoundingClientRect().top-document.querySelector('#dashboardJobOpen').getBoundingClientRect().bottom);assert.ok(dashboardGap>=24,'Dashboard gap: '+dashboardGap);
   await page.evaluate(async()=>{const j=await JKDB.get('jobs','badge');await JKDB.putLocal('jobs',{...j,workDays:undefined,date:'2026-10-20',startTime:'20:00',endTime:'02:00',status:'afgerond'});});
   await page.clock.setFixedTime(new Date('2026-10-20T23:00:00Z'));await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),0,'Night shift still running');
@@ -332,14 +337,17 @@ module.exports=async(browser,origin)=>{
   // Agreement amounts only become outstanding when BOTH status and all planned end times qualify.
   await page.evaluate(()=>App.renderJobs());
   const numeric=async selector=>Number((await page.locator(selector).innerText()).replace(/[^0-9,-]/g,'').replace(',','.'));
-  const baseline={open:await numeric('#jobOpenTotal'),cash:await numeric('.job-totals [data-payment-group="cash"] strong'),bank:await numeric('.job-totals [data-payment-group="bank"] strong'),invoice:await numeric('.job-totals .payment-invoice-values > div:first-child strong')};
+  const baseline={open:await numeric('#jobOpenTotal'),cash:await numeric('.job-totals [data-payment-group="cash"] strong'),bank:await numeric('.job-totals [data-payment-group="bank"] strong')};
+  assert.equal(await page.locator('.job-totals [data-payment-group="bank"] span').innerText(),'Bank','Alleen Bank als label op Klussen');
+  assert.equal(await page.locator('.job-totals .payment-invoice-detail').count(),0,'Factuur-btw alleen in Statistieken');
+  assert.equal(await page.locator('.job-totals .payment-method-box').count(),2,'Twee betalingenkaarten in Klussen');
   const recordsBefore=await page.evaluate(async()=>JSON.stringify({hours:await JKDB.all('timeEntries'),docs:await JKDB.all('documents'),payments:(await JKDB.all('settings')).filter(r=>r.kind==='jkPayment')}));
   await page.evaluate(async()=>{
     await JKDB.putLocal('jobs',{id:'settlement',clientId:'client',clientName:'Fictieve klant',title:'Vaste afspraak later klaar',pricingType:'fixed',agreedAmount:150,paymentType:'invoice',status:'gepland',date:'2026-10-01',workDays:[{date:'2026-10-01',startTime:'08:00',endTime:'16:00'},{date:'2026-10-25',startTime:'08:00',endTime:'16:00'}]});
     await JKDB.putLocal('jobs',{id:'settlement-cash',title:'Contante afspraak',pricingType:'fixed',agreedAmount:200,paymentType:'cash',status:'open',date:'2026-10-01'});
     await App.renderJobs();
   });
-  assert.equal(await numeric('#jobOpenTotal'),baseline.open);assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash);assert.equal(await numeric('.job-totals .payment-invoice-values > div:first-child strong'),baseline.invoice);
+  assert.equal(await numeric('#jobOpenTotal'),baseline.open);assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank);
   const setSettlement=async changes=>page.evaluate(async changes=>{const j=await JKDB.get('jobs','settlement');await JKDB.putLocal('jobs',{...j,...changes});await App.renderJobs();},changes);
   const settlementMetrics=()=>page.evaluate(()=>App.state.finance.job(App.state.finance.jobs.find(j=>j.id==='settlement')));
   await setSettlement({status:'afgerond'});assert.equal((await settlementMetrics()).open,0,'Completed alone is insufficient with a future workday');assert.equal((await settlementMetrics()).agreed,150);assert.equal((await settlementMetrics()).paid,false);
@@ -350,19 +358,18 @@ module.exports=async(browser,origin)=>{
   assert.equal((await settlementMetrics()).open,150);assert.equal(await numeric('#jobOpenTotal'),baseline.open+150);
   await page.evaluate(()=>App.renderDashboard());assert.equal(await numeric('#dashOpenPayments strong'),baseline.open+150);
   await page.evaluate(()=>App.renderJobs());
-  for(const filter of ['cash','invoice','all']){await page.locator(`[data-jpf="${filter}"]`).click();await page.waitForFunction(value=>document.querySelector(`[data-jpf="${value}"]`).classList.contains('active'),filter);assert.equal(await numeric('#jobOpenTotal'),baseline.open+150);assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash);assert.equal(await numeric('.job-totals .payment-invoice-values > div:first-child strong'),baseline.invoice);}
+  for(const filter of ['cash','invoice','all']){await page.locator(`[data-jpf="${filter}"]`).click();await page.waitForFunction(value=>document.querySelector(`[data-jpf="${value}"]`).classList.contains('active'),filter);assert.equal(await numeric('#jobOpenTotal'),baseline.open+150);assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank);}
   for(const width of [390,1024]){
     await page.setViewportSize({width,height:844});
     const layout=await page.locator('.job-totals').evaluate(e=>{
       const open=e.querySelector('.job-open-filter'),methods=[...e.querySelectorAll('.payment-method-box')],
-        invoice=e.querySelector('.payment-invoice-detail'),style=getComputedStyle(open),
-        cash=methods[0].getBoundingClientRect(),bank=methods[1].getBoundingClientRect();
-      const first=open.getBoundingClientRect(),last=invoice.getBoundingClientRect();
+        style=getComputedStyle(open),cash=methods[0].getBoundingClientRect(),bank=methods[1].getBoundingClientRect();
+      const first=open.getBoundingClientRect();
       return {fits:e.scrollWidth<=e.clientWidth,center:style.textAlign,color:style.color,bg:style.backgroundColor,
         fullWidth:first.width>Math.max(cash.width,bank.width)*1.9,below:cash.top>=first.bottom&&Math.abs(cash.top-bank.top)<2,
-        invoiceBelow:last.top>=cash.bottom&&last.top>=bank.bottom,note:e.querySelectorAll('p').length};
+        noInvoices:e.querySelectorAll('.payment-invoice-detail').length===0,note:e.querySelectorAll('p').length};
     });
-    assert.ok(layout.fits&&layout.fullWidth&&layout.below&&layout.invoiceBelow);
+    assert.ok(layout.fits&&layout.fullWidth&&layout.below&&layout.noInvoices);
     assert.equal(layout.center,'center');assert.equal(layout.bg,'rgb(254, 228, 226)');
     assert.equal(layout.color,'rgb(180, 35, 24)');assert.equal(layout.note,0);
   }await page.setViewportSize({width:390,height:844});
@@ -386,12 +393,12 @@ module.exports=async(browser,origin)=>{
     await App.renderJobs();
   });
   assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash+50);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+130);
-  assert.equal(await numeric('.job-totals .payment-invoice-values > div:first-child strong'),baseline.invoice+130);assert.equal(await numeric('#jobOpenTotal'),baseline.open+50,'Only orphan invoice remainder is newly outstanding');
+  assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+130);assert.equal(await numeric('#jobOpenTotal'),baseline.open+50,'Only orphan invoice remainder is newly outstanding');
   await page.evaluate(async()=>{const p=await JKDB.get('settings','settlement-payment');await JKDB.putLocal('settings',{...p,invoiceId:'received-linked',amount:150});await App.renderJobs();});
-  assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+180);assert.equal(await numeric('.job-totals .payment-invoice-values > div:first-child strong'),baseline.invoice+180,'Moving and editing the same payment through its linked invoice never duplicates received totals');assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash+50);
-  await page.evaluate(async()=>{const p=await JKDB.get('settings','received-cash');await JKDB.putLocal('settings',{...p,voided:true});await App.renderJobs();});assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+180);assert.equal(await numeric('.job-totals .payment-invoice-values > div:first-child strong'),baseline.invoice+180);
-  console.log('PASS: uitsluitend ontvangen contant/factuur, deelbetalingen, onbetaalde afspraken uitgesloten, gekoppelde/losse facturen, wijzigen en verwijderen; gecentreerd rood openstaand en witte totalen zonder toelichting');
-  console.log('PASS: compact klussaldo en betaalwijzeverdeling met factuur/btw-specificatie; openstaand uitsluitend afgerond én laatste einde voorbij; dashboard, filters, toekomst/heropenen, deelbetaling, nachtwerk/middernacht en bytegelijk behoud uren/facturen/betalingen');
+  assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+180);assert.equal(await page.locator('.job-totals .payment-invoice-detail').count(),0,'Geen factuur-specificatie op Klussen');assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash+50);
+  await page.evaluate(async()=>{const p=await JKDB.get('settings','received-cash');await JKDB.putLocal('settings',{...p,voided:true});await App.renderJobs();});assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+180);assert.equal(await page.locator('.job-totals .payment-invoice-detail').count(),0);
+  console.log('PASS: uitsluitend ontvangen contant/bank, deelbetalingen, onbetaalde afspraken uitgesloten, gekoppelde/losse facturen, wijzigen en verwijderen; gecentreerd rood openstaand en witte totalen zonder toelichting');
+  console.log('PASS: compact klussaldo en betaalwijzeverdeling zonder factuurblok; openstaand uitsluitend afgerond én laatste einde voorbij; dashboard, filters, toekomst/heropenen, deelbetaling, nachtwerk/middernacht en bytegelijk behoud uren/facturen/betalingen');
   // Issue #35: clickable outstanding filter, rounding without creating revenue and reversible settlement.
   await page.evaluate(async()=>{
     await JKDB.putLocal('jobs',{id:'issue35',title:'Afronding bij montage',clientName:'Proefklant',date:'2026-10-01',status:'afgerond',pricingType:'fixed',agreedAmount:105,hourlyRate:15,paymentType:'cash'});

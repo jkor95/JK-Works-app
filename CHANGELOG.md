@@ -1,3 +1,10 @@
+## v71.13.22 — minder knoppen op Dashboard, korter Klussenoverzicht
+- **Klussen → overzicht:** verberg uitsluitend het kleine blok **Via facturen (specificatie)** met factuurontvangsten en ontvangen btw. De klikbare **Openstaand**-kaart en de twee blokjes **Contant** en **Bank** blijven behouden.
+- **Bank** is alleen het kortere *label* voor de gecombineerde ontvangsten per bankoverschrijving en betaalverzoek; bestaande betaalmethoden en bedragen blijven ongewijzigd.
+- **Meer → Statistieken → Betaalwijze:** de volledige specificatie van factuurontvangsten en btw blijft daar beschikbaar; deze wijziging verwijdert geen boekhoudgegevens.
+- **Dashboard → Snel openen:** verwijder uitsluitend de twee snelknoppen **Klanten** en **Materiaal**. **Klanten** blijft onder **Meer → Klanten**, **Materiaal** via de onderste hoofdnavigatie; overige dashboardfuncties en snelknoppen blijven aanwezig.
+- Geen wijzigingen aan klantrecords, betalingen, facturen, statistiekberekeningen of Supabase. Mobiele breedte en regressies gecontroleerd.
+
 ## v71.13.21 — ontvangen per betaalwijze en factuur-btw
 - **Klussen → overzicht bovenaan:** behoud de bestaande klikbare **Openstaand**-kaart. Toon daaronder **Contant** afzonderlijk en **Bank + betaalverzoek** als één totaal, gebaseerd op daadwerkelijk geregistreerde betaalwijzen (niet alleen op klussoort).
 - Direct daaronder staat een kleiner onderdeel **Via facturen (specificatie)** met **Ontvangen via facturen** en **Waarvan ontvangen btw**. De twee factuurwaarden worden niet bovenop de bedragen per betaalwijze geteld.

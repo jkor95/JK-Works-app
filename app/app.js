@@ -895,8 +895,6 @@ const App = (() => {
         <button class="quick" id="addHours"><span class="emoji">🕒</span><strong>Uren invoeren</strong><small>Datum en van-tot registreren</small></button>
         <button class="quick" id="newQuote"><span class="emoji">📄</span><strong>Nieuwe offerte</strong><small>Vanuit een bestaande klus</small></button>
         <button class="quick" id="newInvoice"><span class="emoji">🧾</span><strong>Nieuwe factuur</strong><small>Uren en materiaal factureren</small></button>
-        <button class="quick" id="clientsDash"><span class="emoji">👥</span><strong>Klanten</strong><small>Contact- en adresgegevens</small></button>
-        <button class="quick" data-go="gear"><span class="emoji">🧰</span><strong>Materiaal</strong><small>Inpaklijsten en gereedschap</small></button>
         <button class="quick quick-stat" id="timeStatsDash"><span class="quick-stat-title"><span class="emoji">📊</span><strong>Urenstatistieken</strong></span>${dashboardYearMiniChart(entries)}</button>
       </div>`;
     $$('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
@@ -905,7 +903,6 @@ const App = (() => {
     $('#newQuote').addEventListener('click',()=>createBusinessDoc('Offerte'));
     $('#addHours').addEventListener('click',()=>chooseJobCalculation());
     $('#newJobDash').addEventListener('click',()=>editJob());
-    $('#clientsDash').addEventListener('click',()=>showClients());
     $('#timeStatsDash').addEventListener('click',()=>showTimeStats());
     $('#dashRequests').addEventListener('click',()=>showWebsiteRequests());
     $('#dashActions').addEventListener('click',()=>showActionCenter());
@@ -2139,22 +2136,22 @@ const App = (() => {
     function paymentMethodOverviewHtml(summary,{compact=false,title='Ontvangen per betaalwijze'}={}){
       const items=[
         ['Contant',summary.cash,'cash'],
-        ['Bank + betaalverzoek',summary.bankAndRequest,'bank']
+        [compact?'Bank':'Bank + betaalverzoek',summary.bankAndRequest,'bank']
       ];
-      if(summary.other>0.005)items.push(['Anders',summary.other,'other']);
-      if(summary.unknown>0.005)items.push(['Betaalwijze onbekend',summary.unknown,'unknown']);
+      if(!compact&&summary.other>0.005)items.push(['Anders',summary.other,'other']);
+      if(!compact&&summary.unknown>0.005)items.push(['Betaalwijze onbekend',summary.unknown,'unknown']);
       const rows=items.map(([label,amount,key])=>
         '<div class="payment-method-box" data-payment-group="'+key+'"><span>'+esc(label)+'</span><strong>'+money(amount)+'</strong></div>'
       ).join('');
       return '<section class="payment-method-breakdown'+(compact?' compact':'')+'" aria-label="'+esc(title)+'">'+
         (compact?'':'<h3>'+esc(title)+'</h3>')+
         '<div class="payment-method-main">'+rows+'</div>'+
-        '<div class="payment-invoice-detail" aria-label="Factuurontvangsten en btw, geen extra inkomsten">'+
+        (compact?'':'<div class="payment-invoice-detail" aria-label="Factuurontvangsten en btw, geen extra inkomsten">'+
           '<span class="payment-invoice-heading">Via facturen (specificatie)</span>'+
           '<div class="payment-invoice-values">'+
             '<div><span>Ontvangen via facturen</span><strong>'+money(summary.invoiceGross)+'</strong></div>'+
             '<div><span>Waarvan ontvangen btw</span><strong>'+money(summary.invoiceVat)+'</strong></div>'+
-          '</div></div></section>';
+          '</div></div>')+'</section>';
     }
     function financialEvents(entries,jobs,company,finance=state.finance){
     const events=[],jobMap=new Map(jobs.map(j=>[String(j.id),j])),ownPaid=ownEarningsPayments(finance,jobs,entries,company);
