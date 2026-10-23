@@ -71,8 +71,8 @@ module.exports=async(browser,origin)=>{
   assert.equal(await page.locator('#openLabelPreview').evaluate(img=>img.naturalWidth),1200);
   assert.equal(await page.locator('#openLabelPreview').evaluate(img=>img.naturalHeight),1800);
   assert.match(await page.locator('#openLabelSummary').innerText(),/50,00/,'Openstaand label gebruikt bestaande €50 schuld');
-  assert.match(await page.locator('#openLabelForm').innerText(),/Fictieve klant/);
-  assert.match(await page.locator('#openLabelForm').innerText(),/Montage kast/);
+  assert.match(await page.locator('#openLabelForm [name="client"]').first().inputValue(),/Fictieve klant/);
+  assert.match(await page.locator('#openLabelForm [name="job"]').first().inputValue(),/Montage kast/);
   assert.equal(await page.locator('#openLabelForm [name="include"]').count()>0,true);
   const beforeWorklabel=await page.evaluate(async()=>JSON.stringify({jobs:await JKDB.all('jobs'),payments:(await JKDB.all('settings')).filter(x=>x.kind==='jkPayment')}));
   await page.locator('#openLabelTitle').fill('Openstaand - eigen overzicht');
