@@ -4,14 +4,6 @@ const JKCloud = (() => {
   const BUCKET = 'jkworks-files';
   const LOCAL_ONLY_STORES = new Set();
   let client = null, session = null, syncing = false, backupBusy = false;
-  let notificationSyncActive=false,notificationSyncTimer=null,notificationRetryTimer=null;
-  // Alleen actiegevoelige wijzigingen gaan bij ingeschakelde echte push alvast
-  // naar de cloud. Andere gegevens blijven zoals voorheen handmatig te syncen.
-  const NOTIFICATION_STORES=new Set(['jobs','timeEntries','jobPhotos','documents']);
-  const NOTIFICATION_SETTINGS=new Set(['notificationPrefs','dismissedActions']);
-  const notificationRelevant=q=>q&&(
-    NOTIFICATION_STORES.has(q.store)||(q.store==='settings'&&NOTIFICATION_SETTINGS.has(q.recordId))
-  );
   const BACKUP_BUCKETS=['jkworks-files','jkworks-request-files','jkworks-website-assets'];
   async function restoreProtected(){return !!(await JKDB.get('settings','backupRestoreGuard'))?.active;}
   async function withBackupRead(action){
@@ -87,18 +79,13 @@ const JKCloud = (() => {
       // Een stille token-refresh mag de interface niet opnieuw opbouwen.
       if(event==='SIGNED_IN' || event==='SIGNED_OUT' || event==='USER_UPDATED')
         document.dispatchEvent(new CustomEvent('jkcloud-auth'));
-      if(event==='SIGNED_IN' || event==='TOKEN_REFRESHED')scheduleNotificationSync();
+      if(event==='SIGNED_IN' || event==='TOKEN_REFRESHED')scheduleNotificationProjection();
     });
-    // Volledige synchronisatie blijft handmatig. Met echte push ingeschakeld
-    // werken alleen de relevante pending updates op de server ook na appsluiting.
-    window.addEventListener('online',scheduleNotificationSync);
-    document.addEventListener('visibilitychange',()=>{
-      if(document.visibilityState==='visible')scheduleNotificationSync();
-    });
-    document.addEventListener('jkcloud-sync',event=>{
-      if(event.detail?.state==='done')scheduleNotificationSync();
-    });
-    scheduleNotificationSync();
+    // v33: geen automatische sync op openen, focus, online worden of timer.
+    // Synchronisatie gebeurt alleen na inloggen of wanneer de gebruiker op Sync drukt.
+    window.addEventListener('online',scheduleNotificationProjection);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')scheduleNotificationProjection();});
+    scheduleNotificationProjection();
     return true;
   }
   function user(){ return session?.user || null; }
@@ -106,7 +93,7 @@ const JKCloud = (() => {
   async function signIn(email,password){
     if(!client) throw new Error('Cloudmodule is niet geladen. Controleer internet.');
     const {data,error}=await client.auth.signInWithPassword({email,password});
-    if(error) throw error; session=data.session; if(!await restoreProtected())await syncNow(); return data;
+    if(error) throw error; session=data.session; if(!await restoreProtected())await syncNow(); scheduleNotificationProjection(); return data;
   }
   async function signUp(email,password){
     if(!client) throw new Error('Cloudmodule is niet geladen. Controleer internet.');
@@ -117,11 +104,93 @@ const JKCloud = (() => {
   }
   async function signOut(){ if(client) await client.auth.signOut(); session=null; }
 
+  // v71.13.20: beperkte, afgeschermde meldingsprojectie. Geen foto's, PDF's,
+  // klantnamen of volledige klusrecords uploaden om achtergrondpush mogelijk te maken.
+  const NOTIFICATION_STORES=new Set(['jobs','documents','timeEntries','jobPhotos']);
+  const NOTIFICATION_SETTINGS=new Set(['notificationPrefs','dismissedActions']);
+  const relevantOp=op=>op&&(NOTIFICATION_STORES.has(op.store)||
+    (op.store==='settings'&&NOTIFICATION_SETTINGS.has(op.recordId)));
+  let mirrorTimer=null,mirrorBusy=false,mirrorPending=false;
+  const clientAlias=name=>{
+    const value=String(name||'').trim().toLowerCase();
+    let hash=2166136261;
+    for(let i=0;i<value.length;i++)hash=Math.imul(hash^value.charCodeAt(i),16777619);
+    return value?'alias-'+(hash>>>0).toString(16):'';
+  };
+  async function notificationProjection(){
+    const [jobs,documents,photos,entries,prefs,dismissed]=await Promise.all([
+      JKDB.all('jobs'),JKDB.all('documents'),JKDB.all('jobPhotos'),JKDB.all('timeEntries'),
+      JKDB.get('settings','notificationPrefs'),JKDB.get('settings','dismissedActions')
+    ]);
+    const allowedPrefs=['hours','photos','quoteCreate','quoteSend','invoiceCreate','invoiceSend','paymentReminder'];
+    return {
+      schema:1,
+      records:[
+        ...jobs.map(j=>({store:'jobs',data:{
+          id:j.id,date:j.date,startTime:j.startTime,endTime:j.endTime,status:j.status,
+          workDays:Array.isArray(j.workDays)?j.workDays.map(d=>({date:d.date,startTime:d.startTime,endTime:d.endTime})):undefined,
+          completionPromptHandledAt:j.completionPromptHandledAt||null,
+          photoPolicy:j.photoPolicy||'optional',quoteNeeded:!!j.quoteNeeded,paymentType:j.paymentType||'invoice',
+          clientName:clientAlias(j.clientName)
+        }})),
+        ...documents.map(d=>({store:'documents',data:{
+          id:d.id,folder:d.folder,kind:d.kind,meta:{
+            jobId:d.meta?.jobId||null,workDate:d.meta?.workDate||null,
+            client:{name:clientAlias(d.meta?.client?.name)},
+            sent:!!d.meta?.sent,paid:!!d.meta?.paid,deadline:d.meta?.deadline||null
+          }
+        }})),
+        ...photos.map(p=>({store:'jobPhotos',data:{jobId:p.jobId,phase:p.phase}})),
+        ...entries.map(e=>({store:'timeEntries',data:{
+          jobId:e.jobId,date:e.date,start:e.start,autoFromJobSchedule:!!e.autoFromJobSchedule,
+          actualConfirmed:!!e.actualConfirmed
+        }})),
+        {store:'settings',data:{id:'notificationPrefs',
+          ...Object.fromEntries(allowedPrefs.map(k=>[k,prefs?.[k]!==false]))}},
+        {store:'settings',data:{id:'dismissedActions',items:dismissed?.items||{}}}
+      ]
+    };
+  }
+  async function subscribedForPush(){
+    if(!isSignedIn()||!navigator.onLine||!('serviceWorker' in navigator)||
+       !('PushManager' in window)||!('Notification' in window)||Notification.permission!=='granted')return false;
+    try{
+      const reg=await navigator.serviceWorker.ready;
+      return !!(await reg.pushManager.getSubscription());
+    }catch{return false;}
+  }
+  async function publishNotificationProjection(){
+    if(!isSignedIn()||!navigator.onLine||syncing||backupBusy||mirrorBusy||
+       await restoreProtected()||!await subscribedForPush())return {sent:false,skipped:true};
+    mirrorBusy=true;
+    try{
+      const snapshot=await notificationProjection();
+      const record={user_id:user().id,store:'notificationSnapshot',record_id:'active',
+        data:snapshot,updated_at:new Date().toISOString()};
+      const {error}=await client.from('app_records').upsert(record,{onConflict:'user_id,store,record_id'});
+      if(error)throw error;
+      return {sent:true};
+    }catch(e){
+      console.warn('Meldingsgegevens niet bijgewerkt op server');
+      return {sent:false,failed:true};
+    }finally{
+      mirrorBusy=false;
+      if(mirrorPending){mirrorPending=false;scheduleNotificationProjection();}
+    }
+  }
+  function scheduleNotificationProjection(){
+    if(mirrorBusy){mirrorPending=true;return;}
+    if(mirrorTimer!==null)return;
+    mirrorTimer=setTimeout(()=>{
+      mirrorTimer=null;
+      publishNotificationProjection().catch(()=>{});
+    },250);
+  }
   async function queueOp(op){
     const q={id:`q_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,...op,queuedAt:new Date().toISOString()};
     await JKDB.putLocal('syncQueue',q);
     document.dispatchEvent(new CustomEvent('jkcloud-queue'));
-    if(notificationRelevant(q))scheduleNotificationSync();
+    if(relevantOp(q))scheduleNotificationProjection();
     return q;
   }
   async function hasLocalDelete(store,id){
@@ -216,73 +285,6 @@ const JKCloud = (() => {
 
   async function purgeLocalOnlyCloudData(){ return; }
 
-  // Bestaande Supabase Web Push heeft servergegevens nodig om later zonder
-  // geopende app iets te kunnen versturen. Dit is geen volledige sync/download:
-  // uitsluitend gewijzigde actiegevoelige records gaan naar de cloud.
-  async function hasPushSubscription(){
-    if(!isSignedIn()||!navigator.onLine||!('serviceWorker' in navigator)||
-       !('PushManager' in window)||!('Notification' in window)||
-       Notification.permission!=='granted')return false;
-    try{
-      const reg=await navigator.serviceWorker.ready;
-      return !!(await reg.pushManager.getSubscription());
-    }catch{return false;}
-  }
-  function scheduleNotificationSync(){
-    if(notificationSyncTimer!==null)return;
-    notificationSyncTimer=setTimeout(()=>{
-      notificationSyncTimer=null;
-      publishNotificationChanges().catch(()=>{});
-    },80);
-  }
-  async function notificationSyncUnlocked(){
-    if(syncing||backupBusy||notificationSyncActive||!isSignedIn()||!navigator.onLine||
-       await restoreProtected())return {sent:0,skipped:true};
-    const eligible=(await JKDB.all('syncQueue')).filter(notificationRelevant);
-    if(!eligible.length)return {sent:0};
-    if(!await hasPushSubscription())return {sent:0,skipped:true};
-    notificationSyncActive=true;
-    let sent=0,failed=0;
-    try{
-      const items=eligible.sort((a,b)=>(a.type==='delete'?0:1)-(b.type==='delete'?0:1));
-      for(const item of items){
-        try{
-          if(item.type==='delete')await markDeleted(item.store,item.recordId);
-          else if(await hasLocalDelete(item.store,item.recordId)){
-            await JKDB.removeLocal('syncQueue',item.id);continue;
-          }else{
-            const obj=await JKDB.get(item.store,item.recordId);
-            if(obj)await pushRecord(item.store,obj);
-          }
-          await JKDB.removeLocal('syncQueue',item.id);
-          sent++;
-        }catch(e){
-          failed++;
-          // Laat de mutatie in de wachtrij zodat deze bij de volgende gelegenheid
-          // opnieuw kan worden verstuurd; log nooit abonnementstokens.
-          console.warn('Meldingsgegevens nog niet bijgewerkt op server',item.store,e?.message||'');
-        }
-      }
-      document.dispatchEvent(new CustomEvent('jkcloud-queue'));
-      return {sent,failed};
-    }finally{
-      notificationSyncActive=false;
-    }
-  }
-  async function publishNotificationChanges(){
-    if(!isSignedIn()||!navigator.onLine)return {sent:0,skipped:true};
-    try{
-      if(navigator.locks){
-        return await navigator.locks.request('jkworks-data-operation',{ifAvailable:true},async lock=>
-          lock?notificationSyncUnlocked():{sent:0,skipped:true}
-        );
-      }
-      return await notificationSyncUnlocked();
-    }catch(e){
-      console.warn('Meldingsgegevens bijwerken mislukt',e?.message||'');
-      return {sent:0,failed:1};
-    }
-  }
   async function flushQueue(){
     if(!isSignedIn() || !navigator.onLine) return;
     const qs=await JKDB.all('syncQueue');
@@ -390,7 +392,7 @@ const JKCloud = (() => {
       }
       await JKDB.putLocal('settings',{id:'cloudStatus',lastSync:new Date().toISOString(),email:user().email});
       document.dispatchEvent(new CustomEvent('jkcloud-sync',{detail:{state:'done',changed:localChanged}}));
-    }finally{ syncing=false; document.dispatchEvent(new CustomEvent('jkcloud-queue')); scheduleNotificationSync(); }
+    }finally{ syncing=false; document.dispatchEvent(new CustomEvent('jkcloud-queue')); scheduleNotificationProjection(); }
   }
 
   async function pruneCloudToLocal(stores=['documents','timeEntries','jobs']){
@@ -458,5 +460,5 @@ const JKCloud = (() => {
   }
   async function pendingCount(){ return (await JKDB.all('syncQueue')).filter(q=>!LOCAL_ONLY_STORES.has(q.store)).length; }
   function status(){ return {available:available(),signedIn:isSignedIn(),email:user()?.email||'',syncing}; }
-  return {readBackupSnapshot,downloadBackupFile,withBackupRead,restoreProtected,getAccessToken:async()=>{const {data}=await client.auth.getSession();return data?.session?.access_token||null;},init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,publishNotificationChanges,queuePut,queueDelete,pruneCloudToLocal,pendingCount,getWebsiteContent,saveWebsiteContent,getWebsiteRequests,updateWebsiteRequest,downloadRequestPhoto,deleteWebsiteRequest};
+  return {readBackupSnapshot,downloadBackupFile,withBackupRead,restoreProtected,getAccessToken:async()=>{const {data}=await client.auth.getSession();return data?.session?.access_token||null;},init,status,user,isSignedIn,signIn,signUp,signOut,syncNow,publishNotificationProjection,queuePut,queueDelete,pruneCloudToLocal,pendingCount,getWebsiteContent,saveWebsiteContent,getWebsiteRequests,updateWebsiteRequest,downloadRequestPhoto,deleteWebsiteRequest};
 })();
