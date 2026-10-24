@@ -1,3 +1,12 @@
+## v71.13.26 — DHR183 geïntegreerd in gereedschap en kluschecklists
+- **Gereedschapsregister:** Makita DHR183 18V LXT SDS-plus boorhamer toegevoegd. Zolang het definitieve Mbox-formaat nog niet bekend is, staat hij onder **Los / reserve** met de opmerking **Mbox nog te bepalen**.
+- **Boren & ophangen:** DHR183 + losse 18V accu en passende SDS-plus boor(en) worden meegenomen voor steen/beton en langere doorvoergaten. Bij hout/gips kan de boorhamer vervallen.
+- **Montagewerk:** ook **Kleine montage / reparatie**, **Keuken monteren** en **Verbouwing / renovatie** noemen de DHR183 conditioneel wanneer bevestiging in steen/beton of een dieper gat nodig is.
+- **Automatische checklistvoorstellen:** bij nieuwe klussen herkent de app omschrijvingen zoals *plank ophangen*, *kapstok bevestigen*, *wandbeugel*, *keuken monteren*, *kast monteren*, *kitten*, *sloop* en *verbouwing* en stelt de passende bestaande kluschecklist voor. De gebruiker kan de keuze altijd handmatig wijzigen.
+- Website-aanvragen die naar een klus worden omgezet krijgen dezelfde checklistvoorstel-logica. Montage-/ophangwoorden vallen ook onder de bestaande categorie **Montagewerkzaamheden** voor werkbeschrijvingen.
+- Bestaande lokale gegevens worden via seedmigratie v7 aangevuld; opgeslagen serienummers, aanschafdatum, checkliststatussen en overige bedrijfsgegevens blijven behouden.
+- PWA-cacheversie bijgewerkt. Geen Supabase-schemawijziging en geen wijziging aan financiële administratie, uren, facturen of offertes.
+
 ## v71.13.25 — 4×6 werkbon van alle openstaande betalingen
 - **Klussen → Openstaand:** bij de openstaande klussen verschijnt de knop **🖨️ Openstaand overzicht / label**. De bon gebruikt exact de bestaande financiële openstanden uit Klussen, inclusief losse openstaande facturen zonder klus die ook in het totaalsaldo vallen. Reeds betaalde en bewust afgeronde/afgeboekte bedragen worden niet opnieuw als schuld getoond.
 - Op iedere post staan **naam/klant, klusomschrijving of factuur, werkdatum en werkelijke uren (of geplande tijden indien nog niet gewerkt)** en het openstaande bedrag. Sortering is van oud naar nieuw. Ontbrekende gegevens worden niet verzonnen.
