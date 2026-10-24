@@ -236,10 +236,10 @@ async function serverTests(){
  assert.equal(mutations.filter(x=>x[0]!=='syncQueue').length,0,'Geen lokale administratieve records gewijzigd');
  subscription=false;
  assert.equal((await cloud.publishNotificationProjection()).skipped,true,'Geen automatische upload als echte push uitstaat');
- assert.equal(emitted.length,1);
+ assert.equal(emitted.length,2);
  subscription=true;protectedRestore=true;
  assert.equal((await cloud.publishNotificationProjection()).skipped,true,'Back-up/herstelbeveiliging blokkeert serverprojectie');
- assert.equal(emitted.length,1);
+ assert.equal(emitted.length,2);
  console.log("PASS: privé meldingsprojectie zonder foto's/PDF/klanttekst, zonder wijziging van handmatige sync en beschermd herstel");
  console.log('PASS: Edge-auth, uitsluitend eigen apparaten, serververtraging 30 s, blijvende deduplicatie, geen herhaalpoging bij onzekere verzending, bestaande webhook/planning en achtergrond-serviceworker');
 }
