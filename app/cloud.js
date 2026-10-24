@@ -117,12 +117,25 @@ const JKCloud = (() => {
     for(let i=0;i<value.length;i++)hash=Math.imul(hash^value.charCodeAt(i),16777619);
     return value?'alias-'+(hash>>>0).toString(16):'';
   };
+  // Only future, timed jobs may expose the minimum private details required
+  // for the explicitly enabled one-hour reminder. Existing manual sync stays unchanged.
+  function jobReminderDetails(j,prefs){
+    if(prefs?.jobReminder===false||['afgerond','geannuleerd','cancelled','completed'].includes(String(j.status||'').toLowerCase()))return undefined;
+    const localDay=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    const days=Array.isArray(j.workDays)?j.workDays:[{date:j.date,startTime:j.startTime}];
+    if(!days.some(d=>String(d?.date||'')>=localDay&&/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(d?.startTime||''))))return undefined;
+    const execution=j.executionAddress;
+    const place=execution&&(execution.street||execution.postal||execution.city)?execution:j;
+    const address=[place.street||place.address||'',[place.postal||'',place.city||''].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    const short=(value,max)=>String(value||'').replace(/[\r\n]+/g,' ').trim().slice(0,max);
+    return {clientName:short(j.clientName,120),title:short(j.title,120),address:short(address,200)};
+  }
   async function notificationProjection(){
     const [jobs,documents,photos,entries,prefs,dismissed]=await Promise.all([
       JKDB.all('jobs'),JKDB.all('documents'),JKDB.all('jobPhotos'),JKDB.all('timeEntries'),
       JKDB.get('settings','notificationPrefs'),JKDB.get('settings','dismissedActions')
     ]);
-    const allowedPrefs=['hours','photos','quoteCreate','quoteSend','invoiceCreate','invoiceSend','paymentReminder'];
+    const allowedPrefs=['jobReminder','hours','photos','quoteCreate','quoteSend','invoiceCreate','invoiceSend','paymentReminder'];
     return {
       schema:1,
       records:[
@@ -131,7 +144,7 @@ const JKCloud = (() => {
           workDays:Array.isArray(j.workDays)?j.workDays.map(d=>({date:d.date,startTime:d.startTime,endTime:d.endTime})):undefined,
           completionPromptHandledAt:j.completionPromptHandledAt||null,
           photoPolicy:j.photoPolicy||'optional',quoteNeeded:!!j.quoteNeeded,paymentType:j.paymentType||'invoice',
-          clientName:clientAlias(j.clientName)
+          clientName:clientAlias(j.clientName),reminder:jobReminderDetails(j,prefs)
         }})),
         ...documents.map(d=>({store:'documents',data:{
           id:d.id,folder:d.folder,kind:d.kind,meta:{
