@@ -41,6 +41,17 @@ async function files(dir) {
   console.log('PASS: JavaScript-syntax, domein, manifest, precache en PDF-sjablonen');
   require('./test_seo.cjs');
   require('./test_no_explanation_cards.cjs');
+  const dbSource = await fs.readFile(path.join(root, 'app/db.js'), 'utf8');
+  const appSource = await fs.readFile(path.join(root, 'app/app.js'), 'utf8');
+  assert.match(dbSource,/Makita DHR183 18V LXT SDS-plus boorhamer/,'DHR183 ontbreekt in inpak-/gereedschapsdata');
+  assert.match(dbSource,/c_drill_mount[\s\S]*Makita DHR183/,'DHR183 ontbreekt bij Boren & ophangen');
+  assert.match(dbSource,/c_small_repair[\s\S]*Makita DHR183/,'DHR183 ontbreekt bij montage/reparatie');
+  assert.match(dbSource,/c_kitchen[\s\S]*Makita DHR183/,'DHR183 ontbreekt bij keukenmontage');
+  assert.match(dbSource,/c_renovation[\s\S]*Makita DHR183/,'DHR183 ontbreekt bij verbouwing');
+  assert.match(appSource,/function suggestedChecklistIdForTitle/,'Automatische checklistvoorstellen ontbreken');
+  assert.match(appSource,/ophangen\|bevestigen[\s\S]*c_drill_mount/,'Ophang-/bevestigingswerk koppelt niet aan Boren & ophangen');
+  assert.match(appSource,/montage\|monteren[\s\S]*c_small_repair/,'Montagewerk koppelt niet aan Kleine montage / reparatie');
+  console.log('PASS: DHR183, montage-/ophangchecklists en automatische klusvoorstellen');
   const deploymentGuards=spawnSync('python3',['-m','unittest','discover','-s','scripts','-p','test_deploy_push.py'],{cwd:root,encoding:'utf8'});
   assert.equal(deploymentGuards.status,0,deploymentGuards.stderr);
   console.log('PASS: veilige deployment, goedgekeurde SQL, afscherming en behoud bestaande functieconfiguratie (fictieve API)');
