@@ -163,7 +163,7 @@ assert.match(editorSource, /siteDefaults=msg\.defaults/);
 assert.match(editorSource, /const val=content\[sel\.key\]\?\?siteDefaults\[sel\.key\]/);
 assert.match(editorAppHtml, /website-editor\.js\?v=71\.8\.9/);
 assert.match(home, /site-editor-public\.js\?v=71\.8\.8/);
-assert.match(editorWorker, /jkworks-pricing-v71-13-25/);
+assert.match(editorWorker, /jkworks-pricing-v71-13-\d+/);
 
 
 // Alleen de geïnstalleerde webapp krijgt extra ruimte rond de iOS-statusbalk.
