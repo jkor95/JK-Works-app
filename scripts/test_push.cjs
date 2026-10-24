@@ -135,15 +135,17 @@ async function serverTests(){
  const initialReminderKey=reminder.actionStates.find(s=>s.active)?.action_key;
  assert.match(initialReminderKey,/jobReminder:/);
  startFixture.records[0].data.workDays[0].startTime='15:05';
+ reminder.advance(5*60000); // 14:05 Amsterdam, one hour before rescheduled start.
  await reminder.call({action:'scheduled-actions'},null,{'x-jk-push-secret':reminder.webhookSecret});
  assert.equal(reminder.sent.length,4,'Aangepaste begintijd heeft eigen notificatiesleutel');
  assert.equal(reminder.actionStates.find(s=>s.action_key===initialReminderKey)?.active,false);
  startFixture.records[0].data.status='afgerond';
  await reminder.call({action:'scheduled-actions'},null,{'x-jk-push-secret':reminder.webhookSecret});
  assert.equal(reminder.sent.length,4,'Afgeronde klus stuurt niets meer');
+ startFixture.records[0].data.status='gepland';
+ startFixture.records[0].data.workDays[0].startTime='15:00';
  const disabled=edge({userStates:[{user_id:'alice'}],appRecords:[{user_id:'alice',store:'notificationSnapshot',record_id:'active',
   data:{schema:1,records:[startFixture.records[0],{store:'settings',data:{id:'notificationPrefs',jobReminder:false}}]}}]});
- startFixture.records[0].data.status='gepland';
  await disabled.call({action:'scheduled-actions'},null,{'x-jk-push-secret':disabled.webhookSecret});
  assert.equal(disabled.sent.length,0,'Uitgeschakelde herinneringscategorie veroorzaakt geen push');
  const missingTime=edge({userStates:[{user_id:'alice'}],appRecords:[{user_id:'alice',store:'notificationSnapshot',record_id:'active',
