@@ -108,6 +108,51 @@ async function serverTests(){
  await projected.call({action:'scheduled-actions'},null,{'x-jk-push-secret':projected.webhookSecret});
  assert.equal(projected.sent.length,4,'Volgende cron stuurt geen dubbele push');
  assert.ok(projected.queries.some(q=>q.table==='app_records'),'Server controleert de actuele projectie');
+
+ // 12:00Z = 14:00 Amsterdam in October; planned job starts at 15:00.
+ // Multiple workdays receive independent, non-badge, one-time reminders.
+ const startFixture={schema:1,records:[
+  {store:'jobs',data:{id:'job-remind',date:'2026-10-14',status:'gepland',
+   workDays:[{date:'2026-10-14',startTime:'15:00'},{date:'2026-10-15',startTime:'15:00'}],
+   reminder:{clientName:'Voorbeeldklant',title:'Keuken monteren',address:'Voorbeeldstraat 12, 3311 AA Dordrecht'}}},
+  {store:'settings',data:{id:'notificationPrefs',jobReminder:true}},
+  {store:'settings',data:{id:'dismissedActions',items:{}}}
+ ]};
+ const reminder=edge({userStates:[{user_id:'alice'}],
+  appRecords:[{user_id:'alice',store:'notificationSnapshot',record_id:'active',data:startFixture}]});
+ await reminder.call({action:'scheduled-actions'},null,{'x-jk-push-secret':reminder.webhookSecret});
+ assert.equal(reminder.sent.length,2,'Een herinnering naar elk aangemeld eigen apparaat');
+ for(const note of reminder.sent){
+  assert.equal(note.payload.title,'Klus begint over 1 uur');
+  assert.match(note.payload.body,/Klant: Voorbeeldklant/);
+  assert.match(note.payload.body,/Klus: Keuken monteren/);
+  assert.match(note.payload.body,/Begintijd: 15:00/);
+  assert.match(note.payload.body,/Uitvoeringsadres: Voorbeeldstraat 12/);
+  assert.match(note.payload.tag,/jobReminder:job-remind:20261014:1500/);
+ }
+ await reminder.call({action:'scheduled-actions'},null,{'x-jk-push-secret':reminder.webhookSecret});
+ assert.equal(reminder.sent.length,2,'Geen dubbele push bij volgende croncontrole');
+ const initialReminderKey=reminder.actionStates.find(s=>s.active)?.action_key;
+ assert.match(initialReminderKey,/jobReminder:/);
+ startFixture.records[0].data.workDays[0].startTime='15:05';
+ await reminder.call({action:'scheduled-actions'},null,{'x-jk-push-secret':reminder.webhookSecret});
+ assert.equal(reminder.sent.length,4,'Aangepaste begintijd heeft eigen notificatiesleutel');
+ assert.equal(reminder.actionStates.find(s=>s.action_key===initialReminderKey)?.active,false);
+ startFixture.records[0].data.status='afgerond';
+ await reminder.call({action:'scheduled-actions'},null,{'x-jk-push-secret':reminder.webhookSecret});
+ assert.equal(reminder.sent.length,4,'Afgeronde klus stuurt niets meer');
+ const disabled=edge({userStates:[{user_id:'alice'}],appRecords:[{user_id:'alice',store:'notificationSnapshot',record_id:'active',
+  data:{schema:1,records:[startFixture.records[0],{store:'settings',data:{id:'notificationPrefs',jobReminder:false}}]}}]});
+ startFixture.records[0].data.status='gepland';
+ await disabled.call({action:'scheduled-actions'},null,{'x-jk-push-secret':disabled.webhookSecret});
+ assert.equal(disabled.sent.length,0,'Uitgeschakelde herinneringscategorie veroorzaakt geen push');
+ const missingTime=edge({userStates:[{user_id:'alice'}],appRecords:[{user_id:'alice',store:'notificationSnapshot',record_id:'active',
+  data:{schema:1,records:[{store:'jobs',data:{id:'empty-time',status:'gepland',date:'2026-10-14',
+   workDays:[{date:'2026-10-14',startTime:''}],reminder:{title:'Klus'}}},
+   {store:'settings',data:{id:'notificationPrefs',jobReminder:true}}]}}]});
+ await missingTime.call({action:'scheduled-actions'},null,{'x-jk-push-secret':missingTime.webhookSecret});
+ assert.equal(missingTime.sent.length,0,'Geen herinnering zonder geplande begintijd');
+
  // Run the real serviceworker with no open browser window.
  const listeners={},notifications=[];
  vm.runInNewContext(fs.readFileSync(path.join(root,'app/service-worker.js'),'utf8'),{self:{addEventListener:(type,callback)=>{listeners[type]=callback;},registration:{showNotification:async(title,opts)=>{notifications.push({title,opts});}}}});
@@ -127,7 +172,7 @@ async function serverTests(){
    blob:{privateBlob:'GEHEIME_PDF'},meta:{jobId:'job-projection',sent:true,paid:false,deadline:'2026-10-31',total:500}}],
   jobPhotos:[{id:'photo-projection',jobId:'job-projection',phase:'before',blob:{privateBlob:'GEHEIME_FOTO'}}],
   timeEntries:[{id:'entry-projection',jobId:'job-projection',date:'2026-10-24',from:'10:00',to:'16:00',note:'GEHEIME_UURNOTITIE'}],
-  settings:[{id:'notificationPrefs',hours:true,photos:true,quoteCreate:true},
+  settings:[{id:'notificationPrefs',hours:true,photos:true,quoteCreate:true,jobReminder:false},
    {id:'dismissedActions',items:{'hours:job-old':true}}],
   syncQueue:[],deleteMarkers:[]
  };
@@ -173,6 +218,21 @@ async function serverTests(){
  assert.equal(snap.data.records.find(r=>r.store==='jobs').data.quoteNeeded,true);
  assert.equal(snap.data.records.find(r=>r.store==='documents').data.meta.deadline,'2026-10-31');
  assert.equal(records.syncQueue.length,1,'Geen handmatige wachtrij opgeruimd tijdens projectie');
+
+ // Explicit opt-in uploads only the three requested job reminder fields.
+ records.settings.find(p=>p.id==='notificationPrefs').jobReminder=true;
+ records.jobs[0].date='2099-10-24';
+ records.jobs[0].workDays=[{date:'2099-10-24',startTime:'10:00',endTime:'16:00'}];
+ Object.assign(records.jobs[0],{street:'Voorbeeldstraat 11',postal:'3311 AA',city:'Dordrecht',
+  executionAddress:{street:'Uitvoerstraat 5',postal:'3312 BB',city:'Dordrecht'},notes:'GEHEIME_NOTITIE'});
+ await cloud.publishNotificationProjection();
+ const optedIn=emitted.at(-1).data.records.find(r=>r.store==='jobs').data.reminder;
+ assert.equal(optedIn.clientName,'GEHEIME_KLANT');
+ assert.equal(optedIn.title,'GEHEIME_KLUSTITEL');
+ assert.equal(optedIn.address,'Uitvoerstraat 5, 3312 BB Dordrecht');
+ for(const data of ['GEHEIME_NOTITIE','GEHEIME_PDF','GEHEIME_FOTO','GEHEIME_UURNOTITIE'])
+  assert.ok(!JSON.stringify(emitted.at(-1).data).includes(data),'Geen overige gegevens uitgelekt');
+
  assert.equal(mutations.filter(x=>x[0]!=='syncQueue').length,0,'Geen lokale administratieve records gewijzigd');
  subscription=false;
  assert.equal((await cloud.publishNotificationProjection()).skipped,true,'Geen automatische upload als echte push uitstaat');
@@ -214,6 +274,7 @@ async function browserTests(browser,origin){
   assert.ok(start>=0&&end>start);
   await page.addScriptTag({content:app.slice(start,end)});await page.evaluate(()=>showNotificationSettings());
   // Herinneringen tonen de actie, klus en klant en geen interne sleutel.
+  assert.equal(await page.locator('[name="jobReminder"]').count(),1,'Eigen schakelaar voor klusherinnering');
   const snoozedRows=page.locator('[data-unsnooze]').locator('xpath=..');
   assert.equal(await snoozedRows.count(),2);
   const rowTexts=await snoozedRows.allTextContents();
