@@ -115,7 +115,7 @@ async function serverTests(){
   {store:'jobs',data:{id:'job-remind',date:'2026-10-14',status:'gepland',
    workDays:[{date:'2026-10-14',startTime:'15:00'},{date:'2026-10-15',startTime:'15:00'}],
    reminder:{clientName:'Voorbeeldklant',title:'Keuken monteren',address:'Voorbeeldstraat 12, 3311 AA Dordrecht'}}},
-  {store:'settings',data:{id:'notificationPrefs',jobReminder:true}},
+  {store:'settings',data:{id:'notificationPrefs',jobReminder:true,hours:false,photos:false,quoteCreate:false,quoteSend:false,invoiceCreate:false,invoiceSend:false,paymentReminder:false}},
   {store:'settings',data:{id:'dismissedActions',items:{}}}
  ]};
  const reminder=edge({userStates:[{user_id:'alice'}],
