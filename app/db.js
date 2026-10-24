@@ -167,15 +167,15 @@ const JKDB = (() => {
       '3-treeds huistrap','Telescoopladder tot 3,8 m','Multiladder / uitschuifbare vouwladder tot 5,2 m'
     ],notes:''},
     {id:'loose_reserve',name:'Los / reserve',type:'Niet in Mbox',items:[
-      'Kniebeschermers','Grotere steeksleutels','Kleine multitool + accessoires','Contourmal / profielmal'
-    ],notes:''},
+      'Makita DHR183 18V LXT SDS-plus boorhamer (Mbox nog te bepalen)','Kniebeschermers','Grotere steeksleutels','Kleine multitool + accessoires','Contourmal / profielmal'
+    ],notes:'DHR183 staat hier tijdelijk totdat het definitieve Mbox-formaat bekend is.'},
     {id:'loose_batteries',name:'Los',type:'Accu\'s',items:[
       'Makita 18V 5,0Ah accu #2','Makita 18V 5,0Ah accu #3','Makita 18V 5,0Ah accu #4','Makita 14,4V accu 2,0Ah','Makita 14,4V accu 1,3Ah'
     ],notes:'1× 18V 5,0Ah accu blijft standaard in de Mbox schroefmachines. De andere 3× 18V 5,0Ah zijn los/vrij.'}
   ];
 
   const canonicalTools = [
-    ['t_dga','Makita DGA506ZJ','Haakse slijper','m_slijp'],['t_dbo','Makita DBO180ZJ','Excentrische schuurmachine','m_schuur'],['t_djv','Makita DJV181ZJ','Decoupeerzaag','m_deco'],['t_dtd','Makita DTD153ZJ','Slagschroevendraaier','m_schroef'],['t_dhp','Makita DHP485Z','Klopboor-/schroefmachine','m_schroef'],['t_dtm','Makita DTM52ZJ','Multitool','m_multi'],['t_dhs','Makita DHS680Z','Cirkelzaag','m_cirkel'],['t_lamp','Makita DML805','Bouwlamp','loose_tools'],['t_kit','18V kitspuit','Kitspuit (Makita-accu compatibel)','m_kit'],['t_wesco','Wesco 230 mm 2000W','Slijptol bedraad','loose_tools'],['t_laser','Kruislijnlaser','Laser','loose_tools'],['t_lasertripod','Statief voor kruislijnlaser','Laser-accessoire','loose_tools'],['t_ceilingpole','Plafondpaal voor kruislijnlaser','Laser-accessoire','loose_tools'],['t_ladder1','3-treeds huistrap','Ladder','loose_ladders'],['t_ladder2','Telescoopladder 3,8 m','Ladder','loose_ladders'],['t_ladder3','Multiladder 5,2 m','Ladder','loose_ladders'],['t_has10','Kabelhaspel 10 m','Elektra','loose_tools'],['t_has75','Kabelhaspel 7,5 m','Elektra','loose_tools'],['t_cart','Opvouwbare steekwagen Action','Transport','loose_tools'],['t_old14','Oude Makita 14,4V schroeftol','Schroefmachine','loose_reserve']
+    ['t_dga','Makita DGA506ZJ','Haakse slijper','m_slijp'],['t_dbo','Makita DBO180ZJ','Excentrische schuurmachine','m_schuur'],['t_djv','Makita DJV181ZJ','Decoupeerzaag','m_deco'],['t_dtd','Makita DTD153ZJ','Slagschroevendraaier','m_schroef'],['t_dhp','Makita DHP485Z','Klopboor-/schroefmachine','m_schroef'],['t_dtm','Makita DTM52ZJ','Multitool','m_multi'],['t_dhs','Makita DHS680Z','Cirkelzaag','m_cirkel'],['t_lamp','Makita DML805','Bouwlamp','loose_tools'],['t_kit','18V kitspuit','Kitspuit (Makita-accu compatibel)','m_kit'],['t_wesco','Wesco 230 mm 2000W','Slijptol bedraad','loose_tools'],['t_laser','Kruislijnlaser','Laser','loose_tools'],['t_lasertripod','Statief voor kruislijnlaser','Laser-accessoire','loose_tools'],['t_ceilingpole','Plafondpaal voor kruislijnlaser','Laser-accessoire','loose_tools'],['t_ladder1','3-treeds huistrap','Ladder','loose_ladders'],['t_ladder2','Telescoopladder 3,8 m','Ladder','loose_ladders'],['t_ladder3','Multiladder 5,2 m','Ladder','loose_ladders'],['t_has10','Kabelhaspel 10 m','Elektra','loose_tools'],['t_has75','Kabelhaspel 7,5 m','Elektra','loose_tools'],['t_cart','Opvouwbare steekwagen Action','Transport','loose_tools'],['t_dhr183','Makita DHR183','SDS-plus boorhamer','loose_reserve'],['t_old14','Oude Makita 14,4V schroeftol','Schroefmachine','loose_reserve']
   ];
 
   async function seed(){
@@ -446,6 +446,54 @@ const JKDB = (() => {
         await put('checklists',{...c,items,checked,updatedAt:new Date().toISOString()});
       }
       await put('settings',{id:'seedVersion',value:6,at:new Date().toISOString()});
+    }
+
+    if(v < 7){
+      const dhrName='Makita DHR183 18V LXT SDS-plus boorhamer';
+      const reserve=await get('mboxes','loose_reserve');
+      if(reserve){
+        const label=dhrName+' (Mbox nog te bepalen)';
+        if(!(reserve.items||[]).includes(label))reserve.items=[label,...(reserve.items||[]).filter(x=>!String(x).includes('DHR183'))];
+        reserve.notes='DHR183 staat hier tijdelijk totdat het definitieve Mbox-formaat bekend is.';
+        await put('mboxes',reserve);
+      }
+      const oldDhr=await get('tools','t_dhr183');
+      await put('tools',{
+        id:'t_dhr183',name:'Makita DHR183',category:'SDS-plus boorhamer',location:'loose_reserve',
+        serial:oldDhr?.serial||'',purchaseDate:oldDhr?.purchaseDate||'',
+        notes:oldDhr?.notes||'Mbox-formaat nog te bepalen. Voor plug-/montagegaten in steen/beton en incidentele diepere doorvoergaten.'
+      });
+
+      const additions={
+        c_departure:[
+          'Bij Makita DHR183: juiste SDS-plus boor(en) en een losse 18V accu meenemen'
+        ],
+        c_drill_mount:[
+          'Makita DHR183 18V LXT SDS-plus boorhamer + losse 18V accu meenemen; bij hout/gips kan deze vervallen',
+          'Juiste SDS-plus boor(en) meenemen voor steen/beton en eventuele langere doorvoer'
+        ],
+        c_small_repair:[
+          'Makita DHR183 + losse 18V accu meenemen als montage / bevestiging in steen of beton nodig is'
+        ],
+        c_kitchen:[
+          'Makita DHR183 + losse 18V accu meenemen als wandrails, bovenkasten of bevestigingen in steen/beton komen'
+        ],
+        c_renovation:[
+          'Makita DHR183 + losse 18V accu en juiste SDS-plus boor(en) meenemen bij steen/beton of diepere doorvoergaten'
+        ]
+      };
+      for(const [id,extra] of Object.entries(additions)){
+        const c=await get('checklists',id);
+        if(!c)continue;
+        let items=(c.items||[]).filter(x=>!String(x).includes('Makita DHR183')&&!/juiste SDS-plus boor/i.test(String(x)));
+        const photoItems=items.filter(x=>/^Foto\b/i.test(String(x).trim()));
+        items=items.filter(x=>!/^Foto\b/i.test(String(x).trim()));
+        items=[...items,...extra,...photoItems];
+        const checked={};
+        for(const item of items)if(c.checked?.[item])checked[item]=true;
+        await put('checklists',{...c,items,checked,updatedAt:new Date().toISOString()});
+      }
+      await put('settings',{id:'seedVersion',value:7,at:new Date().toISOString()});
     }
   }
 
