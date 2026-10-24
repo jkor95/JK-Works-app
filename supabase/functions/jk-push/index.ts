@@ -51,7 +51,7 @@ async function scheduleTest(userId:string,requestId:unknown){
  return json({ok:true,requestId,status:'scheduled',scheduledFor},202);
 }
 
-type Action={key:string;category:string;title:string};
+type Action={key:string;category:string;title:string;pushTitle?:string};
 const folder=(d:any)=>{const x=String(d?.folder||d?.kind||'').toLowerCase();return x.includes('offert')?'offerte':x.includes('fact')?'factuur':'other'};
 const amsterdamNow=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ','T');
 function actionsFor(records:any[]):Action[]{
@@ -62,9 +62,32 @@ function actionsFor(records:any[]):Action[]{
  const dismissed=settings.find(x=>x.id==='dismissedActions')?.items||{};
  const on=(key:string)=>prefs[key]!==false;
  const now=amsterdamNow(),day=now.slice(0,10),out:Action[]=[];
- const add=(key:string,category:string,title:string)=>{if(on(category)&&!dismissed[key])out.push({key,category,title});};
+ const add=(key:string,category:string,title:string,pushTitle?:string)=>{if(on(category)&&!dismissed[key])out.push({key,category,title,pushTitle});};
  for(const j of jobs){
   if(!j?.id)continue;
+  // Each planned workday gets one short-lived, uniquely identified reminder.
+  // Compare Amsterdam wall-clock minutes; this also covers midnight crossings.
+  // Without the restricted client projection, never fall back to old full records.
+  const status=String(j.status||'').toLowerCase();
+  if(on('jobReminder')&&j.reminder&&!['afgerond','geannuleerd','cancelled','completed'].includes(status)){
+   const planned=Array.isArray(j.workDays)?j.workDays:[{date:j.date,startTime:j.startTime||j.from||j.start}];
+   const currentMinute=Date.parse(now+':00Z');
+   for(const d of planned){
+    const plannedDay=String(d?.date||'').slice(0,10),plannedTime=String(d?.startTime||'').slice(0,5);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(plannedDay)||!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(plannedTime))continue;
+    const remaining=(Date.parse(plannedDay+'T'+plannedTime+':00Z')-currentMinute)/60000;
+    // 5-minute server checks, with a small allowance for scheduler delays.
+    if(!Number.isFinite(remaining)||remaining<=50||remaining>60)continue;
+    const clean=(v:unknown,fallback:string,max:number)=>String(v||'').replace(/[\r\n]+/g,' ').trim().slice(0,max)||fallback;
+    const detail=j.reminder;
+    const body='Klant: '+clean(detail.clientName,'Niet ingevuld',120)+
+     '\nKlus: '+clean(detail.title,'Klus',120)+
+     '\nBegintijd: '+plannedTime+
+     '\nUitvoeringsadres: '+clean(detail.address,'Niet opgegeven',200);
+    const key='jobReminder:'+j.id+':'+plannedDay.replace(/-/g,'')+':'+plannedTime.replace(':','');
+    add(key,'jobReminder',body,'Klus begint over 1 uur');
+   }
+  }
   const start=String(j.startTime||j.from||j.start||j.timeFrom||j.beginTime||j.begin||j.start_time||'').slice(0,5);
   const end=String(j.endTime||j.to||j.end||j.timeTo||j.finishTime||j.finish||j.end_time||'').slice(0,5);
   const date=String(j.date||'').slice(0,10);
@@ -196,7 +219,7 @@ async function runActionChecks(){
    let delivered=true;
    if(newActions.some(x=>x.key===a.key)){
     for(const sub of userSubs){try{
-     await webpush.sendNotification(sub.subscription,JSON.stringify({title:'Actie nodig',body:a.title,tag:'jkworks-action-'+a.key}));sent++;
+     await webpush.sendNotification(sub.subscription,JSON.stringify({title:a.pushTitle||'Actie nodig',body:a.title,tag:'jkworks-action-'+a.key}));sent++;
     }catch(e:any){if([404,410].includes(e.statusCode))await db.from('jk_push_subscriptions').delete().eq('endpoint',sub.endpoint);else delivered=false;}}
    }
    if(delivered){const {error:e}=await db.from('jk_push_action_state').upsert({user_id:userId,action_key:a.key,active:true},{onConflict:'user_id,action_key'});if(e)console.error('Actiestatus opslaan mislukt');}
