@@ -939,7 +939,8 @@ const App = (() => {
       try{
         const clients=await JKDB.all('clients');let c=clients.find(c=>(r.email&&c.email&&c.email.toLowerCase()===String(r.email).toLowerCase())||(r.phone&&c.phone&&String(c.phone).replace(/\D/g,'')===String(r.phone).replace(/\D/g,'')));
         if(!c){c={id:JKDB.id('client'),name:r.company||r.name,attention:r.company?r.name:'',street:r.location||'',postal:'',city:'',phone:r.phone||'',email:r.email||'',notes:'Aangemaakt vanuit website-aanvraag'};await JKDB.put('clients',c);}
-        const j={id:JKDB.id('job'),title:r.request_type||'Opdracht via website',clientId:c.id,clientName:c.name,attention:c.attention||'',street:r.location||c.street||'',postal:c.postal||'',city:c.city||'',phone:r.phone||c.phone||'',email:r.email||c.email||'',date:r.requested_date||today(),startTime:r.start_time?String(r.start_time).slice(0,5):'',endTime:r.end_time?String(r.end_time).slice(0,5):'',status:'gepland',notes:r.description||'',checklistId:'',checklistState:{},photoPolicy:/horeca|catering/i.test(r.request_type||'')?'none':'optional',paymentType:'invoice',hourlyRate:'',extraAmount:'',paymentPaid:false,quoteNeeded:makeQuote,sourceRequestId:r.id};
+        const requestTitle=r.request_type||'Opdracht via website',suggestedChecklist=suggestedChecklistIdForTitle(requestTitle+' '+(r.description||''));
+        const j={id:JKDB.id('job'),title:requestTitle,clientId:c.id,clientName:c.name,attention:c.attention||'',street:r.location||c.street||'',postal:c.postal||'',city:c.city||'',phone:r.phone||c.phone||'',email:r.email||c.email||'',date:r.requested_date||today(),startTime:r.start_time?String(r.start_time).slice(0,5):'',endTime:r.end_time?String(r.end_time).slice(0,5):'',status:'gepland',notes:r.description||'',checklistId:suggestedChecklist,checklistState:{},photoPolicy:/horeca|catering/i.test(requestTitle)?'none':suggestedChecklist?'required':'optional',paymentType:'invoice',hourlyRate:'',extraAmount:'',paymentPaid:false,quoteNeeded:makeQuote,sourceRequestId:r.id};
         await JKDB.put('jobs',{...j,createdAt:new Date().toISOString()});await ensureWorkLabelJobNumbers();await ensureJobTimeEntry(j);await JKCloud.updateWebsiteRequest(r.id,{status:'converted'});closeModal();toast(makeQuote?'Klant en klus aangemaakt - offerte voorbereiden':'Klant en klus aangemaakt');
         if(makeQuote)createBusinessDoc('Offerte',{jobId:j.id,clientId:c.id,workDate:j.date});else showJob(j.id);
       }catch(e){alert('Aanvraag verwerken mislukt: '+(e.message||e));}
@@ -1010,8 +1011,21 @@ const App = (() => {
     $('#showAllJobs')?.addEventListener('click',()=>{state.jobPaymentFilter='all';renderJobs()});
     $$('[data-jpf]').forEach(b=>b.addEventListener('click',()=>{state.jobPaymentFilter=b.dataset.jpf;renderJobs()}));
   }
+  function suggestedChecklistIdForTitle(title){
+    const t=String(title||'').toLowerCase();
+    if(/horeca|catering|barwerk|bediening|buffet/.test(t))return 'c_catering';
+    if(/kitten|afkitten|kitwerk|siliconenkit|acrylaatkit/.test(t))return 'c_kit';
+    if(/schilder|verf|lakken|afwerken/.test(t))return 'c_paint_finish';
+    if(/sloop|stripwerk|slopen|demonteren/.test(t))return 'c_strip_demo';
+    if(/verbouw|renovatie|zolder|wand|plaatwerk/.test(t))return 'c_renovation';
+    if(/keuken/.test(t))return 'c_kitchen';
+    if(/ophangen|bevestigen|plank|schilderij|kapstok|tv.?beugel|wandbeugel|muurbeugel|boren/.test(t))return 'c_drill_mount';
+    if(/montage|monteren|kast|meubel|ikea|reparatie|afstellen/.test(t))return 'c_small_repair';
+    return '';
+  }
   async function editJob(id,prefill={}){
     const j=id?await JKDB.get('jobs',id):{id:JKDB.id('job'),title:'',clientId:'',clientName:'',attention:'',street:'',postal:'',city:'',phone:'',email:'',date:today(),startTime:'',endTime:'',status:'open',notes:'',checklistId:'',checklistState:{},photoPolicy:'optional',paymentType:'invoice',hourlyRate:'',extraAmount:'',paymentPaid:false,quoteNeeded:false,...prefill};
+    if(!id&&!j.checklistId)j.checklistId=suggestedChecklistIdForTitle(j.title);
     const [clients,checks,company]=await Promise.all([JKDB.all('clients'),JKDB.all('checklists'),JKDB.get('settings','company')]);
     const linked=clients.find(c=>c.id===j.clientId);
     const initial={name:linked?.name||j.clientName||'',attention:linked?.attention||j.attention||'',street:linked?.street||j.street||j.address||'',postal:linked?.postal||j.postal||'',city:linked?.city||j.city||'',phone:linked?.phone||j.phone||'',email:linked?.email||j.email||''};
@@ -1042,12 +1056,23 @@ const App = (() => {
     $('#addWorkDay').addEventListener('click',()=>$('#workDayFields').insertAdjacentHTML('beforeend',workDayFields({date:''})));
     $('#workDayFields').addEventListener('click',event=>{if(event.target.closest('[data-remove-day]'))event.target.closest('[data-workday]').remove();});
     $('#jobClientPick').addEventListener('change',e=>fillFromClient(clients.find(c=>c.id===e.target.value)));
-    let photoPolicyTouched=!!id;
+    let photoPolicyTouched=!!id,checklistTouched=!!id||!!j.checklistId;
     $('#jobPhotoPolicy').addEventListener('change',()=>{photoPolicyTouched=true});
     $('#jobChecklistPick').addEventListener('change',e=>{
+      checklistTouched=true;
       if(photoPolicyTouched)return;
       const ch=checks.find(c=>c.id===e.target.value),name=String(ch?.name||'').toLowerCase();
       $('#jobPhotoPolicy').value=!ch?'optional':name.includes('catering')||name.includes('horeca')?'none':'required';
+    });
+    $('[name=title]').addEventListener('input',e=>{
+      if(checklistTouched)return;
+      const suggested=suggestedChecklistIdForTitle(e.target.value);
+      if(!suggested||!checks.some(c=>c.id===suggested))return;
+      $('#jobChecklistPick').value=suggested;
+      if(!photoPolicyTouched){
+        const ch=checks.find(c=>c.id===suggested),name=String(ch?.name||'').toLowerCase();
+        $('#jobPhotoPolicy').value=name.includes('catering')||name.includes('horeca')?'none':'required';
+      }
     });
     $('#jobForm').addEventListener('submit',async e=>{e.preventDefault();let workDays;try{workDays=readWorkDays();}catch(error){alert(error.message);return;}const f=new FormData(e.target);let clientId=f.get('clientId'),client=clients.find(c=>c.id===clientId);const values={name:String(f.get('clientName')||'').trim(),attention:f.get('attention')||'',street:f.get('street')||'',postal:f.get('postal')||'',city:f.get('city')||'',phone:f.get('phone')||'',email:f.get('email')||''};if(client){Object.assign(client,values);await JKDB.put('clients',client);}else if(values.name){client={id:JKDB.id('client'),...values,notes:''};clientId=client.id;await JKDB.put('clients',client);}await freezeLegacyPayments(await refreshFinance(),j.id);const quoteWasNeeded=j.quoteNeeded===true;const oldSchedule=`${j.date||''}|${jobStartTime(j)}|${jobEndTime(j)}`;Object.assign(j,{title:f.get('title'),clientId:clientId||'',clientName:values.name,attention:values.attention,street:values.street,address:values.street,postal:values.postal,city:values.city,phone:values.phone,email:values.email,
       executionAddress:f.get('hasExecutionAddress')==='on'?{street:String(f.get('executionStreet')||'').trim(),postal:String(f.get('executionPostal')||'').trim(),city:String(f.get('executionCity')||'').trim()}:null,workDays,date:workDays[0]?.date||'',startTime:workDays[0]?.startTime||'',endTime:workDays[0]?.endTime||'',status:f.get('status'),paymentType:f.get('paymentType')==='cash'?'cash':'invoice',hourlyRate:f.get('hourlyRate')||'',extraAmount:f.get('extraAmount')||'',paymentLedger:true,pricingType:f.get('pricingType'),agreedAmount:f.get('agreedAmount')===''?'':num(f.get('agreedAmount')),extraIncluded:f.get('extraIncluded')==='true',quoteNeeded:f.get('quoteNeeded')==='on',checklistId:f.get('checklistId'),photoPolicy:f.get('photoPolicy')||'optional',notes:f.get('notes')});const newSchedule=`${j.date||''}|${jobStartTime(j)}|${jobEndTime(j)}`;if(oldSchedule!==newSchedule)j.completionPromptHandledAt=null;
@@ -1606,7 +1631,7 @@ const App = (() => {
     {id:'kit',label:'Kitwerkzaamheden',keywords:'kitten, afkitten, kitwerk, siliconenkit, acrylaatkit, plinten'},
     {id:'catering',label:'Cateringwerkzaamheden',keywords:'catering, buffet, bruiloft catering'},
     {id:'horeca',label:'Horecawerkzaamheden',keywords:'horeca, achter de bar, barwerk, bediening, bartender, tappen, barmedewerker'},
-    {id:'montage',label:'Montagewerkzaamheden',keywords:'montage, monteren, keuken, ikea, kasten, meubelmontage'},
+    {id:'montage',label:'Montagewerkzaamheden',keywords:'montage, monteren, keuken, ikea, kasten, meubelmontage, ophangen, bevestigen, plank, schilderij, kapstok, wandbeugel, muurbeugel'},
     {id:'vloer',label:'Vloerwerkzaamheden',keywords:'laminaat, pvc vloer, vloer leggen, parket, plavuizen'},
     {id:'elektra',label:'Elektrawerkzaamheden',keywords:'elektra, elektrisch, bekabeling, kabel trekken, stopcontact, verlichting'},
     {id:'schilder',label:'Schilderwerkzaamheden',keywords:'schilderen, verven, schilderwerk, lakken'},
