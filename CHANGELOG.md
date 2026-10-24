@@ -1,3 +1,10 @@
+## v71.13.27 — Klusherinnering één uur vóór aanvang
+- Nieuwe standaard ingeschakelde categorie **Klus begint over 1 uur** onder Meer → Meldingen. Eén echte Web Push per geplande werkdag, ook bij meerdere werkdagen; geen blijvende actie of badge.
+- De melding noemt klantnaam, klusnaam, geplande begintijd en uitvoeringsadres (of klantadres wanneer geen apart uitvoeringsadres is ingesteld). Bij ontbrekend adres staat ‘Niet opgegeven’.
+- De bestaande vijfminutencontrole verzendt in het tijdvak van 60 tot 50 minuten vóór de start. Afgeronde of geannuleerde klussen en werkdagen zonder begintijd worden overgeslagen; per datum en begintijd wordt een unieke verzendsleutel gebruikt.
+- Alleen voor deze ingeschakelde herinneringscategorie worden minimaal noodzakelijke naam, omschrijving en adres in de bestaande RLS-afgeschermde notificatieprojectie opgeslagen. Overige factuur-, foto- en synchronisatiegegevens veranderen niet.
+- Wijzigingen voorbereid via PR; productie-push vereist uitrol van de bestaande Supabase Edge Function en publicatie van de PWA. Geautomatiseerde tests en echte iPhone-ontvangst afzonderlijk controleren.
+
 ## v71.13.26 — DHR183 geïntegreerd in gereedschap en kluschecklists
 - **Gereedschapsregister:** Makita DHR183 18V LXT SDS-plus boorhamer toegevoegd. Zolang het definitieve Mbox-formaat nog niet bekend is, staat hij onder **Los / reserve** met de opmerking **Mbox nog te bepalen**.
 - **Boren & ophangen:** DHR183 + losse 18V accu en passende SDS-plus boor(en) worden meegenomen voor steen/beton en langere doorvoergaten. Bij hout/gips kan de boorhamer vervallen.
