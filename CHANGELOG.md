@@ -1,3 +1,8 @@
+## v71.13.28 — klussenoverzicht chronologisch met actieve klussen bovenaan
+- In Klussen (Alles, Factuur en Contant) worden open en geplande klussen eerst op datum gezet: oudste/eerstvolgende datum bovenaan. Meerdaagse klussen gebruiken de eerste geplande werkdag.
+- Afgeronde klussen staan altijd onder de open en geplande klussen, met de recentste afgeronde klus eerst. Klussen zonder datum staan aan het einde van hun eigen statusgroep.
+- Geen wijzigingen in betalingsbedragen, openstanden, klusstatussen, tijdregistraties of opgeslagen klussen. Regressietests controleren de lijst en filters.
+
 ## v71.13.27 — Klusherinnering één uur vóór aanvang
 - Nieuwe standaard ingeschakelde categorie **Klus begint over 1 uur** onder Meer → Meldingen. Eén echte Web Push per geplande werkdag, ook bij meerdere werkdagen; geen blijvende actie of badge.
 - De melding noemt klantnaam, klusnaam, geplande begintijd en uitvoeringsadres (of klantadres wanneer geen apart uitvoeringsadres is ingesteld). Bij ontbrekend adres staat ‘Niet opgegeven’.
