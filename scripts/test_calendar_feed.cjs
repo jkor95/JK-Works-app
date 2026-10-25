@@ -82,10 +82,24 @@ module.exports=async()=>{
   street:'Klantstraat 1',executionAddress:{street:'Werkstraat 4',postal:'3311 AA',city:'Dordrecht'},
   workDays:[{date:'2026-10-29',startTime:'22:00',endTime:'02:00'},{date:'2026-10-28',startTime:'10:00',endTime:'14:00'}],
   notes:'PRIVÉ_NOTITIES',agreedAmount:280,phone:'PRIVÉ_TEL',status:'gepland'}];
+ const storage=new Map(),localChanges=[];
+ const legacySecret={id:'calendarFeedLocal',enabled:true,url:'https://fixture.invalid/?token=secret-only-local'};
+ const browserStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)};
  const calendar=vm.runInNewContext(client+';JKCalendarFeed;',{
-  window,JKDB:{get:async()=>null,putLocal:async()=>{},all:async()=>rowsLocal},
+  window,localStorage:browserStorage,
+  JKDB:{get:async(store,id)=>store==='settings'&&id==='calendarFeedLocal'?legacySecret:null,
+   removeLocal:async(store,id)=>{localChanges.push([store,id]);},putLocal:async()=>{throw Error('Do not put calendar tokens in synced IndexedDB');},all:async()=>rowsLocal},
   JKCloud:{isSignedIn:()=>false},navigator:{onLine:false},setTimeout:()=>0,console
  });
+ const localLink=await calendar.own();
+ assert.equal(localLink.url,legacySecret.url,'Legacy token migrated to non-synced browser storage');
+ assert.equal(localChanges.length,1,'Legacy synced setting removed locally');
+ assert.ok(storage.has('jkworks-private-calendar-subscription'));
+ const cloud=fs.readFileSync(path.join(root,'app/cloud.js'),'utf8');
+ assert.match(cloud,/LOCAL_ONLY_SETTINGS = new Set\(\['calendarFeedLocal'\]\)/);
+ assert.match(cloud,/if\(store==='settings'&&LOCAL_ONLY_SETTINGS.has\(obj\?\.id\)\)return/);
+ assert.match(cloud,/if\(q.store==='settings'&&LOCAL_ONLY_SETTINGS.has\(q.recordId\)\)/);
+
  const projected=calendar.entriesFor(rowsLocal);
  assert.equal(projected.length,2);
  assert.deepEqual(Array.from(projected.map(x=>x.date)),['2026-10-28','2026-10-29']);
@@ -96,6 +110,6 @@ module.exports=async()=>{
  const app=fs.readFileSync(path.join(root,'app/app.js'),'utf8');
  const html=fs.readFileSync(path.join(root,'app/index.html'),'utf8');
  assert.match(app,/id="calendarSyncMenu"/);
- assert.match(html,/calendar-sync\.js\?v=71\.13\.29/);
+ assert.match(html,/calendar-sync\.js\?v=71\.13\.30/);
  console.log('PASS: beveiligde agenda-link, JWT, hash, afscherming, verwijderen, nachtwerk, dagafspraken, rotatie/intrekken en privacyprojectie');
 };

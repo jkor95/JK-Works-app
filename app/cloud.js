@@ -3,6 +3,8 @@ const JKCloud = (() => {
   const SUPABASE_KEY = 'sb_publishable_z4kkYgzjr-bYDEcSZlVciw_cP8MfOuX';
   const BUCKET = 'jkworks-files';
   const LOCAL_ONLY_STORES = new Set();
+  // Never upload legacy copies of private calendar bearer URLs from IndexedDB.
+  const LOCAL_ONLY_SETTINGS = new Set(['calendarFeedLocal']);
   let client = null, session = null, syncing = false, backupBusy = false;
   const BACKUP_BUCKETS=['jkworks-files','jkworks-request-files','jkworks-website-assets'];
   async function restoreProtected(){return !!(await JKDB.get('settings','backupRestoreGuard'))?.active;}
@@ -218,7 +220,7 @@ const JKCloud = (() => {
   }
   async function queuePut(store,obj){
     if(LOCAL_ONLY_STORES.has(store)) return;
-    if(!JKDB.stores.includes(store) || store==='settings' && ['cloudStatus','backup','backupRestoreGuard'].includes(obj.id)) return;
+    if(!JKDB.stores.includes(store) || store==='settings' && (['cloudStatus','backup','backupRestoreGuard'].includes(obj.id)||LOCAL_ONLY_SETTINGS.has(obj.id))) return;
     if(await hasLocalDelete(store,obj.id)) return;
     // v33: elke wijziging blijft lokaal staan tot de gebruiker handmatig synchroniseert.
     // Houd per record alleen de nieuwste PUT in de wachtrij.
@@ -227,7 +229,7 @@ const JKCloud = (() => {
   }
   async function queueDelete(store,id){
     if(LOCAL_ONLY_STORES.has(store)) return;
-    if(!JKDB.stores.includes(store)) return;
+    if(!JKDB.stores.includes(store) || store==='settings'&&LOCAL_ONLY_SETTINGS.has(id)) return;
     await JKDB.markDeleteLocal(store,id);
     await removePendingPuts(store,id);
     const existing=(await JKDB.all('syncQueue')).find(q=>q.type==='delete'&&q.store===store&&q.recordId===id);
@@ -262,6 +264,7 @@ const JKCloud = (() => {
     return obj;
   }
   async function pushRecord(store,obj){
+    if(store==='settings'&&LOCAL_ONLY_SETTINGS.has(obj?.id))return;
     if(!isSignedIn()) return;
     if(await hasLocalDelete(store,obj.id)) return;
     const data=await encodeRecord(store,obj);
@@ -307,6 +310,9 @@ const JKCloud = (() => {
     // hetzelfde record opnieuw schrijven.
     const ordered=[...qs].sort((a,b)=>(a.type==='delete'?0:1)-(b.type==='delete'?0:1));
     for(const q of ordered){
+      if(q.store==='settings'&&LOCAL_ONLY_SETTINGS.has(q.recordId)){
+        await JKDB.removeLocal('syncQueue',q.id);continue;
+      }
       try{
         if(q.type==='delete') await markDeleted(q.store,q.recordId);
         else {
@@ -341,7 +347,7 @@ const JKCloud = (() => {
       if(deletionsRes.error) throw deletionsRes.error;
 
       const legacyDeleted=(recordsRes.data||[]).filter(r=>r?.data?.__deleted);
-      const remote=new Map((recordsRes.data||[]).filter(r=>!r?.data?.__deleted && !LOCAL_ONLY_STORES.has(r.store)).map(r=>[`${r.store}|${r.record_id}`,r]));
+      const remote=new Map((recordsRes.data||[]).filter(r=>!r?.data?.__deleted && !LOCAL_ONLY_STORES.has(r.store) && !(r.store==='settings'&&LOCAL_ONLY_SETTINGS.has(r.record_id))).map(r=>[`${r.store}|${r.record_id}`,r]));
       const deletedKeys=new Set();
 
       // Lokale markers blijven bewust bewaard, zodat een oude lokale kopie ook
@@ -381,7 +387,7 @@ const JKCloud = (() => {
         if(LOCAL_ONLY_STORES.has(store)) continue;
         const local=await JKDB.all(store);
         for(const obj of local){
-          if(store==='settings'&&['backup','backupRestoreGuard'].includes(obj.id))continue;
+          if(store==='settings'&&(['backup','backupRestoreGuard'].includes(obj.id)||LOCAL_ONLY_SETTINGS.has(obj.id)))continue;
           const key=`${store}|${obj.id}`;
           if(deletedKeys.has(key)){ await JKDB.removeLocal(store,obj.id); localChanged=true; continue; }
           const rr=remote.get(key);
@@ -397,7 +403,7 @@ const JKCloud = (() => {
         }
       }
       for(const rr of remote.values()){
-        if(rr.store==='settings'&&['backup','backupRestoreGuard'].includes(rr.record_id))continue;
+        if(rr.store==='settings'&&(['backup','backupRestoreGuard'].includes(rr.record_id)||LOCAL_ONLY_SETTINGS.has(rr.record_id)))continue;
         if(!JKDB.stores.includes(rr.store)) continue;
         const key=`${rr.store}|${rr.record_id}`;
         if(deletedKeys.has(key)) continue;
