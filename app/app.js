@@ -987,10 +987,28 @@ const App = (() => {
     const data=openPaymentLabelData(jobs,orphanInvoices,entries,company);
     window.JKOpenPaymentsEditor.open({items:data},{modal,modalHead,downloadBlob,toast,closeModal});
   }
+  // Open and planned jobs are grouped above completed jobs. Future work is shown
+  // chronologically; completed work remains accessible below, newest first.
+  function sortJobsForOverview(items){
+    const dateOf=j=>jobWorkDays(j)[0]?.date||j.date||'';
+    return [...items].sort((a,b)=>{
+      const doneA=a.status==='afgerond',doneB=b.status==='afgerond';
+      if(doneA!==doneB)return doneA?1:-1;
+      const dateA=dateOf(a),dateB=dateOf(b);
+      if(!dateA||!dateB){
+        if(!dateA&&!dateB)return 0;
+        return dateA?-1:1; // Undated jobs at the end of their own group.
+      }
+      const dateComparison=doneB?dateB.localeCompare(dateA):dateA.localeCompare(dateB);
+      if(dateComparison)return dateComparison;
+      const timeA=jobStartTime(a),timeB=jobStartTime(b);
+      return doneA?timeB.localeCompare(timeA):timeA.localeCompare(timeB);
+    });
+  }
   async function renderJobs(){
     await refreshFinance();title('Klussen');
     const [allJobs,entries,company]=await Promise.all([JKDB.all('jobs'),JKDB.all('timeEntries'),JKDB.get('settings','company')]);
-    const jobs=allJobs.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    const jobs=sortJobsForOverview(allJobs);
     const invoiceJobs=jobs.filter(j=>jobPaymentType(j)==='invoice'),cashJobs=jobs.filter(j=>jobPaymentType(j)==='cash');
     const openJobs=jobs.filter(j=>jobFinancial(j,entries,company).open>0);
     const orphanOpen=state.finance.documents.filter(d=>isUnassignedInvoice(d)&&state.finance.document(d).open>0);
