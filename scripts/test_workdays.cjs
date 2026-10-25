@@ -77,6 +77,11 @@ module.exports=async(browser,origin)=>{
   await page.locator('[name=note]').fill('Gewijzigd vanuit Urenregistratie');await page.locator('#timeForm button.primary').click();await page.waitForFunction(()=>!document.querySelector('#timeForm'));
   assert.equal(await page.evaluate(id=>JKDB.all('timeEntries').then(es=>es.filter(e=>e.jobId===id).length),job.id),3);
   await page.evaluate(id=>App.showJob(id),job.id);assert.ok((await page.locator('.workday-list').innerText()).includes('Gewijzigd vanuit Urenregistratie'));
+  assert.equal(await page.locator('#calendarThisJob').count(),0,'De overbodige Google Agenda-knop ontbreekt bij de klus');
+  for(const action of ['#editThisJob','#repeatThisJob','#hoursThisJob','#quoteThisJob','#invoiceThisJob','#labelThisJob'])
+    assert.equal(await page.locator(action).count(),1,'Bestaande klusacties blijven beschikbaar: '+action);
+  assert.ok(await page.locator('#jobIcs').count(),'De optionele werkdag-export blijft beschikbaar');
+  console.log('PASS: overbodige Google Agenda-knop weg; klusacties en automatische agenda-export behouden');
   const amounts=await page.evaluate(async id=>{const j=await JKDB.get('jobs',id),es=await JKDB.all('timeEntries');return {actual:App.jobMinutes(j,[...es,...es]),planned:App.jobPlannedMinutes(j),done:App.jobHasEnded(j),minutes:App.entryMinutes({date:'2026-10-23',from:'22:00',to:'02:00',breakMinutes:30}),unconfirmed:App.entryMinutes({date:'2026-10-23',from:'08:00',to:'16:00',autoFromJobSchedule:true})};},job.id);
   assert.equal(amounts.actual,1350);assert.equal(amounts.done,false);assert.equal(amounts.minutes,210);assert.equal(amounts.unconfirmed,0);
   console.log('PASS: werkelijke uren, pauzes, €787,50, beide bewerkingsroutes, nachtwerk en deduplicatie; geen automatische afronding');
