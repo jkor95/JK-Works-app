@@ -78,6 +78,7 @@ module.exports=async(browser,origin)=>{
   assert.equal(await page.evaluate(id=>JKDB.all('timeEntries').then(es=>es.filter(e=>e.jobId===id).length),job.id),3);
   await page.evaluate(id=>App.showJob(id),job.id);assert.ok((await page.locator('.workday-list').innerText()).includes('Gewijzigd vanuit Urenregistratie'));
   assert.equal(await page.locator('#calendarThisJob').count(),0,'De overbodige Google Agenda-knop ontbreekt bij de klus');
+  assert.equal((await page.locator('#labelThisJob').innerText()).trim(),'🖨️ Werkbon','Knop toont alleen Werkbon');
   for(const action of ['#editThisJob','#repeatThisJob','#hoursThisJob','#quoteThisJob','#invoiceThisJob','#labelThisJob'])
     assert.equal(await page.locator(action).count(),1,'Bestaande klusacties blijven beschikbaar: '+action);
   assert.ok(await page.locator('#jobIcs').count(),'De optionele werkdag-export blijft beschikbaar');
