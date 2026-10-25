@@ -29,21 +29,47 @@ const JKCalendarFeed=(()=>{
   const days=Array.isArray(j.workDays)?j.workDays:(j.date?[{date:j.date,startTime:j.startTime,endTime:j.endTime}]:[]);
   return [...days].filter(d=>d?.date).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
  };
- function entriesFor(jobs){
+ // Use confirmed time entries in preference to the original job plan. A planned
+ // workday without confirmed hours remains visible; an unplanned worked day is
+ // also included. Tentative/auto-generated hours never overwrite the plan.
+ const validDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(value);
+ const validTime=value=>/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+ function entriesFor(jobs,timeEntries=[]){
+  const actualByJob=new Map();
+  for(const entry of timeEntries||[]){
+   if(!entry?.jobId || entry.autoFromJobSchedule===true && !entry.actualConfirmed)continue;
+   const date=String(entry.date||entry.start||'').slice(0,10);
+   const startTime=String(entry.from||String(entry.start||'').slice(11,16));
+   const endTime=String(entry.to||String(entry.end||'').slice(11,16));
+   if(!validDate(date)||!validTime(startTime)||!validTime(endTime))continue;
+   const id=String(entry.jobId),byDate=actualByJob.get(id)||new Map();
+   // An existing same-day registration should be used only once.
+   byDate.set(date,{date,startTime,endTime,actual:true});
+   actualByJob.set(id,byDate);
+  }
   const events=[];
   for(const j of jobs){
    if(!j?.id||['geannuleerd','cancelled'].includes(String(j.status||'').toLowerCase()))continue;
    const execution=j.executionAddress||{},isExecution=!!(execution.street||execution.postal||execution.city);
    const place=isExecution?execution:j;
    const addr=[place.street||place.address||'',[place.postal,place.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-   for(const d of jobDays(j)){
-    const date=String(d.date||'').slice(0,10);
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(date))continue;
-    const startTime=String(d.startTime||'').slice(0,5),endTime=String(d.endTime||'').slice(0,5);
-    // A workday without an agreed pair of times is shown as an all-day event.
-    events.push({id:String(j.id),date,startTime:startTime&&endTime?startTime:'',
-     endTime:startTime&&endTime?endTime:'',title:String(j.title||'Klus'),
-     clientName:String(j.clientName||''),address:addr,status:String(j.status||'')});
+   const days=new Map();
+   for(const planned of jobDays(j)){
+    const date=String(planned.date||'').slice(0,10);
+    if(!validDate(date))continue;
+    days.set(date,{date,startTime:String(planned.startTime||'').slice(0,5),endTime:String(planned.endTime||'').slice(0,5)});
+   }
+   const actual=actualByJob.get(String(j.id))||new Map();
+   // If a single-day job was worked on a different date, the actual day
+   // replaces its original planned slot, instead of creating a duplicate.
+   if(days.size===1&&actual.size===1&&!days.has([...actual.keys()][0]))days.clear();
+   for(const [date,worked] of actual)days.set(date,worked);
+   for(const d of [...days.values()].sort((a,b)=>a.date.localeCompare(b.date))){
+    const startTime=validTime(d.startTime)&&validTime(d.endTime)?d.startTime:'';
+    const endTime=startTime?d.endTime:'';
+    events.push({id:String(j.id),date:d.date,startTime,endTime,
+     title:String(j.title||'Klus'),clientName:String(j.clientName||''),
+     address:addr,status:String(j.status||'')});
    }
   }
   return events;
@@ -59,7 +85,10 @@ const JKCalendarFeed=(()=>{
   if(!res.ok)throw Error(data.error||'Kalenderserver tijdelijk niet beschikbaar');
   return data;
  }
- async function snapshot(){return entriesFor(await JKDB.all('jobs'));}
+ async function snapshot(){
+  const [jobs,timeEntries]=await Promise.all([JKDB.all('jobs'),JKDB.all('timeEntries')]);
+  return entriesFor(jobs,timeEntries);
+ }
  async function status(){return api('status');}
  async function create(action){
   const data=await api(action,{events:await snapshot()});

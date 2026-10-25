@@ -107,9 +107,49 @@ module.exports=async()=>{
  assert.ok(!JSON.stringify(projected).includes('PRIVÉ_NOTITIES'));
  assert.ok(!JSON.stringify(projected).includes('PRIVÉ_TEL'));
  assert.ok(!JSON.stringify(projected).includes('280'));
+
+ // Start with the planned timetable, then confirmed actual hours must win.
+ const plans=[
+  {id:'multi',title:'Keuken',clientName:'Fictieve klant',date:'2026-10-27',
+   workDays:[{date:'2026-10-27',startTime:'09:00',endTime:'16:00'},
+             {date:'2026-10-28',startTime:'08:00',endTime:'15:00'},
+             {date:'2026-10-29',startTime:'10:00',endTime:'14:00'}]},
+  {id:'single',title:'Verplaatst',date:'2026-11-01',startTime:'09:00',endTime:'13:00'}
+ ];
+ const actualRecords=[
+  {id:'confirmed',jobId:'multi',date:'2026-10-27',from:'10:15',to:'17:30',actualConfirmed:true,autoFromJobSchedule:false,breakMinutes:45,note:'PRIVATE_NOTE'},
+  {id:'unconfirmed',jobId:'multi',date:'2026-10-28',from:'11:00',to:'18:00',actualConfirmed:false,autoFromJobSchedule:true},
+  {id:'extra',jobId:'multi',date:'2026-10-30',from:'22:00',to:'02:00',actualConfirmed:true,autoFromJobSchedule:false},
+  {id:'moved',jobId:'single',date:'2026-11-02',from:'09:30',to:'13:30',actualConfirmed:true,autoFromJobSchedule:false},
+  {id:'irrelevant',jobId:'other',date:'2026-10-27',from:'01:00',to:'02:00'}
+ ];
+ const actualEvents=calendar.entriesFor(plans,actualRecords);
+ const by=(job,date)=>actualEvents.find(e=>e.id===job&&e.date===date);
+ assert.equal(by('multi','2026-10-27').startTime,'10:15','Confirmed start overrides plan');
+ assert.equal(by('multi','2026-10-27').endTime,'17:30','Confirmed end overrides plan');
+ assert.equal(by('multi','2026-10-28').startTime,'08:00','Unconfirmed automatic record cannot override plan');
+ assert.equal(by('multi','2026-10-29').startTime,'10:00','Untouched future day remains planned');
+ assert.equal(by('multi','2026-10-30').startTime,'22:00','Extra worked day is added');
+ assert.equal(by('multi','2026-10-30').endTime,'02:00','Overnight actual work is preserved');
+ assert.equal(by('single','2026-11-01'),undefined,'Single-day original slot is replaced when actual date differs');
+ assert.equal(by('single','2026-11-02').startTime,'09:30','Actual date is used');
+ assert.equal(actualEvents.length,5,'One event per workday, never a duplicate plan and actual');
+ assert.ok(!JSON.stringify(actualEvents).includes('PRIVATE_NOTE'),'Private time entry notes are never published');
+ assert.ok(!JSON.stringify(actualEvents).includes('45'),'Break time is not a public field');
+ const reverted=calendar.entriesFor(plans,actualRecords.filter(e=>e.id!=='confirmed'));
+ assert.equal(reverted.find(e=>e.id==='multi'&&e.date==='2026-10-27').startTime,'09:00',
+  'Removing actual hours automatically restores the planned times');
+ const cloudSrc=fs.readFileSync(path.join(root,'app/cloud.js'),'utf8');
+ assert.match(cloudSrc,/q\.store==='jobs'\|\|q\.store==='timeEntries'/,
+  'Saving actual worked hours queues calendar refresh');
+ assert.match(cloudSrc,/store==='jobs'\|\|store==='timeEntries'/,
+  'Deleting worked hours queues calendar refresh');
+ assert.match(client,/Promise\.all\(\[JKDB\.all\('jobs'\),JKDB\.all\('timeEntries'\)\]\)/,
+  'Published calendar must load both jobs and actual hours');
+
  const app=fs.readFileSync(path.join(root,'app/app.js'),'utf8');
  const html=fs.readFileSync(path.join(root,'app/index.html'),'utf8');
  assert.match(app,/id="calendarSyncMenu"/);
- assert.match(html,/calendar-sync\.js\?v=71\.13\.30/);
+ assert.match(html,/calendar-sync\.js\?v=71\.13\.31/);
  console.log('PASS: beveiligde agenda-link, JWT, hash, afscherming, verwijderen, nachtwerk, dagafspraken, rotatie/intrekken en privacyprojectie');
 };

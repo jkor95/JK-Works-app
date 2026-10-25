@@ -1,3 +1,9 @@
+## v71.13.31 — Google Agenda toont bevestigde werkelijke werktijden
+- De agenda gebruikt nu de daadwerkelijk ingevoerde, bevestigde werktijden per klusdag. Zolang die ontbreken blijft de oorspronkelijke planning zichtbaar.
+- Automatisch ingevulde maar onbevestigde uren worden genegeerd; extra werkelijk gewerkte dagen komen erbij. Bij één verplaatste werkdag vervangt de geregistreerde werkdag de oorspronkelijke afspraak. Bij het wissen van een registratie komt de geplande tijd terug.
+- Ook opslaan en verwijderen van urenregistraties stuurt automatisch een update naar de bestaande beveiligde agenda-abonnementsfeed, zonder automatische volledige cloudsynchronisatie.
+- Geen financiële bedragen, notities of pauzegegevens gedeeld met Google Agenda. Google bepaalt zelf wanneer het externe abonnement opnieuw wordt opgehaald.
+
 ## v71.13.30 — geheime agenda-link strikt lokaal houden
 - De privé-abonnementslink wordt uitsluitend bewaard in lokale browseropslag, buiten de normale IndexedDB-instellingen die door een handmatige cloudsynchronisatie kunnen worden gelezen.
 - Voor het oude formaat wordt een reeds aanwezige lokale link overgezet en de oude instelling verwijderd. Alle cloud-sync-routes weigeren bovendien het oude agenda-secret expliciet te uploaden of te herstellen.
