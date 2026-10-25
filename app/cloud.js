@@ -206,7 +206,7 @@ const JKCloud = (() => {
     await JKDB.putLocal('syncQueue',q);
     document.dispatchEvent(new CustomEvent('jkcloud-queue'));
     if(relevantOp(q))scheduleNotificationProjection();
-    if(q.store==='jobs')window.JKCalendarFeed?.schedule();
+    if(q.store==='jobs'||q.store==='timeEntries')window.JKCalendarFeed?.schedule();
     return q;
   }
   async function hasLocalDelete(store,id){
@@ -235,7 +235,7 @@ const JKCloud = (() => {
     const existing=(await JKDB.all('syncQueue')).find(q=>q.type==='delete'&&q.store===store&&q.recordId===id);
     if(!existing) await queueOp({type:'delete',store,recordId:id});
     else document.dispatchEvent(new CustomEvent('jkcloud-queue'));
-    if(store==='jobs')window.JKCalendarFeed?.schedule();
+    if(store==='jobs'||store==='timeEntries')window.JKCalendarFeed?.schedule();
     // Cloud-delete wordt pas uitgevoerd bij handmatige synchronisatie.
   }
 
