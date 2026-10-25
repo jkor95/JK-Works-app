@@ -63,6 +63,38 @@ module.exports=async(browser,origin)=>{
   await page.locator('[data-close]').click();await page.evaluate(()=>App.renderJobs());
   assert.equal(await page.locator('#view .finance-kpis').count(),0,'Klussenoverzicht heeft geen detailkaarten');
   assert.equal(await page.locator('#view .jobs-summary-card').count(),0,'Klussenoverzicht heeft geen uitgebreide samenvatting');
+
+  // Klusoverzicht: open/gepland eerst op oplopende datum, afgerond daarna.
+  const sortFixtures=[
+    {id:'sort-completed-new',title:'Eerder afgerond 2',date:'2026-12-01',status:'afgerond',paymentType:'invoice'},
+    {id:'sort-active-later',title:'Gepland later',date:'2026-11-04',status:'gepland',paymentType:'invoice'},
+    {id:'sort-active-sooner',title:'Open binnenkort',date:'2026-10-28',status:'open',paymentType:'cash'},
+    {id:'sort-completed-old',title:'Eerder afgerond 1',date:'2026-09-01',status:'afgerond',paymentType:'cash'},
+    {id:'sort-active-multi',title:'Meerdere werkdagen',date:'2026-10-27',status:'gepland',
+      workDays:[{date:'2026-10-29',startTime:'09:00'},{date:'2026-10-27',startTime:'08:00'}],paymentType:'invoice'},
+    {id:'sort-active-no-date',title:'Zonder datum',date:'',status:'open',paymentType:'cash'}
+  ];
+  await page.evaluate(async fixtures=>{
+    for(const fixture of fixtures)await JKDB.putLocal('jobs',{clientName:'Proefklant',...fixture});
+    await App.renderJobs();
+  },sortFixtures);
+  const sortRows=()=>page.locator('#view [data-job]').evaluateAll(rows=>rows.map(row=>row.getAttribute('data-job')).filter(id=>id.startsWith('sort-')));
+  assert.deepEqual(await sortRows(),['sort-active-multi','sort-active-sooner','sort-active-later',
+    'sort-active-no-date','sort-completed-new','sort-completed-old'],
+    'Actieve klussen op datum, afgerond onderaan met nieuwste afgeronde bovenaan');
+  await page.locator('[data-jpf=invoice]').click();
+  await page.waitForFunction(()=>document.querySelector('[data-jpf=invoice]')?.classList.contains('active'));
+  assert.deepEqual(await sortRows(),['sort-active-multi','sort-active-later','sort-completed-new'],
+    'Factuurfilter respecteert dezelfde sortering');
+  await page.locator('[data-jpf=cash]').click();
+  await page.waitForFunction(()=>document.querySelector('[data-jpf=cash]')?.classList.contains('active'));
+  assert.deepEqual(await sortRows(),['sort-active-sooner','sort-active-no-date','sort-completed-old'],
+    'Contantfilter respecteert dezelfde sortering');
+  await page.locator('[data-jpf=all]').click();
+  await page.waitForFunction(()=>document.querySelector('[data-jpf=all]')?.classList.contains('active'));
+  await page.evaluate(async fixtures=>{for(const fixture of fixtures)await JKDB.removeLocal('jobs',fixture.id);await App.renderJobs();},sortFixtures);
+  console.log('PASS: open/geplande klussen chronologisch, afgeronde klussen onderaan, meerdaagse planning en betaalfilters');
+
   const row=page.locator('[data-job=fixed]');assert.match(await row.innerText(),/Montage kast/);assert.match(await row.innerText(),/Fictieve klant/);assert.doesNotMatch(await row.innerText(),/Berekende urenwaarde|Referentie-uurtarief|Effectief/);assert.match(await row.innerText(),/50,00/);
   // De nieuwe Openstaand-knop gebruikt dezelfde echte schuld (geen afboekingen).
   await page.locator('[data-jpf="open"]').click();
