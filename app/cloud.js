@@ -79,12 +79,12 @@ const JKCloud = (() => {
       // Een stille token-refresh mag de interface niet opnieuw opbouwen.
       if(event==='SIGNED_IN' || event==='SIGNED_OUT' || event==='USER_UPDATED')
         document.dispatchEvent(new CustomEvent('jkcloud-auth'));
-      if(event==='SIGNED_IN' || event==='TOKEN_REFRESHED')scheduleNotificationProjection();
+      if(event==='SIGNED_IN' || event==='TOKEN_REFRESHED'){scheduleNotificationProjection();window.JKCalendarFeed?.schedule();}
     });
     // v33: geen automatische sync op openen, focus, online worden of timer.
     // Synchronisatie gebeurt alleen na inloggen of wanneer de gebruiker op Sync drukt.
-    window.addEventListener('online',scheduleNotificationProjection);
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')scheduleNotificationProjection();else publishNotificationProjection().catch(()=>{});});
+    window.addEventListener('online',()=>{scheduleNotificationProjection();window.JKCalendarFeed?.schedule();});
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){scheduleNotificationProjection();window.JKCalendarFeed?.schedule();}else{publishNotificationProjection().catch(()=>{});window.JKCalendarFeed?.publish().catch(()=>{});}});
     scheduleNotificationProjection();
     return true;
   }
@@ -93,7 +93,7 @@ const JKCloud = (() => {
   async function signIn(email,password){
     if(!client) throw new Error('Cloudmodule is niet geladen. Controleer internet.');
     const {data,error}=await client.auth.signInWithPassword({email,password});
-    if(error) throw error; session=data.session; if(!await restoreProtected())await syncNow(); scheduleNotificationProjection(); return data;
+    if(error) throw error; session=data.session; if(!await restoreProtected())await syncNow(); scheduleNotificationProjection();window.JKCalendarFeed?.schedule(); return data;
   }
   async function signUp(email,password){
     if(!client) throw new Error('Cloudmodule is niet geladen. Controleer internet.');
@@ -204,6 +204,7 @@ const JKCloud = (() => {
     await JKDB.putLocal('syncQueue',q);
     document.dispatchEvent(new CustomEvent('jkcloud-queue'));
     if(relevantOp(q))scheduleNotificationProjection();
+    if(q.store==='jobs')window.JKCalendarFeed?.schedule();
     return q;
   }
   async function hasLocalDelete(store,id){
@@ -232,6 +233,7 @@ const JKCloud = (() => {
     const existing=(await JKDB.all('syncQueue')).find(q=>q.type==='delete'&&q.store===store&&q.recordId===id);
     if(!existing) await queueOp({type:'delete',store,recordId:id});
     else document.dispatchEvent(new CustomEvent('jkcloud-queue'));
+    if(store==='jobs')window.JKCalendarFeed?.schedule();
     // Cloud-delete wordt pas uitgevoerd bij handmatige synchronisatie.
   }
 
@@ -405,7 +407,7 @@ const JKCloud = (() => {
       }
       await JKDB.putLocal('settings',{id:'cloudStatus',lastSync:new Date().toISOString(),email:user().email});
       document.dispatchEvent(new CustomEvent('jkcloud-sync',{detail:{state:'done',changed:localChanged}}));
-    }finally{ syncing=false; document.dispatchEvent(new CustomEvent('jkcloud-queue')); scheduleNotificationProjection(); }
+    }finally{ syncing=false; document.dispatchEvent(new CustomEvent('jkcloud-queue')); scheduleNotificationProjection();window.JKCalendarFeed?.schedule(); }
   }
 
   async function pruneCloudToLocal(stores=['documents','timeEntries','jobs']){
