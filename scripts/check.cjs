@@ -55,6 +55,7 @@ async function files(dir) {
   const deploymentGuards=spawnSync('python3',['-m','unittest','discover','-s','scripts','-p','test_deploy_push.py'],{cwd:root,encoding:'utf8'});
   assert.equal(deploymentGuards.status,0,deploymentGuards.stderr);
   console.log('PASS: veilige deployment, goedgekeurde SQL, afscherming en behoud bestaande functieconfiguratie (fictieve API)');
+  await require('./test_calendar_feed.cjs')();
   await require('./test_push.cjs').serverTests();
   await require('./test_invoice_payment.cjs')();
   console.log('PASS: factuur-betaalstatus en gekoppelde klussen (fictieve gegevens)');

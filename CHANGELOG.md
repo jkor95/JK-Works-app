@@ -1,3 +1,10 @@
+## v71.13.29 — beveiligde automatische Google Agenda-abonnementslink
+- Onder Meer → Agenda synchronisatie eenmalig een privé-ICS-link genereren, kopiëren, vervangen of intrekken. Link alleen in lokale instellingen bewaard; server bewaart SHA-256-hash.
+- De nieuwe Supabase Edge Function jk-calendar-feed geeft een alleen-lezen agenda met stabiele afspraken per geplande werkdag. Afwijkende uitvoeringsadressen krijgen voorrang, nachtwerk loopt door tot de volgende dag, werkdagen zonder tijden worden dagafspraken; verwijderde werkdagen verdwijnen bij de volgende publicatie/Google-verversing.
+- Automatische beperkte projectie bij klusaanpassingen, online/heropenen en na handmatige sync. **Geen** automatische volledige synchronisatie, betalingen, facturen, documenten of foto's in de agenda.
+- Opt-in: zonder expliciet activeren wordt niets gepubliceerd. Bij herstelbeveiliging blijft publicatie geblokkeerd. Google bepaalt zelf hoe vaak de externe kalender opnieuw wordt opgehaald; wijzigingen zijn niet onmiddellijk zichtbaar.
+- Serverwijziging bestaat uit nieuwe RLS-afgeschermde tabel jk_calendar_feeds en losse Edge Function. Eerst tests en beoordeling, daarna productie-uitrol.
+
 ## v71.13.28 — klussenoverzicht chronologisch met actieve klussen bovenaan
 - In Klussen (Alles, Factuur en Contant) worden open en geplande klussen eerst op datum gezet: oudste/eerstvolgende datum bovenaan. Meerdaagse klussen gebruiken de eerste geplande werkdag.
 - Afgeronde klussen staan altijd onder de open en geplande klussen, met de recentste afgeronde klus eerst. Klussen zonder datum staan aan het einde van hun eigen statusgroep.
