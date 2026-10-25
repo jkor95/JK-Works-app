@@ -538,6 +538,7 @@ const App = (() => {
   async function init(){
     await JKDB.open();
     await JKCloud.init();
+    window.JKCalendarFeed?.schedule();
     bindSiteAuth();
     bindCloudEvents();
     registerSW();
@@ -2038,8 +2039,55 @@ const App = (() => {
 
   async function renderMore(){
     title('Meer');const [clients,entries,company,backup,cloudStatus,requests]=await Promise.all([JKDB.all('clients'),JKDB.all('timeEntries'),JKDB.get('settings','company'),JKDB.get('settings','backup'),JKDB.get('settings','cloudStatus'),getWebsiteRequestsSafe()]);const cs=JKCloud.status(),openRequests=requests.filter(r=>r.status==='new'||r.status==='contact').length;
-    $('#view').innerHTML=`<div class="list"><div class="list-item clickable" id="cloudMenu"><div class="main"><div class="title">☁️ Synchronisatie</div><div class="sub">${cs.signedIn?(cs.email+' · '+(cloudStatus?.lastSync?'laatst '+fmtDateTime(cloudStatus.lastSync):'nog niet gesynchroniseerd')):'Niet ingelogd'}</div></div><span>›</span></div><div class="list-item clickable" id="notificationMenu"><div class="main"><div class="title">🔔 Meldingen</div><div class="sub">Acties, badges en meldingen per categorie</div></div><span>›</span></div><div class="list-item clickable" id="timeMenu"><div class="main"><div class="title">🕒 Urenregistratie</div><div class="sub">${entries.length} registraties · handmatig van-tot</div></div><span>›</span></div><div class="list-item clickable" id="timeStatsMenu"><div class="main"><div class="title">📊 Statistieken</div><div class="sub">Ontvangen, afspraken en uren per periode of klant</div></div><span>›</span></div><div class="list-item clickable" id="clientMenu"><div class="main"><div class="title">👥 Klanten</div><div class="sub">${clients.length} klanten</div></div><span>›</span></div><div class="list-item clickable" id="workCategoriesMenu"><div class="main"><div class="title">🧰 Werkzaamhedencategorieën</div><div class="sub">Automatische omschrijvingen en trefwoorden beheren</div></div><span>›</span></div><div class="list-item clickable" id="companyMenu"><div class="main"><div class="title">🏢 Bedrijfsgegevens</div><div class="sub">${esc(company?.companyName||'JK Works Dordrecht')}</div></div><span>›</span></div><div class="list-item clickable" id="websiteRequestsMenu"><div class="main"><div class="title">📥 Website-aanvragen</div><div class="sub">${openRequests} open aanvraag${openRequests===1?'':'en'}</div></div><span>›</span></div><div class="list-item clickable" id="websiteMenu"><div class="main"><div class="title">🌐 Website beheren</div><div class="sub">Teksten van jkworks.nl aanpassen en direct publiceren</div></div><span>›</span></div><div class="list-item clickable" id="backupMenu"><div class="main"><div class="title">💾 Back-up en herstellen</div><div class="sub">${backup?.lastBackup?'Laatst '+fmtDateTime(backup.lastBackup):'Nog geen back-up'}</div></div><span>›</span></div></div>`;
-    $('#cloudMenu').addEventListener('click',showCloud);$('#notificationMenu').addEventListener('click',showNotificationSettings);$('#timeMenu').addEventListener('click',showTimeEntries);$('#timeStatsMenu').addEventListener('click',showTimeStats);$('#clientMenu').addEventListener('click',showClients);$('#companyMenu').addEventListener('click',showCompany);$('#workCategoriesMenu').addEventListener('click',showWorkCategories);$('#websiteRequestsMenu').addEventListener('click',showWebsiteRequests);$('#websiteMenu').addEventListener('click',()=>window.JKWebsiteEditor.open());$('#backupMenu').addEventListener('click',showBackup);
+    $('#view').innerHTML=`<div class="list"><div class="list-item clickable" id="cloudMenu"><div class="main"><div class="title">☁️ Synchronisatie</div><div class="sub">${cs.signedIn?(cs.email+' · '+(cloudStatus?.lastSync?'laatst '+fmtDateTime(cloudStatus.lastSync):'nog niet gesynchroniseerd')):'Niet ingelogd'}</div></div><span>›</span></div><div class="list-item clickable" id="calendarSyncMenu"><div class="main"><div class="title">📅 Agenda synchronisatie</div><div class="sub">Automatische Google Agenda-link voor geplande werkdagen</div></div><span>›</span></div><div class="list-item clickable" id="notificationMenu"><div class="main"><div class="title">🔔 Meldingen</div><div class="sub">Acties, badges en meldingen per categorie</div></div><span>›</span></div><div class="list-item clickable" id="timeMenu"><div class="main"><div class="title">🕒 Urenregistratie</div><div class="sub">${entries.length} registraties · handmatig van-tot</div></div><span>›</span></div><div class="list-item clickable" id="timeStatsMenu"><div class="main"><div class="title">📊 Statistieken</div><div class="sub">Ontvangen, afspraken en uren per periode of klant</div></div><span>›</span></div><div class="list-item clickable" id="clientMenu"><div class="main"><div class="title">👥 Klanten</div><div class="sub">${clients.length} klanten</div></div><span>›</span></div><div class="list-item clickable" id="workCategoriesMenu"><div class="main"><div class="title">🧰 Werkzaamhedencategorieën</div><div class="sub">Automatische omschrijvingen en trefwoorden beheren</div></div><span>›</span></div><div class="list-item clickable" id="companyMenu"><div class="main"><div class="title">🏢 Bedrijfsgegevens</div><div class="sub">${esc(company?.companyName||'JK Works Dordrecht')}</div></div><span>›</span></div><div class="list-item clickable" id="websiteRequestsMenu"><div class="main"><div class="title">📥 Website-aanvragen</div><div class="sub">${openRequests} open aanvraag${openRequests===1?'':'en'}</div></div><span>›</span></div><div class="list-item clickable" id="websiteMenu"><div class="main"><div class="title">🌐 Website beheren</div><div class="sub">Teksten van jkworks.nl aanpassen en direct publiceren</div></div><span>›</span></div><div class="list-item clickable" id="backupMenu"><div class="main"><div class="title">💾 Back-up en herstellen</div><div class="sub">${backup?.lastBackup?'Laatst '+fmtDateTime(backup.lastBackup):'Nog geen back-up'}</div></div><span>›</span></div></div>`;
+    $('#cloudMenu').addEventListener('click',showCloud);$('#calendarSyncMenu').addEventListener('click',showCalendarSync);$('#notificationMenu').addEventListener('click',showNotificationSettings);$('#timeMenu').addEventListener('click',showTimeEntries);$('#timeStatsMenu').addEventListener('click',showTimeStats);$('#clientMenu').addEventListener('click',showClients);$('#companyMenu').addEventListener('click',showCompany);$('#workCategoriesMenu').addEventListener('click',showWorkCategories);$('#websiteRequestsMenu').addEventListener('click',showWebsiteRequests);$('#websiteMenu').addEventListener('click',()=>window.JKWebsiteEditor.open());$('#backupMenu').addEventListener('click',showBackup);
+  }
+
+  async function showCalendarSync(){
+    modal(modalHead('Agenda synchronisatie')+'<div class="card"><h3>JK Works - Klussen</h3><p class="muted small">Eenmalig toevoegen aan Google Agenda via een beveiligde agenda-link. Nieuwe, gewijzigde en verwijderde werkdagen verschijnen daarna automatisch als Google de agenda opnieuw ophaalt. Dit kan uren duren.</p><div id="calendarSyncContent" role="status" aria-live="polite">Agendakoppeling controleren...</div></div>');
+    const target=$('#calendarSyncContent');
+    async function refresh(){
+      if(!$('#calendarSyncContent'))return;
+      if(!JKCloud.isSignedIn()){
+        target.innerHTML='<p class="muted">Log eerst in bij Meer → Synchronisatie om een beveiligde agenda-link te maken.</p>';
+        return;
+      }
+      try{
+        const [remote,local]=await Promise.all([JKCalendarFeed.status(),JKCalendarFeed.own()]);
+        const link=remote.enabled&&local.enabled?local.url||'':'';
+        const last=remote.updatedAt?new Date(remote.updatedAt).toLocaleString('nl-NL'):'';
+        target.innerHTML='<p class="muted small">'+(remote.enabled?'Agenda-abonnement actief.':'Er is nog geen agenda-abonnement.')+
+          (last?' Laatst bijgewerkt: '+esc(last):'')+'</p>'+
+          (link?'<div class="field"><label>Jouw privé-agenda-link</label><input id="calendarSubscriptionUrl" readonly value="'+esc(link)+'"></div><button type="button" class="secondary" id="calendarCopy">📋 Agenda-link kopiëren</button>':'')+
+          (remote.enabled&&!link?'<p class="muted small">De agenda is actief, maar de geheime link is niet op dit toestel bewaard. Maak een nieuwe link en voeg deze daarna opnieuw toe aan Google Agenda.</p>':'')+
+          '<div class="button-row" style="margin-top:12px">'+
+          (!remote.enabled?'<button type="button" class="primary" id="calendarEnable">Agenda-link maken</button>':
+          '<button type="button" class="secondary" id="calendarRotate">Nieuwe link maken</button><button type="button" class="danger-btn" id="calendarDisable">Koppeling uitschakelen</button>')+
+          '</div><p class="muted small">Toevoegen op een computer: Google Agenda → Andere agenda’s (+) → Via URL. Deze link is privé: iedereen met de link kan de klusnaam, klant, tijden en het uitvoeringsadres zien. Deel hem dus niet. Bedragen, uren en facturen blijven afgeschermd.</p>'+
+          '<p class="muted small">De agenda wordt vanuit dit toestel automatisch bijgewerkt als je online bent. Google bepaalt zelf wanneer de kalender ververst. Wijzigingen op andere apparaten moeten eerst in deze app terechtkomen.</p>';
+        $('#calendarCopy')?.addEventListener('click',async()=>{
+          try{
+            if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(link);
+            else{const el=$('#calendarSubscriptionUrl');el.select();if(!document.execCommand('copy'))throw Error('Kopiëren niet ondersteund');}
+            toast('Privé-agenda-link gekopieerd');
+          }catch{const el=$('#calendarSubscriptionUrl');el?.select();alert('Selecteer de link en kopieer deze handmatig.');}
+        });
+        const action=async(operation,confirmation)=>{
+          if(confirmation&&!confirm(confirmation))return;
+          target.textContent='Agenda-instellingen opslaan...';
+          try{
+            const data=await JKCalendarFeed[operation]();
+            if(data?.ok&&operation!=='disable')toast('Agenda-link gemaakt');
+            if(operation==='disable')toast('Agenda-abonnement uitgeschakeld');
+            await refresh();
+          }catch(err){target.textContent='Agendakoppeling mislukt: '+(err.message||err);}
+        };
+        $('#calendarEnable')?.addEventListener('click',()=>action('enable'));
+        $('#calendarRotate')?.addEventListener('click',()=>action('rotate','Een nieuwe link maakt de oude onbruikbaar. Je moet de kalender dan opnieuw toevoegen in Google Agenda. Doorgaan?'));
+        $('#calendarDisable')?.addEventListener('click',()=>action('disable','Agenda uitschakelen? De abonnementslink werkt daarna niet meer.'));
+      }catch(err){target.textContent='Agendastatus niet beschikbaar: '+(err.message||err);}
+    }
+    await refresh();
   }
 
   function showCloud(){
