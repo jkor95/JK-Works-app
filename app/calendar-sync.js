@@ -3,10 +3,28 @@
 const JKCalendarFeed=(()=>{
  const endpoint='https://ercqiavruotoclhvfzud.supabase.co/functions/v1/jk-calendar-feed';
  const publishable='sb_publishable_z4kkYgzjr-bYDEcSZlVciw_cP8MfOuX';
- const key='calendarFeedLocal';
+ const key='jkworks-private-calendar-subscription';
  let timer=null,busy=false,pending=false;
- const own=async()=>await JKDB.get('settings',key)||{id:key,enabled:false,url:''};
- const save=async local=>JKDB.putLocal('settings',{...local,id:key});
+ // The subscription URL is a bearer credential. Keep it out of IndexedDB
+ // 'settings' because the manual cloud sync can upload that entire store.
+ async function own(){
+  let row=null;
+  try{row=JSON.parse(localStorage.getItem(key)||'null');}catch{}
+  if(row&&typeof row==='object'&&typeof row.url==='string')return row;
+  // Upgrade any pre-existing local IndexedDB value without uploading it.
+  const legacy=await JKDB.get('settings','calendarFeedLocal');
+  if(legacy){
+   const migrated={enabled:!!legacy.enabled,url:String(legacy.url||''),lastSentAt:legacy.lastSentAt||null};
+   localStorage.setItem(key,JSON.stringify(migrated));
+   await JKDB.removeLocal('settings','calendarFeedLocal');
+   return migrated;
+  }
+  return {enabled:false,url:''};
+ }
+ async function save(local){
+  localStorage.setItem(key,JSON.stringify({enabled:!!local.enabled,url:String(local.url||''),lastSentAt:local.lastSentAt||null}));
+  await JKDB.removeLocal('settings','calendarFeedLocal');
+ }
  const jobDays=j=>{
   const days=Array.isArray(j.workDays)?j.workDays:(j.date?[{date:j.date,startTime:j.startTime,endTime:j.endTime}]:[]);
   return [...days].filter(d=>d?.date).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
