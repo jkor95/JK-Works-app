@@ -1,3 +1,8 @@
+## v71.13.30 — geheime agenda-link strikt lokaal houden
+- De privé-abonnementslink wordt uitsluitend bewaard in lokale browseropslag, buiten de normale IndexedDB-instellingen die door een handmatige cloudsynchronisatie kunnen worden gelezen.
+- Voor het oude formaat wordt een reeds aanwezige lokale link overgezet en de oude instelling verwijderd. Alle cloud-sync-routes weigeren bovendien het oude agenda-secret expliciet te uploaden of te herstellen.
+- Geen wijzigingen aan de private Supabase-agendatabel, bestaande klussen of de kalender-URL zelf.
+
 ## v71.13.29 — beveiligde automatische Google Agenda-abonnementslink
 - Onder Meer → Agenda synchronisatie eenmalig een privé-ICS-link genereren, kopiëren, vervangen of intrekken. Link alleen in lokale instellingen bewaard; server bewaart SHA-256-hash.
 - De nieuwe Supabase Edge Function jk-calendar-feed geeft een alleen-lezen agenda met stabiele afspraken per geplande werkdag. Afwijkende uitvoeringsadressen krijgen voorrang, nachtwerk loopt door tot de volgende dag, werkdagen zonder tijden worden dagafspraken; verwijderde werkdagen verdwijnen bij de volgende publicatie/Google-verversing.
