@@ -150,6 +150,6 @@ module.exports=async()=>{
  const app=fs.readFileSync(path.join(root,'app/app.js'),'utf8');
  const html=fs.readFileSync(path.join(root,'app/index.html'),'utf8');
  assert.match(app,/id="calendarSyncMenu"/);
- assert.match(html,/calendar-sync\.js\?v=71\.13\.30/);
+ assert.match(html,/calendar-sync\.js\?v=71\.13\.31/);
  console.log('PASS: beveiligde agenda-link, JWT, hash, afscherming, verwijderen, nachtwerk, dagafspraken, rotatie/intrekken en privacyprojectie');
 };
