@@ -83,12 +83,15 @@ module.exports=async(browser,origin)=>{
     'sort-active-no-date','sort-completed-new','sort-completed-old'],
     'Actieve klussen op datum, afgerond onderaan met nieuwste afgeronde bovenaan');
   await page.locator('[data-jpf=invoice]').click();
+  await page.waitForFunction(()=>document.querySelector('[data-jpf=invoice]')?.classList.contains('active'));
   assert.deepEqual(await sortRows(),['sort-active-multi','sort-active-later','sort-completed-new'],
     'Factuurfilter respecteert dezelfde sortering');
   await page.locator('[data-jpf=cash]').click();
+  await page.waitForFunction(()=>document.querySelector('[data-jpf=cash]')?.classList.contains('active'));
   assert.deepEqual(await sortRows(),['sort-active-sooner','sort-active-no-date','sort-completed-old'],
     'Contantfilter respecteert dezelfde sortering');
   await page.locator('[data-jpf=all]').click();
+  await page.waitForFunction(()=>document.querySelector('[data-jpf=all]')?.classList.contains('active'));
   await page.evaluate(async fixtures=>{for(const fixture of fixtures)await JKDB.removeLocal('jobs',fixture.id);await App.renderJobs();},sortFixtures);
   console.log('PASS: open/geplande klussen chronologisch, afgeronde klussen onderaan, meerdaagse planning en betaalfilters');
 
