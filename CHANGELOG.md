@@ -1,3 +1,8 @@
+## v71.13.32 — Meer ruimte bij klusdetails
+- De overbodige knop ‘Google Agenda’ is weggehaald uit de rij met acties bovenaan bij een klus. Automatische kalenderkoppeling blijft actief.
+- De overige acties, per-werkdag-opties, optionele ICS-download en bestaande planning, uren en factuurgegevens blijven ongewijzigd.
+- Regressietest controleert de compactere knoppenbalk bij een klus, zonder veranderingen in de kalenderfeed.
+
 ## v71.13.31 — Google Agenda toont bevestigde werkelijke werktijden
 - De agenda gebruikt nu de daadwerkelijk ingevoerde, bevestigde werktijden per klusdag. Zolang die ontbreken blijft de oorspronkelijke planning zichtbaar.
 - Automatisch ingevulde maar onbevestigde uren worden genegeerd; extra werkelijk gewerkte dagen komen erbij. Bij één verplaatste werkdag vervangt de geregistreerde werkdag de oorspronkelijke afspraak. Bij het wissen van een registratie komt de geplande tijd terug.
