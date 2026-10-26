@@ -588,7 +588,7 @@ const JKDB = (() => {
         let items=[...(c.items||[])].map(raw=>{
           let s=String(raw||'');
           s=s.replace(/Mbox maat 3\s*[–-]\s*Kit & afwerking/g,'Mbox maat 2 – Kit & afwerking');
-          s=s.replace('Handkitspuit zit in de Mbox; elektrische 18V kitspuit alleen los meenemen als gewenst','Handkitspuit zit in de Mbox; elektrische 18V kitspuit alleen los meenemen als gewenst');
+          s=s.replace('Handkitspuit meenemen; 18V kitspuit alleen als gewenst','Handkitspuit zit in de Mbox; elektrische 18V kitspuit alleen los meenemen als gewenst');
           return s;
         });
         items=[...new Set(items)];
