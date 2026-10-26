@@ -44,6 +44,11 @@ async function files(dir) {
   const dbSource = await fs.readFile(path.join(root, 'app/db.js'), 'utf8');
   const appSource = await fs.readFile(path.join(root, 'app/app.js'), 'utf8');
   assert.match(dbSource,/Makita DHR183 18V LXT SDS-plus boorhamer/,'DHR183 ontbreekt in inpak-/gereedschapsdata');
+  assert.match(dbSource,/id:'m_dhr',name:'Mbox maat 1',type:'Boorhamer'/,'DHR183 staat niet in Mbox maat 1');
+  assert.match(dbSource,/id:'m_deco_multi',name:'Mbox maat 1',type:'Decoupeerzaag & multitool'/,'Decoupeerzaag en multitool staan niet samen in Mbox maat 1');
+  assert.match(dbSource,/t_djv[^\n]*m_deco_multi/,'DJV181 staat niet in gecombineerde Mbox maat 1');
+  assert.match(dbSource,/t_dtm[^\n]*m_deco_multi/,'DTM52 staat niet in gecombineerde Mbox maat 1');
+  assert.match(dbSource,/seedVersion',value:8/,'Seedmigratie v8 ontbreekt');
   assert.match(dbSource,/c_drill_mount[\s\S]*Makita DHR183/,'DHR183 ontbreekt bij Boren & ophangen');
   assert.match(dbSource,/c_small_repair[\s\S]*Makita DHR183/,'DHR183 ontbreekt bij montage/reparatie');
   assert.match(dbSource,/c_kitchen[\s\S]*Makita DHR183/,'DHR183 ontbreekt bij keukenmontage');
