@@ -133,9 +133,9 @@ const JKDB = (() => {
     {id:'m_cirkel',name:'Mbox maat 3',type:'Cirkelzaag',items:[
       'Makita DHS680Z cirkelzaag','Afzuigadapter','Afstandhouder / geleider','Timmermansdriehoek'
     ],notes:'Geen vaste accu. Bij meenemen ook een losse 18V accu meenemen.'},
-    {id:'m_kit',name:'Mbox maat 3',type:'Kit & afwerking',items:[
-      '18V kitspuit (Makita-accucompatibel)','Handkitspuit','Kitkokers','Spuitmonden','Kitstrijkers','Stanleymes','Schilderstape','Keukenpapier','Afvalzakjes','Werkhandschoenen','Latex handschoenen','Spons','Sprayfles met water + Dreft'
-    ],notes:'Voor de 18V kitspuit is een losse 18V accu nodig. Sprayfles met water + Dreft stond nog op toevoegen.'},
+    {id:'m_kit',name:'Mbox maat 2',type:'Kit & afwerking',items:[
+      'Handkitspuit','Kitkokers','Spuitmonden','Kitstrijkers','Stanleymes','Schilderstape','Keukenpapier','Afvalzakjes','Werkhandschoenen','Latex handschoenen','Spons','Sprayfles met water + Dreft'
+    ],notes:'De elektrische 18V kitspuit zit niet meer in deze Mbox en wordt los opgeborgen.'},
     {id:'m_div',name:'Mbox maat 3',type:'Diversen',items:[
       'Houtborenset','Metaalborenset','Steenborenset','Gatenzaagset','Speedboor','Ringstops voor boren','Glasboren','Handblazer voor stof','Ringen-set diverse maten','Snelspan lijmklem','Ducttape','Schilderstape','Nanotape','Sealtape','Dubbelzijdige tape','Tie-wraps','1x metalen tie-wrap','Opblaasbare montagewig (air wedge)','WD-40','PVC-lijm','18V adapter met USB / USB-C oplader','IJzerdraad','Extra pluggen','Grote S-haak voor aan ladder','Stoffer + blik','Digitale leidingzoeker'
     ],notes:''},
@@ -161,8 +161,8 @@ const JKDB = (() => {
       'Multimeter','Kniptang','Striptang','Pijpenknipper','Mes','Kabelstripper','Knijptang','Aftekenstift','Schroevendraaier PZ2','Schroevendraaier PH1','Kleine platte schroevendraaier','Brede platte schroevendraaier','Kleine platte schroevendraaier / 1-polige spanningstester','Diverse WAGO-lasklemmen','Stekkers','Overige elektra-benodigdheden'
     ],notes:''},
     {id:'loose_tools',name:'Los',type:'Gereedschap & transport',items:[
-      'Makita DML805 bouwlamp','Kruislijnlaser','Statief voor kruislijnlaser','Plafondpaal voor kruislijnlaser','Wesco 230 mm slijptol, 2000W, bedraad','Kabelhaspel 10 m','Kabelhaspel 7,5 m','Opvouwbare steekwagen van Action'
-    ],notes:'Bij de Makita DML805 bouwlamp eventueel de 14,4V accu\'s meenemen.'},
+      '18V kitspuit (Makita-accucompatibel)','Makita DML805 bouwlamp','Kruislijnlaser','Statief voor kruislijnlaser','Plafondpaal voor kruislijnlaser','Wesco 230 mm slijptol, 2000W, bedraad','Kabelhaspel 10 m','Kabelhaspel 7,5 m','Opvouwbare steekwagen van Action'
+    ],notes:'De elektrische 18V kitspuit wordt los opgeborgen en gebruikt een losse 18V accu. Bij de Makita DML805 bouwlamp eventueel de 14,4V accu\'s meenemen.'},
     {id:'loose_ladders',name:'Los',type:'Ladders & trappen',items:[
       '3-treeds huistrap','Telescoopladder tot 3,8 m','Multiladder / uitschuifbare vouwladder tot 5,2 m'
     ],notes:''},
@@ -175,7 +175,7 @@ const JKDB = (() => {
   ];
 
   const canonicalTools = [
-    ['t_dga','Makita DGA506ZJ','Haakse slijper','m_slijp'],['t_dbo','Makita DBO180ZJ','Excentrische schuurmachine','m_schuur'],['t_djv','Makita DJV181ZJ','Decoupeerzaag','m_deco_multi'],['t_dtd','Makita DTD153ZJ','Slagschroevendraaier','m_schroef'],['t_dhp','Makita DHP485Z','Klopboor-/schroefmachine','m_schroef'],['t_dtm','Makita DTM52ZJ','Multitool','m_deco_multi'],['t_dhs','Makita DHS680Z','Cirkelzaag','m_cirkel'],['t_lamp','Makita DML805','Bouwlamp','loose_tools'],['t_kit','18V kitspuit','Kitspuit (Makita-accu compatibel)','m_kit'],['t_wesco','Wesco 230 mm 2000W','Slijptol bedraad','loose_tools'],['t_laser','Kruislijnlaser','Laser','loose_tools'],['t_lasertripod','Statief voor kruislijnlaser','Laser-accessoire','loose_tools'],['t_ceilingpole','Plafondpaal voor kruislijnlaser','Laser-accessoire','loose_tools'],['t_ladder1','3-treeds huistrap','Ladder','loose_ladders'],['t_ladder2','Telescoopladder 3,8 m','Ladder','loose_ladders'],['t_ladder3','Multiladder 5,2 m','Ladder','loose_ladders'],['t_has10','Kabelhaspel 10 m','Elektra','loose_tools'],['t_has75','Kabelhaspel 7,5 m','Elektra','loose_tools'],['t_cart','Opvouwbare steekwagen Action','Transport','loose_tools'],['t_dhr183','Makita DHR183','SDS-plus boorhamer','m_dhr'],['t_old14','Oude Makita 14,4V schroeftol','Schroefmachine','loose_reserve']
+    ['t_dga','Makita DGA506ZJ','Haakse slijper','m_slijp'],['t_dbo','Makita DBO180ZJ','Excentrische schuurmachine','m_schuur'],['t_djv','Makita DJV181ZJ','Decoupeerzaag','m_deco_multi'],['t_dtd','Makita DTD153ZJ','Slagschroevendraaier','m_schroef'],['t_dhp','Makita DHP485Z','Klopboor-/schroefmachine','m_schroef'],['t_dtm','Makita DTM52ZJ','Multitool','m_deco_multi'],['t_dhs','Makita DHS680Z','Cirkelzaag','m_cirkel'],['t_lamp','Makita DML805','Bouwlamp','loose_tools'],['t_kit','18V kitspuit','Kitspuit (Makita-accu compatibel)','loose_tools'],['t_wesco','Wesco 230 mm 2000W','Slijptol bedraad','loose_tools'],['t_laser','Kruislijnlaser','Laser','loose_tools'],['t_lasertripod','Statief voor kruislijnlaser','Laser-accessoire','loose_tools'],['t_ceilingpole','Plafondpaal voor kruislijnlaser','Laser-accessoire','loose_tools'],['t_ladder1','3-treeds huistrap','Ladder','loose_ladders'],['t_ladder2','Telescoopladder 3,8 m','Ladder','loose_ladders'],['t_ladder3','Multiladder 5,2 m','Ladder','loose_ladders'],['t_has10','Kabelhaspel 10 m','Elektra','loose_tools'],['t_has75','Kabelhaspel 7,5 m','Elektra','loose_tools'],['t_cart','Opvouwbare steekwagen Action','Transport','loose_tools'],['t_dhr183','Makita DHR183','SDS-plus boorhamer','m_dhr'],['t_old14','Oude Makita 14,4V schroeftol','Schroefmachine','loose_reserve']
   ];
 
   async function seed(){
@@ -259,9 +259,9 @@ const JKDB = (() => {
         ]},
         {id:'c_kit',name:'Kitten',items:[
           'Drinkfles meenemen',
-          'Mbox maat 3 – Kit & afwerking compleet meenemen',
+          'Mbox maat 2 – Kit & afwerking compleet meenemen',
           'Juiste kit + voldoende kokers controleren',
-          'Handkitspuit meenemen; 18V kitspuit alleen als gewenst',
+          'Handkitspuit zit in de Mbox; elektrische 18V kitspuit alleen los meenemen als gewenst',
           'Kitstrijkers en spuitmonden',
           'Stanleymes / mesjes',
           'Schilderstape indien nodig',
@@ -338,7 +338,7 @@ const JKDB = (() => {
           'Drinkfles meenemen',
           'Eten / lunch meenemen als dit een grotere dagklus is',
           'Mbox maat 2 – Schuurmachine: Makita DBO180ZJ excentrische schuurmachine, stofopvang en schuurpapier korrel 80/120/180/250',
-          'Mbox maat 3 – Kit & afwerking indien naden / kieren moeten worden afgewerkt',
+          'Mbox maat 2 – Kit & afwerking indien naden / kieren moeten worden afgewerkt',
           'Mbox maat 3 – Diversen: schilderstape, ducttape en stoffer + blik',
           'Mbox maat 2 – Handgereedschap: stanleymes, schaar en aftekenspullen',
           'Los: bouwlamp voor controle van de afwerking',
@@ -559,6 +559,45 @@ const JKDB = (() => {
       }
 
       await put('settings',{id:'seedVersion',value:8,at:new Date().toISOString()});
+    }
+
+    if(v < 9){
+      const kitBox=await get('mboxes','m_kit');
+      if(kitBox){
+        kitBox.name='Mbox maat 2';
+        kitBox.items=(kitBox.items||[]).filter(x=>!/^18V kitspuit/i.test(String(x)));
+        if(!(kitBox.items||[]).includes('Handkitspuit')) kitBox.items=['Handkitspuit',...(kitBox.items||[])];
+        kitBox.notes='De elektrische 18V kitspuit zit niet meer in deze Mbox en wordt los opgeborgen.';
+        kitBox.updatedAt=new Date().toISOString();
+        await put('mboxes',kitBox);
+      }
+
+      const loose=await get('mboxes','loose_tools');
+      if(loose){
+        const item='18V kitspuit (Makita-accucompatibel)';
+        loose.items=[item,...(loose.items||[]).filter(x=>String(x)!==item)];
+        loose.notes='De elektrische 18V kitspuit wordt los opgeborgen en gebruikt een losse 18V accu. Bij de Makita DML805 bouwlamp eventueel de 14,4V accu\'s meenemen.';
+        loose.updatedAt=new Date().toISOString();
+        await put('mboxes',loose);
+      }
+
+      const kitTool=await get('tools','t_kit');
+      if(kitTool) await put('tools',{...kitTool,location:'loose_tools',notes:'Los opgeborgen; gebruikt een losse Makita 18V accu.'});
+
+      for(const c of await all('checklists')){
+        let items=[...(c.items||[])].map(raw=>{
+          let s=String(raw||'');
+          s=s.replace(/Mbox maat 3\s*[–-]\s*Kit & afwerking/g,'Mbox maat 2 – Kit & afwerking');
+          s=s.replace('Handkitspuit meenemen; 18V kitspuit alleen als gewenst','Handkitspuit zit in de Mbox; elektrische 18V kitspuit alleen los meenemen als gewenst');
+          return s;
+        });
+        items=[...new Set(items)];
+        const checked={};
+        for(const item of items) if(c.checked?.[item]) checked[item]=true;
+        await put('checklists',{...c,items,checked,updatedAt:new Date().toISOString()});
+      }
+
+      await put('settings',{id:'seedVersion',value:9,at:new Date().toISOString()});
     }
   }
 
