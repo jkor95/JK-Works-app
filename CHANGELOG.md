@@ -1,3 +1,9 @@
+## v71.13.35 — Kitkoffer compacter en elektrische kitspuit los
+- **Kit & afwerking:** verplaatst van **Mbox maat 3** naar **Mbox maat 2**. De handkitspuit en overige kit-/afwerkspullen blijven in deze koffer.
+- **Elektrische 18V kitspuit:** uit de Mbox gehaald en voortaan als **los gereedschap** geregistreerd; hiervoor blijft een losse 18V accu nodig.
+- Bestaande materiaalgegevens worden via seedmigratie v9 aangepast. Kluschecklists verwijzen voortaan naar **Mbox maat 2 – Kit & afwerking** en noemen de elektrische kitspuit alleen als los mee te nemen wanneer gewenst.
+- Geen wijzigingen aan overige Mboxen, financiën, klussen, documenten of Supabase-schema.
+
 ## v71.13.34 — Compactere Mbox-indeling gereedschap
 - **Makita DHR183:** definitief verplaatst van Los / reserve naar **Mbox maat 1**. De boorhamer blijft zonder vaste accu; checklists noemen voortaan de Mbox maat 1 wanneer de DHR183 nodig is.
 - **Decoupeerzaag + multitool:** de Makita DJV181ZJ en DTM52ZJ staan nu **samen in één Mbox maat 1**, inclusief hun bestaande accessoires. De twee oude afzonderlijke Mbox maat 2-vermeldingen worden via migratie verwijderd.
