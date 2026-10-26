@@ -1,3 +1,9 @@
+## v71.13.36 — Booraccessoires bij DHR183 in Mbox maat 1
+- **Mbox maat 1 – Boorhamer & booraccessoires:** naast de Makita DHR183 zitten hier nu ook de hout-, metaal-, steen- en glasborenset, gatenzaagset, speedboor en ringstops.
+- **Mbox maat 3 – Diversen:** bovenstaande booraccessoires zijn hieruit verwijderd. Overige inhoud, zoals tapes, montagewig, WD-40, leidingzoeker en schoonmaak-/kleinmateriaal, blijft staan.
+- Bestaande materiaalgegevens en kluschecklists worden via seedmigratie v10 bijgewerkt zodat boorwerk naar de juiste Mbox maat 1 verwijst.
+- Geen wijzigingen aan overige Mbox-indelingen, financiën, klussen, documenten of Supabase-schema.
+
 ## v71.13.35 — Kitkoffer compacter en elektrische kitspuit los
 - **Kit & afwerking:** verplaatst van **Mbox maat 3** naar **Mbox maat 2**. De handkitspuit en overige kit-/afwerkspullen blijven in deze koffer.
 - **Elektrische 18V kitspuit:** uit de Mbox gehaald en voortaan als **los gereedschap** geregistreerd; hiervoor blijft een losse 18V accu nodig.
