@@ -137,17 +137,17 @@ const JKDB = (() => {
       'Handkitspuit','Kitkokers','Spuitmonden','Kitstrijkers','Stanleymes','Schilderstape','Keukenpapier','Afvalzakjes','Werkhandschoenen','Latex handschoenen','Spons','Sprayfles met water + Dreft'
     ],notes:'De elektrische 18V kitspuit zit niet meer in deze Mbox en wordt los opgeborgen.'},
     {id:'m_div',name:'Mbox maat 3',type:'Diversen',items:[
-      'Houtborenset','Metaalborenset','Steenborenset','Gatenzaagset','Speedboor','Ringstops voor boren','Glasboren','Handblazer voor stof','Ringen-set diverse maten','Snelspan lijmklem','Ducttape','Schilderstape','Nanotape','Sealtape','Dubbelzijdige tape','Tie-wraps','1x metalen tie-wrap','Opblaasbare montagewig (air wedge)','WD-40','PVC-lijm','18V adapter met USB / USB-C oplader','IJzerdraad','Extra pluggen','Grote S-haak voor aan ladder','Stoffer + blik','Digitale leidingzoeker'
-    ],notes:''},
+      'Handblazer voor stof','Ringen-set diverse maten','Snelspan lijmklem','Ducttape','Schilderstape','Nanotape','Sealtape','Dubbelzijdige tape','Tie-wraps','1x metalen tie-wrap','Opblaasbare montagewig (air wedge)','WD-40','PVC-lijm','18V adapter met USB / USB-C oplader','IJzerdraad','Extra pluggen','Grote S-haak voor aan ladder','Stoffer + blik','Digitale leidingzoeker'
+    ],notes:'Booraccessoires zijn verplaatst naar de Mbox maat 1 van de boorhamer.'},
     {id:'m_hand',name:'Mbox maat 2',type:'Handgereedschap',items:[
       'Rolmaat','Kleine waterpas','Kleine hamer','WERA schroevendraaierset met diverse opzetstukken','Waterpomptang','Punttang','Zijkniptang','Verstelbare moersleutel','Inbussleutelset','Torx-sleutelset','Potlood, stift en overige aftekenspullen','Kleine koevoet','Kleine ijzerzaag','Popnageltang','Zaklampje','USB-C oplaadkabel','Schaar','Priem','Visitekaartjes','Mini-ratel voor bitjes','Werkhandschoenen','Winkelhaak','Timmermansdriehoek','Reserve ijzerzaagjes'
     ],notes:''},
     {id:'m_schuur',name:'Mbox maat 2',type:'Schuurmachine',items:[
       'Makita DBO180ZJ excentrische schuurmachine','Stofopvangbakje','Stofopvangzakken','Schuurpapier korrel 80','Schuurpapier korrel 120','Schuurpapier korrel 180','Schuurpapier korrel 250','Mondkapjes'
     ],notes:'Geen vaste accu. Bij meenemen ook een losse 18V accu meenemen.'},
-    {id:'m_dhr',name:'Mbox maat 1',type:'Boorhamer',items:[
-      'Makita DHR183 18V LXT SDS-plus boorhamer'
-    ],notes:'Geen vaste accu. Bij meenemen ook een losse 18V accu meenemen.'},
+    {id:'m_dhr',name:'Mbox maat 1',type:'Boorhamer & booraccessoires',items:[
+      'Makita DHR183 18V LXT SDS-plus boorhamer','Houtborenset','Metaalborenset','Steenborenset','Glasboren','Gatenzaagset','Speedboor','Ringstops voor boren'
+    ],notes:'Alle booraccessoires zitten bij de DHR183 in deze Mbox. Geen vaste accu; bij elektrisch gebruik een losse 18V accu meenemen.'},
     {id:'m_deco_multi',name:'Mbox maat 1',type:'Decoupeerzaag & multitool',items:[
       'Makita DJV181ZJ decoupeerzaag','Geleider / afstandhouder','Diverse zaagjes','Stofafzuigadapter','Makita DTM52ZJ multitool','Doosje met diverse multitoolzaagjes'
     ],notes:'Decoupeerzaag en multitool zitten samen in één Mbox maat 1. Geen vaste accu.'},
@@ -245,7 +245,8 @@ const JKDB = (() => {
           'Mbox maat 2 – Decoupeerzaag: Makita DJV181ZJ decoupeerzaag, zaagjes, geleider en afzuigadapter',
           'Mbox maat 2 – Multitool: Makita DTM52ZJ multitool + diverse zaagjes',
           'Mbox maat 2 – Handgereedschap: rolmaat, waterpas, hamer, schroevendraaiers, tangen, sleutels, aftekenspullen, koevoet, winkelhaak / timmermansdriehoek',
-          'Mbox maat 3 – Diversen: hout/steen/metaalboren, gatenzaag, speedboor, ringstops, montagewig, tapes, WD-40, leidingzoeker en stoffer + blik',
+          'Mbox maat 1 – Boorhamer & booraccessoires: Makita DHR183, hout/steen/metaal/glasboren, gatenzaag, speedboor en ringstops',
+          'Mbox maat 3 – Diversen: montagewig, tapes, WD-40, leidingzoeker en stoffer + blik',
           'Organizer – Bevestigingsmateriaal: schroeven, pluggen, spijkers en popnagels',
           'Organizer – Elektra meenemen als stopcontacten / aansluitingen gecontroleerd moeten worden',
           'Los: kruislijnlaser + statief / plafondpaal',
@@ -313,7 +314,8 @@ const JKDB = (() => {
         {id:'c_drill_mount',name:'Boren & ophangen',items:[
           'Drinkfles meenemen',
           'Mbox maat 3 – Schroefmachines: Makita DHP485Z klopboor-/schroefmachine + Makita DTD153ZJ slagschroevendraaier, bitjes en accu',
-          'Mbox maat 3 – Diversen: juiste hout/steen/metaal/glasboor, ringstops, gatenzaag / speedboor indien nodig en leidingzoeker',
+          'Mbox maat 1 – Boorhamer & booraccessoires: Makita DHR183, juiste hout/steen/metaal/glasboor, ringstops, gatenzaag / speedboor indien nodig',
+          'Mbox maat 3 – Diversen: leidingzoeker',
           'Mbox maat 2 – Handgereedschap: rolmaat, waterpas, hamer, schroevendraaiers en aftekenspullen',
           'Organizer – Bevestigingsmateriaal: juiste pluggen en schroeven',
           'Los: kruislijnlaser indien recht / op lijn gemonteerd moet worden',
@@ -326,7 +328,8 @@ const JKDB = (() => {
           'Drinkfles meenemen',
           'Mbox maat 3 – Schroefmachines meenemen als er geschroefd / geboord wordt',
           'Mbox maat 2 – Handgereedschap compleet',
-          'Mbox maat 3 – Diversen voor boren, tape, WD-40, pluggen en leidingzoeker',
+          'Mbox maat 1 – Boorhamer & booraccessoires meenemen als er geboord wordt',
+          'Mbox maat 3 – Diversen voor tape, WD-40, pluggen en leidingzoeker',
           'Organizer – Bevestigingsmateriaal indien nodig',
           'Eén losse 18V 5,0Ah accu extra meenemen als elektrisch gereedschap nodig is',
           'Passende trap / ladder alleen indien nodig',
@@ -598,6 +601,70 @@ const JKDB = (() => {
       }
 
       await put('settings',{id:'seedVersion',value:9,at:new Date().toISOString()});
+    }
+
+    if(v < 10){
+      const drillItems=['Houtborenset','Metaalborenset','Steenborenset','Glasboren','Gatenzaagset','Speedboor','Ringstops voor boren'];
+
+      const dhrBox=await get('mboxes','m_dhr');
+      if(dhrBox){
+        dhrBox.type='Boorhamer & booraccessoires';
+        dhrBox.items=['Makita DHR183 18V LXT SDS-plus boorhamer',...drillItems];
+        dhrBox.notes='Alle booraccessoires zitten bij de DHR183 in deze Mbox. Geen vaste accu; bij elektrisch gebruik een losse 18V accu meenemen.';
+        dhrBox.updatedAt=new Date().toISOString();
+        await put('mboxes',dhrBox);
+      }
+
+      const divBox=await get('mboxes','m_div');
+      if(divBox){
+        const moved=new Set(drillItems);
+        divBox.items=(divBox.items||[]).filter(x=>!moved.has(String(x)));
+        divBox.notes='Booraccessoires zijn verplaatst naar de Mbox maat 1 van de boorhamer.';
+        divBox.updatedAt=new Date().toISOString();
+        await put('mboxes',divBox);
+      }
+
+      const replacements=[
+        ['Mbox maat 3 – Diversen: hout/steen/metaalboren, gatenzaag, speedboor, ringstops, montagewig, tapes, WD-40, leidingzoeker en stoffer + blik',
+         'Mbox maat 3 – Diversen: montagewig, tapes, WD-40, leidingzoeker en stoffer + blik'],
+        ['Mbox maat 3 – Diversen: juiste hout/steen/metaal/glasboor, ringstops, gatenzaag / speedboor indien nodig en leidingzoeker',
+         'Mbox maat 3 – Diversen: leidingzoeker'],
+        ['Mbox maat 3 – Diversen voor boren, tape, WD-40, pluggen en leidingzoeker',
+         'Mbox maat 3 – Diversen voor tape, WD-40, pluggen en leidingzoeker']
+      ];
+
+      const drillLine='Mbox maat 1 – Boorhamer & booraccessoires: Makita DHR183 + hout/metaal/steen/glasboren, gatenzaag, speedboor en ringstops';
+      for(const c of await all('checklists')){
+        let items=[...(c.items||[])];
+        items=items.map(raw=>{
+          let s=String(raw||'');
+          for(const [from,to] of replacements) if(s===from) s=to;
+          return s;
+        });
+
+        const needsDrillBox=['c_kitchen','c_drill_mount','c_small_repair','c_renovation','c_departure'].includes(c.id);
+        if(needsDrillBox){
+          items=items.filter(x=>{
+            const s=String(x);
+            if(s===drillLine) return false;
+            if(/Makita DHR183/i.test(s)) return false;
+            if(/juiste SDS-plus boor/i.test(s)) return false;
+            return true;
+          });
+          const photoItems=items.filter(x=>/^Foto\b/i.test(String(x).trim()));
+          items=items.filter(x=>!/^Foto\b/i.test(String(x).trim()));
+          items.push(drillLine);
+          if(c.id==='c_departure') items.push('Bij gebruik van de DHR183 ook een losse 18V accu meenemen');
+          items.push(...photoItems);
+        }
+
+        items=[...new Set(items)];
+        const checked={};
+        for(const item of items) if(c.checked?.[item]) checked[item]=true;
+        await put('checklists',{...c,items,checked,updatedAt:new Date().toISOString()});
+      }
+
+      await put('settings',{id:'seedVersion',value:10,at:new Date().toISOString()});
     }
   }
 
