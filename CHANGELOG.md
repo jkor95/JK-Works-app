@@ -1,3 +1,9 @@
+## v71.13.34 — Compactere Mbox-indeling gereedschap
+- **Makita DHR183:** definitief verplaatst van Los / reserve naar **Mbox maat 1**. De boorhamer blijft zonder vaste accu; checklists noemen voortaan de Mbox maat 1 wanneer de DHR183 nodig is.
+- **Decoupeerzaag + multitool:** de Makita DJV181ZJ en DTM52ZJ staan nu **samen in één Mbox maat 1**, inclusief hun bestaande accessoires. De twee oude afzonderlijke Mbox maat 2-vermeldingen worden via migratie verwijderd.
+- **Materiaalregister en checklists:** locaties en kluschecklists zijn aangepast zodat er niet langer twee koffers worden geadviseerd waar één gecombineerde Mbox maat 1 volstaat.
+- Bestaande serienummers, aanschafdatums en checklistgegevens blijven behouden. Geen wijzigingen aan financiën, klussen, documenten of Supabase-schema.
+
 ## v71.13.32 — Meer ruimte bij klusdetails
 - De overbodige knop ‘Google Agenda’ is weggehaald uit de rij met acties bovenaan bij een klus. Automatische kalenderkoppeling blijft actief.
 - De overige acties, per-werkdag-opties, optionele ICS-download en bestaande planning, uren en factuurgegevens blijven ongewijzigd.
