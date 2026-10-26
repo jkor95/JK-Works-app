@@ -145,15 +145,15 @@ const JKDB = (() => {
     {id:'m_schuur',name:'Mbox maat 2',type:'Schuurmachine',items:[
       'Makita DBO180ZJ excentrische schuurmachine','Stofopvangbakje','Stofopvangzakken','Schuurpapier korrel 80','Schuurpapier korrel 120','Schuurpapier korrel 180','Schuurpapier korrel 250','Mondkapjes'
     ],notes:'Geen vaste accu. Bij meenemen ook een losse 18V accu meenemen.'},
-    {id:'m_deco',name:'Mbox maat 2',type:'Decoupeerzaag',items:[
-      'Makita DJV181ZJ decoupeerzaag','Geleider / afstandhouder','Diverse zaagjes','Stofafzuigadapter'
+    {id:'m_dhr',name:'Mbox maat 1',type:'Boorhamer',items:[
+      'Makita DHR183 18V LXT SDS-plus boorhamer'
     ],notes:'Geen vaste accu. Bij meenemen ook een losse 18V accu meenemen.'},
+    {id:'m_deco_multi',name:'Mbox maat 1',type:'Decoupeerzaag & multitool',items:[
+      'Makita DJV181ZJ decoupeerzaag','Geleider / afstandhouder','Diverse zaagjes','Stofafzuigadapter','Makita DTM52ZJ multitool','Doosje met diverse multitoolzaagjes'
+    ],notes:'Decoupeerzaag en multitool zitten samen in één Mbox maat 1. Geen vaste accu.'},
     {id:'m_slijp',name:'Mbox maat 2',type:'Haakse slijper',items:[
       'Makita DGA506ZJ haakse slijper','Diverse slijpschijven','Handvat','Veiligheidsbril','Oordopjes'
     ],notes:'Geen vaste accu. Bij meenemen ook een losse 18V accu meenemen.'},
-    {id:'m_multi',name:'Mbox maat 2',type:'Multitool',items:[
-      'Makita DTM52ZJ multitool','Doosje met diverse multitoolzaagjes'
-    ],notes:'Geen vaste accu. De accu die eerder hier lag is nu los/vrij.'},
     {id:'o_schroef',name:'Organizer',type:'Bevestigingsmateriaal',items:[
       'Diverse maten schroeven','Spijkers','Pluggen o.a. 6 mm en 8 mm','Popnagels'
     ],notes:''},
@@ -167,15 +167,15 @@ const JKDB = (() => {
       '3-treeds huistrap','Telescoopladder tot 3,8 m','Multiladder / uitschuifbare vouwladder tot 5,2 m'
     ],notes:''},
     {id:'loose_reserve',name:'Los / reserve',type:'Niet in Mbox',items:[
-      'Makita DHR183 18V LXT SDS-plus boorhamer (Mbox nog te bepalen)','Kniebeschermers','Grotere steeksleutels','Kleine multitool + accessoires','Contourmal / profielmal'
-    ],notes:'DHR183 staat hier tijdelijk totdat het definitieve Mbox-formaat bekend is.'},
+      'Kniebeschermers','Grotere steeksleutels','Kleine multitool + accessoires','Contourmal / profielmal'
+    ],notes:''},
     {id:'loose_batteries',name:'Los',type:'Accu\'s',items:[
       'Makita 18V 5,0Ah accu #2','Makita 18V 5,0Ah accu #3','Makita 18V 5,0Ah accu #4','Makita 14,4V accu 2,0Ah','Makita 14,4V accu 1,3Ah'
     ],notes:'1× 18V 5,0Ah accu blijft standaard in de Mbox schroefmachines. De andere 3× 18V 5,0Ah zijn los/vrij.'}
   ];
 
   const canonicalTools = [
-    ['t_dga','Makita DGA506ZJ','Haakse slijper','m_slijp'],['t_dbo','Makita DBO180ZJ','Excentrische schuurmachine','m_schuur'],['t_djv','Makita DJV181ZJ','Decoupeerzaag','m_deco'],['t_dtd','Makita DTD153ZJ','Slagschroevendraaier','m_schroef'],['t_dhp','Makita DHP485Z','Klopboor-/schroefmachine','m_schroef'],['t_dtm','Makita DTM52ZJ','Multitool','m_multi'],['t_dhs','Makita DHS680Z','Cirkelzaag','m_cirkel'],['t_lamp','Makita DML805','Bouwlamp','loose_tools'],['t_kit','18V kitspuit','Kitspuit (Makita-accu compatibel)','m_kit'],['t_wesco','Wesco 230 mm 2000W','Slijptol bedraad','loose_tools'],['t_laser','Kruislijnlaser','Laser','loose_tools'],['t_lasertripod','Statief voor kruislijnlaser','Laser-accessoire','loose_tools'],['t_ceilingpole','Plafondpaal voor kruislijnlaser','Laser-accessoire','loose_tools'],['t_ladder1','3-treeds huistrap','Ladder','loose_ladders'],['t_ladder2','Telescoopladder 3,8 m','Ladder','loose_ladders'],['t_ladder3','Multiladder 5,2 m','Ladder','loose_ladders'],['t_has10','Kabelhaspel 10 m','Elektra','loose_tools'],['t_has75','Kabelhaspel 7,5 m','Elektra','loose_tools'],['t_cart','Opvouwbare steekwagen Action','Transport','loose_tools'],['t_dhr183','Makita DHR183','SDS-plus boorhamer','loose_reserve'],['t_old14','Oude Makita 14,4V schroeftol','Schroefmachine','loose_reserve']
+    ['t_dga','Makita DGA506ZJ','Haakse slijper','m_slijp'],['t_dbo','Makita DBO180ZJ','Excentrische schuurmachine','m_schuur'],['t_djv','Makita DJV181ZJ','Decoupeerzaag','m_deco_multi'],['t_dtd','Makita DTD153ZJ','Slagschroevendraaier','m_schroef'],['t_dhp','Makita DHP485Z','Klopboor-/schroefmachine','m_schroef'],['t_dtm','Makita DTM52ZJ','Multitool','m_deco_multi'],['t_dhs','Makita DHS680Z','Cirkelzaag','m_cirkel'],['t_lamp','Makita DML805','Bouwlamp','loose_tools'],['t_kit','18V kitspuit','Kitspuit (Makita-accu compatibel)','m_kit'],['t_wesco','Wesco 230 mm 2000W','Slijptol bedraad','loose_tools'],['t_laser','Kruislijnlaser','Laser','loose_tools'],['t_lasertripod','Statief voor kruislijnlaser','Laser-accessoire','loose_tools'],['t_ceilingpole','Plafondpaal voor kruislijnlaser','Laser-accessoire','loose_tools'],['t_ladder1','3-treeds huistrap','Ladder','loose_ladders'],['t_ladder2','Telescoopladder 3,8 m','Ladder','loose_ladders'],['t_ladder3','Multiladder 5,2 m','Ladder','loose_ladders'],['t_has10','Kabelhaspel 10 m','Elektra','loose_tools'],['t_has75','Kabelhaspel 7,5 m','Elektra','loose_tools'],['t_cart','Opvouwbare steekwagen Action','Transport','loose_tools'],['t_dhr183','Makita DHR183','SDS-plus boorhamer','m_dhr'],['t_old14','Oude Makita 14,4V schroeftol','Schroefmachine','loose_reserve']
   ];
 
   async function seed(){
@@ -459,7 +459,7 @@ const JKDB = (() => {
       }
       const oldDhr=await get('tools','t_dhr183');
       await put('tools',{
-        id:'t_dhr183',name:'Makita DHR183',category:'SDS-plus boorhamer',location:'loose_reserve',
+        id:'t_dhr183',name:'Makita DHR183',category:'SDS-plus boorhamer',location:'m_dhr',
         serial:oldDhr?.serial||'',purchaseDate:oldDhr?.purchaseDate||'',
         notes:oldDhr?.notes||'Mbox-formaat nog te bepalen. Voor plug-/montagegaten in steen/beton en incidentele diepere doorvoergaten.'
       });
@@ -494,6 +494,71 @@ const JKDB = (() => {
         await put('checklists',{...c,items,checked,updatedAt:new Date().toISOString()});
       }
       await put('settings',{id:'seedVersion',value:7,at:new Date().toISOString()});
+    }
+
+    if(v < 8){
+      const oldDeco=await get('mboxes','m_deco');
+      const oldMulti=await get('mboxes','m_multi');
+      const oldDhrBox=await get('mboxes','m_dhr');
+      const combinedChecked={...(oldDeco?.checked||{}),...(oldMulti?.checked||{})};
+
+      await put('mboxes',{
+        id:'m_dhr',name:'Mbox maat 1',type:'Boorhamer',
+        items:['Makita DHR183 18V LXT SDS-plus boorhamer'],
+        notes:'Geen vaste accu. Bij meenemen ook een losse 18V accu meenemen.',
+        checked:oldDhrBox?.checked||{},updatedAt:new Date().toISOString()
+      });
+      await put('mboxes',{
+        id:'m_deco_multi',name:'Mbox maat 1',type:'Decoupeerzaag & multitool',
+        items:['Makita DJV181ZJ decoupeerzaag','Geleider / afstandhouder','Diverse zaagjes','Stofafzuigadapter','Makita DTM52ZJ multitool','Doosje met diverse multitoolzaagjes'],
+        notes:'Decoupeerzaag en multitool zitten samen in één Mbox maat 1. Geen vaste accu.',
+        checked:combinedChecked,updatedAt:new Date().toISOString()
+      });
+
+      if(oldDeco) await remove('mboxes','m_deco');
+      if(oldMulti) await remove('mboxes','m_multi');
+
+      const reserve=await get('mboxes','loose_reserve');
+      if(reserve){
+        reserve.items=(reserve.items||[]).filter(x=>!String(x).includes('DHR183'));
+        reserve.notes='';
+        await put('mboxes',reserve);
+      }
+
+      for(const [id,location,defaultNotes] of [
+        ['t_dhr183','m_dhr','Opgeborgen in Mbox maat 1. Voor plug-/montagegaten in steen/beton en incidentele diepere doorvoergaten.'],
+        ['t_djv','m_deco_multi','Opgeborgen samen met de DTM52ZJ multitool in één Mbox maat 1.'],
+        ['t_dtm','m_deco_multi','Opgeborgen samen met de DJV181ZJ decoupeerzaag in één Mbox maat 1.']
+      ]){
+        const tool=await get('tools',id);
+        if(tool) await put('tools',{...tool,location,notes:(tool.notes&& !/Mbox-formaat nog te bepalen/i.test(tool.notes))?tool.notes:defaultNotes});
+      }
+
+      const checklistReplacements=[
+        ['Mbox maat 2 – Decoupeerzaag: Makita DJV181ZJ decoupeerzaag, zaagjes, geleider en afzuigadapter','Mbox maat 1 – Decoupeerzaag & multitool: Makita DJV181ZJ decoupeerzaag, Makita DTM52ZJ multitool, zaagjes, geleider en afzuigadapter'],
+        ['Mbox maat 2 – Multitool: Makita DTM52ZJ multitool + diverse zaagjes',''],
+        ['Mbox maat 2 – Multitool compleet','Mbox maat 1 – Decoupeerzaag & multitool compleet'],
+        ['Mbox maat 2 – Decoupeerzaag compleet',''],
+        ['Mbox maat 2 – Multitool + zaagjes','Mbox maat 1 – Decoupeerzaag & multitool: Makita DTM52ZJ multitool + zaagjes']
+      ];
+      for(const c of await all('checklists')){
+        let items=[...(c.items||[])];
+        for(const [from,to] of checklistReplacements){
+          items=items.map(x=>String(x)===from?to:x).filter(Boolean);
+        }
+        items=items.map(x=>{
+          const s=String(x);
+          if(!s.includes('Makita DHR183')) return s;
+          if(/Mbox maat 1\s*[–-]\s*Boorhamer/i.test(s)) return s;
+          return 'Mbox maat 1 – Boorhamer: '+s.replace(/^Makita DHR183(?: 18V LXT SDS-plus boorhamer)?\s*/,'Makita DHR183 18V LXT SDS-plus boorhamer ');
+        });
+        items=[...new Set(items)];
+        const checked={};
+        for(const item of items) if(c.checked?.[item]) checked[item]=true;
+        await put('checklists',{...c,items,checked,updatedAt:new Date().toISOString()});
+      }
+
+      await put('settings',{id:'seedVersion',value:8,at:new Date().toISOString()});
     }
   }
 
