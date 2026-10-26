@@ -49,6 +49,11 @@ async function files(dir) {
   assert.match(dbSource,/t_djv[^\n]*m_deco_multi/,'DJV181 staat niet in gecombineerde Mbox maat 1');
   assert.match(dbSource,/t_dtm[^\n]*m_deco_multi/,'DTM52 staat niet in gecombineerde Mbox maat 1');
   assert.match(dbSource,/seedVersion',value:8/,'Seedmigratie v8 ontbreekt');
+  assert.match(dbSource,/id:'m_kit',name:'Mbox maat 2',type:'Kit & afwerking'/,'Kit & afwerking staat niet in Mbox maat 2');
+  assert.doesNotMatch(dbSource,/id:'m_kit'[\s\S]{0,500}18V kitspuit \(Makita-accucompatibel\)/,'Elektrische kitspuit staat nog in de kit-Mbox');
+  assert.match(dbSource,/loose_tools[\s\S]{0,500}18V kitspuit \(Makita-accucompatibel\)/,'Elektrische kitspuit staat niet los');
+  assert.match(dbSource,/t_kit[^\n]*loose_tools/,'Elektrische kitspuit heeft niet de losse locatie');
+  assert.match(dbSource,/seedVersion',value:9/,'Seedmigratie v9 ontbreekt');
   assert.match(dbSource,/c_drill_mount[\s\S]*Makita DHR183/,'DHR183 ontbreekt bij Boren & ophangen');
   assert.match(dbSource,/c_small_repair[\s\S]*Makita DHR183/,'DHR183 ontbreekt bij montage/reparatie');
   assert.match(dbSource,/c_kitchen[\s\S]*Makita DHR183/,'DHR183 ontbreekt bij keukenmontage');
