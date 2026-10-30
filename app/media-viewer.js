@@ -11,11 +11,11 @@
     overlay.setAttribute('role','dialog');
     overlay.setAttribute('aria-modal','true');
     overlay.setAttribute('aria-label',title);
-    overlay.innerHTML='<div class="jk-media-bar"><strong class="jk-media-title"></strong><div class="jk-media-tools"><button type="button" data-zoom-out aria-label="Uitzoomen">−</button><button type="button" data-zoom-reset aria-label="Op normale grootte">100%</button><button type="button" data-zoom-in aria-label="Inzoomen">+</button><button type="button" data-zoom-close aria-label="Sluiten">×</button></div></div><div class="jk-media-stage"><div class="jk-media-surface"><div class="jk-media-content"></div></div></div><div class="jk-media-hint">Knijp met twee vingers of dubbeltik om te vergroten. Sleep om te verschuiven.</div>';
+    overlay.innerHTML='<div class="jk-media-bar"><strong class="jk-media-title"></strong><div class="jk-media-tools"><button type="button" data-zoom-out aria-label="Uitzoomen">−</button><button type="button" data-zoom-reset aria-label="Op normale grootte">100%</button><button type="button" data-zoom-in aria-label="Inzoomen">+</button><button type="button" data-zoom-close aria-label="Sluiten">×</button></div></div><div class="jk-media-stage"><div class="jk-media-surface"><div class="jk-media-content"></div></div></div><div class="jk-media-hint">Knijp met twee vingers om te vergroten. Sleep om te verschuiven.</div>';
     overlay.querySelector('.jk-media-title').textContent=title;
     const stage=overlay.querySelector('.jk-media-stage'),surface=overlay.querySelector('.jk-media-surface');
     const content=overlay.querySelector('.jk-media-content');
-    const state={overlay,scale:1,x:0,y:0,objectUrl:null,closed:false,lastTap:0,lastPoint:null,touch:null};
+    const state={overlay,scale:1,x:0,y:0,objectUrl:null,closed:false,touch:null};
     current=state;
     document.body.appendChild(overlay);
     const previous=document.activeElement,oldOverflow=document.body.style.overflow;
@@ -46,7 +46,7 @@
       if(e.touches.length===2){
         state.touch={kind:'pinch',distance:distance(e.touches),scale:state.scale,point:getPoint(e.touches),x:state.x,y:state.y};
       }else if(e.touches.length===1){
-        state.touch={kind:'pan',point:getPoint(e.touches),x:state.x,y:state.y,moved:false};
+        state.touch={kind:'pan',point:getPoint(e.touches),x:state.x,y:state.y};
       }
     };
     const touchMove=e=>{
@@ -64,26 +64,17 @@
         const point=getPoint(e.touches);
         state.x=gesture.x+point.x-gesture.point.x;
         state.y=gesture.y+point.y-gesture.point.y;
-        gesture.moved=Math.hypot(point.x-gesture.point.x,point.y-gesture.point.y)>12;
         draw();
       }
     };
     const touchEnd=e=>{
-      const gesture=state.touch;
-      if(e.touches.length===0){
-        if(gesture?.kind==='pan'&&!gesture.moved){
-          const t=Date.now(),p=gesture.point;
-          if(t-state.lastTap<340&&state.lastPoint&&Math.hypot(p.x-state.lastPoint.x,p.y-state.lastPoint.y)<65){
-            zoomTo(state.scale>1?1:2.5,p);state.lastTap=0;
-          }else{state.lastTap=t;state.lastPoint=p;}
-        }
-        state.touch=null;
-      }else if(e.touches.length===1){state.touch={kind:'pan',point:getPoint(e.touches),x:state.x,y:state.y};}
+      if(e.touches.length===0)state.touch=null;
+      else if(e.touches.length===1)
+        state.touch={kind:'pan',point:getPoint(e.touches),x:state.x,y:state.y};
     };
     stage.addEventListener('touchstart',touchStart,{passive:true});
     stage.addEventListener('touchmove',touchMove,{passive:false});
     stage.addEventListener('touchend',touchEnd,{passive:true});
-    stage.addEventListener('dblclick',e=>{e.preventDefault();zoomTo(state.scale>1?1:2.5,{x:e.clientX,y:e.clientY});});
     overlay.querySelector('[data-zoom-in]').addEventListener('click',()=>zoomTo(state.scale*1.5));
     overlay.querySelector('[data-zoom-out]').addEventListener('click',()=>zoomTo(state.scale/1.5));
     overlay.querySelector('[data-zoom-reset]').addEventListener('click',()=>zoomTo(1));

@@ -1,3 +1,8 @@
+## v71.13.40 — dubbel tikken bij mediavergroting uitgeschakeld
+- In de fullscreen-weergave van foto's, bonnetjes, offertes en facturen is dubbel tikken niet langer een zoomactie.
+- De uitleg noemt alleen knijpen met twee vingers en verschuiven. Tweevingerzoom en de +, − en 100%-knoppen blijven werken.
+- Alle andere app-schermen blijven op vaste schaal. De mediaviewer en tests zijn aangepast; geen wijziging aan data of documenten.
+
 ## v71.13.39 — zoomweergave netter op de iPhone
 - Foto- en bonvoorbeelden behouden hun bestaande kaartformaat en tonen subtiel dat je op de afbeelding kunt tikken om te vergroten.
 - Zoom- en sluitknoppen van de fullscreen mediaviewer staan ook bij de geïnstalleerde iOS-app onder het systeemstatusgebied.
