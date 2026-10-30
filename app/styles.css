@@ -288,10 +288,10 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
     padding-bottom:calc(2px + var(--safe-bottom));
   }
   .ios-standalone #appShell > .bottom-nav .nav-item{
-    /* Op iPhones met home-indicator de pictogrammen/labels nog max. 8 px lager.
-       Laat minstens circa 26 px onder de knoppen en verschuif niets als er
-       geen safe-area-inset beschikbaar is (bv. iPads of desktop). */
-    transform:translateY(clamp(0px,calc(var(--safe-bottom) - 26px),8px));
+    /* Pictogrammen en labels komen 24 px lager zodra de iPhone onderruimte
+       biedt. Geen extra marge voor de vervagende home-indicator reserveren.
+       Zonder onderruimte blijven knoppen op het scherm in plaats van erbuiten. */
+    transform:translateY(clamp(0px,var(--safe-bottom),24px));
   }
   .ios-standalone .modal{
     max-height:calc(100dvh - max(112px,calc(env(safe-area-inset-top,0px) + 50px)));
