@@ -1,3 +1,8 @@
+## v71.13.39 — zoomweergave netter op de iPhone
+- Foto- en bonvoorbeelden behouden hun bestaande kaartformaat en tonen subtiel dat je op de afbeelding kunt tikken om te vergroten.
+- Zoom- en sluitknoppen van de fullscreen mediaviewer staan ook bij de geïnstalleerde iOS-app onder het systeemstatusgebied.
+- Geen wijzigingen aan onderliggende documenten, foto's, bonnetjes of opslag.
+
 ## v71.13.38 — inzoomen bij foto's, bonnetjes, facturen en offertes
 - De gewone JK Works-schermen behouden een vaste schaal zonder tweevingerzoom of ongewenst dubbel-tikken.
 - Foto's van klussen en website-aanvragen, bonafbeeldingen en bon-PDF's kunnen in een aparte schermvullende viewer met twee vingers, dubbel tikken, zoomen en verschuiven bekeken worden.
