@@ -474,3 +474,11 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
  background:#1e272d;flex:0 0 auto}
 .zoomable-media{cursor:zoom-in}
 .zoomable-media button{cursor:zoom-in}
+
+/* Alleen de voorbeeldfoto of het bonnetje activeert het vergrote mediavenster. */
+.jk-media-preview-button{display:block;width:100%;padding:0;border:0;background:transparent;color:var(--text);text-align:center;cursor:zoom-in}
+.jk-media-preview-button>img{display:block;max-width:100%;height:auto;margin:auto}
+.jk-media-preview-button>span{display:block;padding:9px 4px;font-size:12px;font-weight:700}
+.request-photo-grid img.zoomable-media{cursor:zoom-in}
+/* Zoom- en sluitknoppen blijven vrij van de iOS 27-systeemstatusbalk. */
+@media(max-width:600px){.ios-standalone .jk-media-overlay{padding-top:calc(env(safe-area-inset-top,0px) + 70px)}}
