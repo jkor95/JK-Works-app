@@ -30,7 +30,13 @@ module.exports=async(browser,origin)=>{
         const backdrop=document.createElement('div');backdrop.className='modal-backdrop';backdrop.innerHTML='<section class="modal" style="height:1600px">Testvenster</section>';document.body.append(backdrop);
         const modal=backdrop.querySelector('.modal').getBoundingClientRect();
         backdrop.remove();
-        return {installedClass:document.documentElement.classList.contains('ios-standalone'),before,scrolled,modalTop:modal.top,modalHeight:modal.height};
+        const view=document.querySelector('#view');
+        const nav=document.querySelector('.bottom-nav');
+        const viewCss=getComputedStyle(view),navCss=getComputedStyle(nav);
+        return {installedClass:document.documentElement.classList.contains('ios-standalone'),before,scrolled,modalTop:modal.top,modalHeight:modal.height,
+          viewTop:parseFloat(viewCss.paddingTop),viewBottom:parseFloat(viewCss.paddingBottom),
+          navBottom:parseFloat(navCss.bottom),navHeight:nav.getBoundingClientRect().height,
+          viewportHeight:window.innerHeight};
       });
       assert.deepEqual(errors,[],'Geen JavaScript-fouten in de app-pagina');
       return result;
@@ -43,11 +49,18 @@ module.exports=async(browser,origin)=>{
   assert.equal(pwa.before.blur,'none','Geen extra vervaging achter iOS-bovenbalk');
   assert.ok(pwa.scrolled.brandTop>=100,'Ook bij scrollen blijven de knoppen onder de systeemblur');
   assert.ok(pwa.modalTop>=108,'Dialogen blijven onder de iOS-statuszone');
+  assert.ok(Math.abs(pwa.viewTop-12)<0.1,'Compactere 12px afstand tussen header en inhoud in geïnstalleerde iPhone-app');
+  assert.ok(pwa.viewBottom>=82,'Voldoende vrije ruimte onderaan om de vaste navigatie niet te bedekken');
+  assert.ok(pwa.navHeight<=pwa.viewBottom,'Eind van scrollende inhoud blijft boven de onderste navigatie');
+  assert.equal(pwa.navBottom,0,'Onderste navigatie blijft vast aan de veilige ondergrens');
   const safari=await inspect({ua:iphone,installed:false});
   assert.equal(safari.installedClass,false,'Gewone Safari-weergave niet aanpassen');
   assert.ok(safari.before.padding<100,'Safari behoudt bestaande hoogte');
+  assert.ok(safari.viewTop>pwa.viewTop,'Normale Safari houdt oorspronkelijke bovenmarge');
+  assert.ok(safari.viewBottom>pwa.viewBottom,'Normale Safari houdt oorspronkelijke scrollruimte');
   const mac=await inspect({ua:desktop,installed:true});
   assert.equal(mac.installedClass,false,'Desktop/Mac niet aanpassen');
   assert.ok(mac.before.padding<100,'Desktop behoudt bestaande header');
-  console.log('PASS: iOS 27 extra systeemblurruimte (>=100px), geen CSS-blur, dialogen, Safari/desktop ongewijzigd');
+  assert.ok(mac.viewTop>pwa.viewTop,'Desktop houdt oorspronkelijke inhoudsmarge');
+  console.log('PASS: iOS 27 blurzone beschermd (>=100px), compactere contentmarges, tabbar vrij, Safari/desktop ongewijzigd');
 };
