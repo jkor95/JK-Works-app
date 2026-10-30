@@ -182,7 +182,7 @@ assert.match(appHtml, /styles\.css\?v=71\.13\.\d+/);
 assert.match(appHtml,/finance\.js\?v=71\.13\.\d+/,'De gewijzigde betaalstatuscode krijgt een nieuwe versiebestandsnaam op iOS');
 assert.match(appStyles,/iOS Safari zoomt naar tekstvelden/);
 assert.match(appStyles,/font-size:16px !important/);
-assert.doesNotMatch(appHtml,/user-scalable=no|maximum-scale=1/);
+assert.match(appHtml,/maximum-scale=1,user-scalable=no/,'User requested fixed-scale mobile app');
 assert.match(appHtml,/job-label\.js\?v=71\.13\.\d+/);
 assert.match(appHtml,/job-label-editor\.js\?v=71\.13\.\d+/);
 assert.match(appHtml,/open-payments-label\.js\?v=71\.13\.\d+/);
