@@ -1,3 +1,9 @@
+## v71.13.43 — onderste navigatie nog iets lager, binnen veilige iPhone-marge
+- In de geïnstalleerde iPhone-webapp de vijf navigatieknoppen maximaal 8 px verder omlaag geplaatst wanneer iOS voldoende onderste safe area beschikbaar heeft.
+- Rond de home-indicator blijft minimaal 26 px vrije ruimte. Als de veilige ondermarge kleiner is, wordt de extra verschuiving automatisch verminderd of helemaal niet toegepast.
+- iOS bepaalt zelf of en wanneer de systeem-home-indicator zichtbaar is; de webapp verandert de zichtbaarheid niet. Safari en desktop blijven ongewijzigd.
+- Nieuwe browserregressietest simuleert een iPhone-ondermarge van 34 px en controleert de exacte verschuiving en veiligheidsafstand.
+
 ## v71.13.42 — onderste navigatie iets lager op de iPhone
 - Alleen in de geïnstalleerde iPhone-webapp de onderste navigatieknoppen 6 px lager geplaatst door overtollige ruimte onder de knoppen te verkleinen.
 - De navigatie blijft vast aan de onderrand en houdt de iOS safe-area rond de home-indicator volledig vrij. De bovenste vervagingszone en de inhoudsmarges blijven ongewijzigd.
