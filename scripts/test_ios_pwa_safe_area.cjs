@@ -38,14 +38,18 @@ module.exports=async(browser,origin)=>{
         const item=nav.querySelector('.nav-item');
         document.documentElement.style.setProperty('--safe-bottom','34px');
         const withShift=item.getBoundingClientRect();
-        item.style.transform='none';
+        const navWithShift=nav.getBoundingClientRect();
+        // The entire navigation (background and top border included) must move.
+        nav.style.bottom='0px';
         const unshifted=item.getBoundingClientRect();
-        item.style.removeProperty('transform');
+        const navUnshifted=nav.getBoundingClientRect();
+        nav.style.removeProperty('bottom');
         const simulatedShift=withShift.bottom-unshifted.bottom;
+        const simulatedNavShift=navWithShift.top-navUnshifted.top;
         const simulatedClearance=window.innerHeight-withShift.bottom;
         document.documentElement.style.removeProperty('--safe-bottom');
         return {installedClass:document.documentElement.classList.contains('ios-standalone'),before,scrolled,modalTop:modal.top,modalHeight:modal.height,
-          simulatedShift,simulatedClearance,
+          simulatedShift,simulatedNavShift,simulatedClearance,
           viewTop:parseFloat(viewCss.paddingTop),viewBottom:parseFloat(viewCss.paddingBottom),
           navBottom:parseFloat(navCss.bottom),navHeight:nav.getBoundingClientRect().height,
           navPaddingBottom:parseFloat(navCss.paddingBottom),
@@ -70,7 +74,8 @@ module.exports=async(browser,origin)=>{
   assert.ok(Math.abs(pwa.navPaddingBottom-2)<0.1 || pwa.navPaddingBottom>=2,
     'Navigatie behoudt minimaal 2px plus de iPhone veilige onderruimte');
   assert.ok(pwa.navLastItemBottom<=pwa.viewportHeight-2,'Navigatieknoppen blijven boven de onderrand');
-  assert.ok(Math.abs(pwa.simulatedShift-24)<0.1,'De iPhone-knoppen schuiven 24px omlaag bij 34px onderste inset');
+  assert.ok(Math.abs(pwa.simulatedShift-24)<0.1,'De navigatieknoppen schuiven 24px omlaag bij 34px onderste inset');
+  assert.ok(Math.abs(pwa.simulatedNavShift-24)<0.1,'Ook de achtergrond en bovenrand van de navigatie schuiven 24px mee');
   assert.ok(pwa.simulatedClearance>=2,'Navigatie mag lager komen maar niet onder de schermrand verdwijnen');
   const safari=await inspect({ua:iphone,installed:false});
   assert.equal(safari.installedClass,false,'Gewone Safari-weergave niet aanpassen');
@@ -80,10 +85,12 @@ module.exports=async(browser,origin)=>{
   assert.ok(Math.abs(safari.navPaddingBottom-pwa.navPaddingBottom-6)<0.1,
     'Alleen de geïnstalleerde iPhone-app zet navigatie 6px lager');
   assert.ok(Math.abs(safari.simulatedShift)<0.1,'Safari krijgt geen extra verschuiving');
+  assert.ok(Math.abs(safari.simulatedNavShift)<0.1,'De Safari-navigatiebalk blijft op de oude positie');
   const mac=await inspect({ua:desktop,installed:true});
   assert.equal(mac.installedClass,false,'Desktop/Mac niet aanpassen');
   assert.ok(mac.before.padding<100,'Desktop behoudt bestaande header');
   assert.ok(mac.viewTop>pwa.viewTop,'Desktop houdt oorspronkelijke inhoudsmarge');
   assert.ok(Math.abs(mac.simulatedShift)<0.1,'Desktop krijgt geen verschuiving');
-  console.log('PASS: iOS-navigatie maximaal 24px lager binnen viewport; Safari/desktop ongewijzigd');
+  assert.ok(Math.abs(mac.simulatedNavShift)<0.1,'De desktop-navigatiebalk blijft op de oude positie');
+  console.log('PASS: iOS-navigatiebalk en knoppen maximaal 24px lager zonder extra witte strook; Safari/desktop ongewijzigd');
 };
