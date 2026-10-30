@@ -440,3 +440,10 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 #openLabelPageCount{text-align:center;font-variant-numeric:tabular-nums}
 .open-label-summary{font-size:14px;font-weight:700;margin:4px 0 12px}
 #openLabelError{color:#ae2e24;font-weight:700;margin:10px 0}
+
+/* v71.13.37 — Houd de iPhone-app op vaste schaal zonder normaal scrollen te blokkeren. */
+@media (pointer:coarse){
+  html,body{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
+}
+/* Gebruik een voorspelbaar vierkant logo, niet een onvolledig geladen grote JPG. */
+.brand-title>img,.auth-logo{display:block;object-fit:contain;background:#fff;flex-shrink:0}
