@@ -480,3 +480,6 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 .jk-media-preview-button>img{display:block;max-width:100%;height:auto;margin:auto}
 .jk-media-preview-button>span{display:block;padding:9px 4px;font-size:12px;font-weight:700}
 .request-photo-grid img.zoomable-media{cursor:zoom-in}
+
+/* De close- en zoomknoppen blijven onder het iOS 27-statusgebied zichtbaar. */
+@media(max-width:600px){.ios-standalone .jk-media-overlay{padding-top:calc(env(safe-area-inset-top,0px) + 70px)}}
