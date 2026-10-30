@@ -28,6 +28,7 @@
       const maxX=Math.max(0,(rect.width*(state.scale-1))/2);
       const maxY=Math.max(0,(rect.height*(state.scale-1))/2);
       state.x=clamp(state.x,-maxX,maxX);state.y=clamp(state.y,-maxY,maxY);
+      stage.classList.toggle('zoomed',state.scale>1);
       surface.style.transform='translate('+state.x+'px,'+state.y+'px) scale('+state.scale+')';
       overlay.querySelector('[data-zoom-reset]').textContent=Math.round(state.scale*100)+'%';
     }
@@ -107,7 +108,7 @@
         const pdf=await pdfjs.getDocument({data:bytes}).promise;
         if(state.closed){await pdf.destroy();return;}
         content.textContent='';
-        const count=Math.min(pdf.numPages,30);
+        const count=Math.min(pdf.numPages,12);
         for(let i=1;i<=count&&!state.closed;i++){
           const page=await pdf.getPage(i),view=page.getViewport({scale:2});
           const canvas=document.createElement('canvas');
@@ -117,7 +118,7 @@
           await page.render({canvasContext:canvas.getContext('2d'),viewport:view}).promise;
         }
         if(count<pdf.numPages&&!state.closed){
-          const note=document.createElement('p');note.textContent='Alleen de eerste 30 pagina’s worden hier getoond.';content.appendChild(note);
+          const note=document.createElement('p');note.textContent='Alleen de eerste 12 pagina’s worden hier getoond. Bekijk het originele PDF-bestand voor alle pagina’s.';content.appendChild(note);
         }
         await pdf.destroy();
       }).catch(error=>{if(!state.closed){content.textContent='PDF-vergroting niet beschikbaar: '+(error.message||error)+'. Gebruik de gewone PDF-weergave om het bestand te bekijken.';}});
