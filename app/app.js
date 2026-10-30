@@ -900,14 +900,10 @@ const App = (() => {
       <div class="quick-grid dashboard-quick-grid">
         <button class="quick" id="newJobDash"><span class="emoji">👷</span><strong>Nieuwe klus</strong><small>Opdracht en klant koppelen</small></button>
         <button class="quick" id="addHours"><span class="emoji">🕒</span><strong>Uren invoeren</strong><small>Datum en van-tot registreren</small></button>
-        <button class="quick" id="newQuote"><span class="emoji">📄</span><strong>Nieuwe offerte</strong><small>Vanuit een bestaande klus</small></button>
-        <button class="quick" id="newInvoice"><span class="emoji">🧾</span><strong>Nieuwe factuur</strong><small>Uren en materiaal factureren</small></button>
         <button class="quick quick-stat" id="timeStatsDash"><span class="quick-stat-title"><span class="emoji">📊</span><strong>Urenstatistieken</strong></span>${dashboardYearMiniChart(entries)}</button>
       </div>`;
     $$('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
     $('#dashboardJobOpen')?.addEventListener('click',()=>showJob(dashboardJob.id));
-    $('#newInvoice').addEventListener('click',()=>createBusinessDoc('Factuur'));
-    $('#newQuote').addEventListener('click',()=>createBusinessDoc('Offerte'));
     $('#addHours').addEventListener('click',()=>chooseJobCalculation());
     $('#newJobDash').addEventListener('click',()=>editJob());
     $('#timeStatsDash').addEventListener('click',()=>showTimeStats());
