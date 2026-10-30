@@ -1,3 +1,8 @@
+## v71.13.42 — onderste navigatie iets lager op de iPhone
+- Alleen in de geïnstalleerde iPhone-webapp de onderste navigatieknoppen 6 px lager geplaatst door overtollige ruimte onder de knoppen te verkleinen.
+- De navigatie blijft vast aan de onderrand en houdt de iOS safe-area rond de home-indicator volledig vrij. De bovenste vervagingszone en de inhoudsmarges blijven ongewijzigd.
+- Safari en desktop behouden dezelfde navigatiepositie. Mobiele regressietest controleert deze 6 px en de veilige ondergrens.
+
 ## v71.13.41 — compactere veilige schermruimte op iPhone
 - In de geïnstalleerde iPhone-webapp de extra bovenruimte iets verkleind, maar minimaal 100 px behouden onder de iOS-systeemvervaging. Het logo en de bovenste knoppen blijven daarbuiten, ook bij scrollen.
 - De bovenmarge van pagina-inhoud is van 18 naar 12 px gebracht en de overbodige onderste scrollruimte van 92 naar 82 px. De vaste navigatie en onderste safe area blijven beschermd.

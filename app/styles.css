@@ -283,6 +283,10 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
     padding-bottom:calc(82px + var(--safe-bottom));
     scroll-margin-top:8px;
   }
+  .ios-standalone #appShell > .bottom-nav{
+    /* Knoppen 6 px lager; de iPhone-home-indicator blijft vrij. */
+    padding-bottom:calc(2px + var(--safe-bottom));
+  }
   .ios-standalone .modal{
     max-height:calc(100dvh - max(112px,calc(env(safe-area-inset-top,0px) + 50px)));
   }
