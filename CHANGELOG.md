@@ -1,3 +1,9 @@
+## v71.13.44 — navigatie nog verder omlaag op de iPhone
+- De vijf navigatieknoppen komen maximaal 24 px lager te staan in de geïnstalleerde iPhone-webapp, in plaats van maximaal 8 px. Dit is de totale extra verplaatsing ten opzichte van de vaste navigatiebalk.
+- Geen extra marge rond de automatisch vervagende iOS-home-indicator; de verschuiving hangt alleen af van de beschikbare onderste veilige schermruimte en wordt begrensd tot 24 px.
+- De knoppen blijven op het scherm en bruikbaar. In Safari en op desktop verandert er niets. De bovenste vervagingszone blijft zoals deze is.
+- Browserregressietests aangepast om de nieuwe positie op iPhone, Safari en desktop te controleren.
+
 ## v71.13.43 — onderste navigatie nog iets lager, binnen veilige iPhone-marge
 - In de geïnstalleerde iPhone-webapp de vijf navigatieknoppen maximaal 8 px verder omlaag geplaatst wanneer iOS voldoende onderste safe area beschikbaar heeft.
 - Rond de home-indicator blijft minimaal 26 px vrije ruimte. Als de veilige ondermarge kleiner is, wordt de extra verschuiving automatisch verminderd of helemaal niet toegepast.
