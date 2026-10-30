@@ -1,3 +1,10 @@
+## v71.13.38 — inzoomen bij foto's, bonnetjes, facturen en offertes
+- De gewone JK Works-schermen behouden een vaste schaal zonder tweevingerzoom of ongewenst dubbel-tikken.
+- Foto's van klussen en website-aanvragen, bonafbeeldingen en bon-PDF's kunnen in een aparte schermvullende viewer met twee vingers, dubbel tikken, zoomen en verschuiven bekeken worden.
+- Facturen en offertes krijgen een knop **Vergroten**. De PDF wordt per pagina scherp gerenderd zodat je tekst en bedragen kunt lezen; de bestaande standaard-PDF-weergave blijft beschikbaar.
+- De PDF-module is reeds aanwezig in de app; de nieuwe viewer wordt lokaal/offline in de PWA-cache opgeslagen. Geen gegevens worden naar andere systemen gestuurd en facturen/bonnetjes blijven ongewijzigd.
+- Browserregressie test afgebakend zoomen en meerdere PDF-pagina's met fictieve gegevens.
+
 ## v71.13.37 — iPhone-zoom blokkeren en logo betrouwbaar laden
 - In de geïnstalleerde iPhone-webapp en op mobiele aanraakschermen is zoomen met twee vingers of dubbeltikken uitgeschakeld. Scrollen, knoppen en gewone invoervelden blijven bruikbaar.
 - De bovenbalk en aanmeldkaart gebruiken voortaan het kleinere lokale app-PNG-logo in plaats van de 189 kB JPEG. Het logo wordt vooraf geladen, met een tweede PNG als fallback wanneer de eerste afbeelding faalt.

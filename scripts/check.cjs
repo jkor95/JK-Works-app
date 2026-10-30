@@ -177,6 +177,7 @@ async function files(dir) {
     await require('./test_workdays.cjs')(browser, origin);
     await require('./test_ios_pwa_safe_area.cjs')(browser, origin);
     await require('./test_mobile_zoom_logo.cjs')(browser, origin);
+    await require('./test_media_zoom.cjs')(browser, origin);
     await require('./test_finance_browser.cjs')(browser, origin);
     console.log('Backend: uitsluitend fixtures; echte productie-Supabase en apparaatdeelkaart niet getest.');
   } finally {
