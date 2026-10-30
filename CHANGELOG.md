@@ -1,3 +1,9 @@
+## v71.13.47 — dashboard compacter en zoveel mogelijk op één iPhone-scherm
+- Alleen bij mobiele dashboardweergave zijn de tussenruimtes bij de meldingen, aankomende klus en snelknoppen subtiel kleiner gemaakt. De kaarten Nieuwe klus en Uren invoeren zijn minder hoog.
+- De urenstatistiekenkaart en maandgrafiek zijn circa 15–20 px lager, met behoud van alle twaalf maanden, het totaal en de leesbare lettergrootte.
+- De iOS bovenste vervagingszone, de onderste navigatie, andere app-tabbladen en documenten blijven ongewijzigd. Op erg kleine iPhones blijft gewoon scrollen mogelijk.
+- Browserregressietest controleert dashboard, grafiek en afstand tot de onderste navigatie op iPhoneachtige schermen.
+
 ## v71.13.46 — dashboard: offerte- en factuurknoppen verwijderd
 - Onder **Snel openen** op het dashboard zijn uitsluitend de overbodige snelkoppelingen **Nieuwe offerte** en **Nieuwe factuur** verwijderd.
 - **Nieuwe klus**, **Uren invoeren** en **Urenstatistieken** blijven staan. Het overzicht is daardoor compacter.
