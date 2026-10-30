@@ -431,7 +431,9 @@ module.exports=async(browser,origin)=>{
   await page.evaluate(()=>App.renderDashboard());
   assert.equal(await page.locator('#view #clientsDash').count(),0,'Klanten niet meer als dashboardknop');
   assert.equal(await page.locator('#view .quick[data-go="gear"]').count(),0,'Materiaal niet meer als dashboardknop');
-  for(const id of ['#newJobDash','#addHours','#newQuote','#newInvoice','#timeStatsDash'])assert.equal(await page.locator('#view '+id).count(),1,'Overige dashboardknop blijft: '+id);
+  for(const id of ['#newJobDash','#addHours','#timeStatsDash'])assert.equal(await page.locator('#view '+id).count(),1,'Nuttige dashboardknop blijft: '+id);
+  for(const id of ['#newQuote','#newInvoice'])assert.equal(await page.locator('#view '+id).count(),0,'Offerte/factuur snelknop is verwijderd van dashboard: '+id);
+  assert.equal(await page.locator('#view .dashboard-quick-grid > .quick').count(),3,'Dashboard toont twee snelknoppen en de urenstatistieken');
   assert.equal(await page.locator('.bottom-nav [data-route="gear"]').count(),1,'Materiaal blijft via hoofdnavigatie bereikbaar');
   assert.equal(await page.locator('.bottom-nav [data-route="more"]').count(),1,'Klanten blijven via Meer bereikbaar');
   const dashboardGap=await page.evaluate(()=>document.querySelector('.dashboard-first-title').getBoundingClientRect().top-document.querySelector('#dashboardJobOpen').getBoundingClientRect().bottom);assert.ok(dashboardGap>=24,'Dashboard gap: '+dashboardGap);
