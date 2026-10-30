@@ -271,10 +271,17 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
    Houd CSS-blur uitgeschakeld; alleen geïnstalleerde iPhone-webapp. */
 @media(max-width:600px){
   .ios-standalone #appShell > .topbar{
-    padding-top:max(100px,calc(env(safe-area-inset-top,0px) + 44px));
+    /* Minstens 100px blijft vrij onder de iOS-systeemvervaging. */
+    padding-top:max(100px,calc(env(safe-area-inset-top,0px) + 40px));
     background:#f8f6f2;
     -webkit-backdrop-filter:none;
     backdrop-filter:none;
+  }
+  .ios-standalone #appShell > .view{
+    /* Meer bruikbare hoogte zonder onder de statusbalk of tabbar te schuiven. */
+    padding-top:12px;
+    padding-bottom:calc(82px + var(--safe-bottom));
+    scroll-margin-top:8px;
   }
   .ios-standalone .modal{
     max-height:calc(100dvh - max(112px,calc(env(safe-area-inset-top,0px) + 50px)));
