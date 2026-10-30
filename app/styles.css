@@ -500,3 +500,22 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
 .request-photo-grid img.zoomable-media{cursor:zoom-in}
 /* Zoom- en sluitknoppen blijven vrij van de iOS 27-systeemstatusbalk. */
 @media(max-width:600px){.ios-standalone .jk-media-overlay{padding-top:calc(env(safe-area-inset-top,0px) + 70px)}}
+
+/* v71.13.47 — dashboard op een mobiel scherm, met behoud van de leesbare lettergrootte.
+   Alleen het dashboard: andere tabbladen en modals veranderen niet. */
+@media(max-width:430px){
+  #view:has(.dashboard-attention){padding-top:8px}
+  #view:has(.dashboard-attention) .dashboard-attention{gap:8px;margin-bottom:10px}
+  #view:has(.dashboard-attention) .dashboard-attention button{padding:8px 10px}
+  #view:has(.dashboard-attention) .section-title{margin-top:18px;margin-bottom:7px}
+  #view:has(.dashboard-attention) #dashboardJobOpen + .dashboard-first-title{margin-top:17px}
+  #view:has(.dashboard-attention) #dashboardJobOpen{padding:13px 15px}
+  #view:has(.dashboard-attention) .dashboard-quick-grid{gap:10px}
+  #view:has(.dashboard-attention) .dashboard-quick-grid .quick:not(.quick-stat){min-height:90px;padding:12px 12px 11px 16px}
+  #view:has(.dashboard-attention) .dashboard-quick-grid .quick-stat{min-height:185px;padding:13px 15px 10px 16px}
+  #view:has(.dashboard-attention) .quick-stat-title{padding-bottom:8px;margin-bottom:7px}
+  #view:has(.dashboard-attention) .dash-stat-head{margin:2px 0 5px}
+  #view:has(.dashboard-attention) .dash-month-chart{height:102px}
+  #view:has(.dashboard-attention) .dash-month-col{height:98px;grid-template-rows:19px 1fr 17px}
+  #view:has(.dashboard-attention) .dash-month-track{height:57px}
+}

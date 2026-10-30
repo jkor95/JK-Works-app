@@ -436,7 +436,32 @@ module.exports=async(browser,origin)=>{
   assert.equal(await page.locator('#view .dashboard-quick-grid > .quick').count(),3,'Dashboard toont twee snelknoppen en de urenstatistieken');
   assert.equal(await page.locator('.bottom-nav [data-route="gear"]').count(),1,'Materiaal blijft via hoofdnavigatie bereikbaar');
   assert.equal(await page.locator('.bottom-nav [data-route="more"]').count(),1,'Klanten blijven via Meer bereikbaar');
-  const dashboardGap=await page.evaluate(()=>document.querySelector('.dashboard-first-title').getBoundingClientRect().top-document.querySelector('#dashboardJobOpen').getBoundingClientRect().bottom);assert.ok(dashboardGap>=24,'Dashboard gap: '+dashboardGap);
+  const dashboardGap=await page.evaluate(()=>document.querySelector('.dashboard-first-title').getBoundingClientRect().top-document.querySelector('#dashboardJobOpen').getBoundingClientRect().bottom);
+  assert.ok(dashboardGap>=15&&dashboardGap<=25,'Compacte maar duidelijke dashboardruimte: '+dashboardGap);
+  // iPhone-achtige zelfstandige webapp: aankomende klus, snelle knoppen en alle 12 maandbalken
+  // moeten op één scherm passen bij schermhoogtes zoals de getoonde iPhone.
+  for(const {width,height} of [{width:416,height:904},{width:390,height:844}]){
+    await page.setViewportSize({width,height});
+    const layout=await page.evaluate(async()=>{
+      document.documentElement.classList.add('ios-standalone');
+      await App.renderDashboard();
+      const stat=document.querySelector('#timeStatsDash'),nav=document.querySelector('.bottom-nav');
+      const chart=stat.querySelector('.dash-month-chart');
+      const statBottom=stat.getBoundingClientRect().bottom,navTop=nav.getBoundingClientRect().top;
+      return {statBottom,navTop,chartColumns:chart.querySelectorAll('.dash-month-col').length,
+        topbarBottom:document.querySelector('.topbar').getBoundingClientRect().bottom,
+        statFont:getComputedStyle(stat.querySelector('strong')).fontSize,
+        documentWidth:document.documentElement.scrollWidth,viewportWidth:innerWidth};
+    });
+    assert.equal(layout.chartColumns,12,'Alle 12 maanden blijven op het dashboard zichtbaar');
+    assert.ok(layout.statBottom<=layout.navTop-3,
+      'Dashboard moet zonder scrollen passen op '+width+'x'+height+': '+JSON.stringify(layout));
+    assert.ok(layout.documentWidth<=layout.viewportWidth+1,'Dashboard heeft geen horizontale pagina-overloop');
+    assert.ok(layout.topbarBottom>=150,'Dashboard blijft beneden de iOS-blurzone');
+    assert.ok(parseFloat(layout.statFont)>=14,'Dashboardletters blijven leesbaar');
+  }
+  await page.evaluate(()=>document.documentElement.classList.remove('ios-standalone'));
+  await page.setViewportSize({width:390,height:844});
   await page.evaluate(async()=>{const j=await JKDB.get('jobs','badge');await JKDB.putLocal('jobs',{...j,workDays:undefined,date:'2026-10-20',startTime:'20:00',endTime:'02:00',status:'afgerond'});});
   await page.clock.setFixedTime(new Date('2026-10-20T23:00:00Z'));await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),0,'Night shift still running');
   await page.clock.setFixedTime(new Date('2026-10-21T01:00:00Z'));await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),1,'Night shift ended');
