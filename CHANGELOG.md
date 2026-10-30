@@ -1,3 +1,9 @@
+## v71.13.46 — dashboard: offerte- en factuurknoppen verwijderd
+- Onder **Snel openen** op het dashboard zijn uitsluitend de overbodige snelkoppelingen **Nieuwe offerte** en **Nieuwe factuur** verwijderd.
+- **Nieuwe klus**, **Uren invoeren** en **Urenstatistieken** blijven staan. Het overzicht is daardoor compacter.
+- Het aanmaken van offertes en facturen via **Documenten**, **Klussen** en de algemene toevoegknop blijft volledig werken.
+- Geen wijzigingen in documenten, facturen, bedragen, klanten, bestaande klussen of synchronisatie. Regressietest controleert de drie resterende knoppen.
+
 ## v71.13.45 — witte strook boven navigatieknoppen opgelost
 - De vijf navigatieknoppen stonden lager, maar de achtergrond en de bovenrand van de balk bleven op hun oude plek. Dit veroorzaakte een onnodig breed wit vlak boven de knoppen.
 - Verplaats in de geïnstalleerde iPhone-app voortaan de hele navigatiebalk maximaal 24 px omlaag, inclusief achtergrond en bovenrand. De knoppen blijven ongeveer op dezelfde hoogte als in v71.13.44.
