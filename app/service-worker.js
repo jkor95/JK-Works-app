@@ -1,4 +1,4 @@
-const CACHE='jkworks-pricing-v71-13-36';
+const CACHE='jkworks-pricing-v71-13-37';
 const LOCAL=[
   './','./index.html','./styles.css','./db.js','./cloud.js','./calendar-sync.js','./push.js','./app.js','./finance.js','./backup.js','./job-label.js','./job-label-editor.js','./open-payments-label.js','./open-payments-editor.js','./website-editor.js','./manifest.webmanifest',
   './assets/jk-works-logo.jpg',
@@ -11,6 +11,21 @@ self.addEventListener('fetch',e=>{
   if(e.request.method!=='GET')return;
   const url=new URL(e.request.url);
   if(url.origin!==self.location.origin)return;
+  // Logo en fallback-icoon altijd eerst uit de gecontroleerde lokale cache laden.
+  // Voorkomt herhaalde netwerkdownloads bij het openen van de iPhone-webapp.
+  if(url.pathname.endsWith('/icons/apple-touch-icon.png')||url.pathname.endsWith('/icons/icon-192.png')){
+    e.respondWith((async()=>{
+      const cached=await caches.match(e.request);
+      if(cached)return cached;
+      const response=await fetch(e.request);
+      if(!response.ok||!response.headers.get('content-type')?.startsWith('image/'))
+        throw new Error('Logo image response invalid');
+      const cache=await caches.open(CACHE);
+      await cache.put(e.request,response.clone());
+      return response;
+    })());
+    return;
+  }
   e.respondWith((async()=>{
     try{
       const r=await fetch(e.request,{cache:'no-store'});
