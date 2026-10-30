@@ -1,3 +1,8 @@
+## v71.13.41 — compactere veilige schermruimte op iPhone
+- In de geïnstalleerde iPhone-webapp de extra bovenruimte iets verkleind, maar minimaal 100 px behouden onder de iOS-systeemvervaging. Het logo en de bovenste knoppen blijven daarbuiten, ook bij scrollen.
+- De bovenmarge van pagina-inhoud is van 18 naar 12 px gebracht en de overbodige onderste scrollruimte van 92 naar 82 px. De vaste navigatie en onderste safe area blijven beschermd.
+- Geen effect in Safari of op desktop en geen wijzigingen aan modals, mediaviewer, gegevens of andere functionaliteit. De PWA-cache vernieuwd.
+
 ## v71.13.40 — dubbel tikken bij mediavergroting uitgeschakeld
 - In de fullscreen-weergave van foto's, bonnetjes, offertes en facturen is dubbel tikken niet langer een zoomactie.
 - De uitleg noemt alleen knijpen met twee vingers en verschuiven. Tweevingerzoom en de +, − en 100%-knoppen blijven werken.
