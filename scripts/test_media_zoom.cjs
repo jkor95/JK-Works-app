@@ -6,7 +6,7 @@ module.exports=async(browser,origin)=>{
  const root=path.resolve(__dirname,'..'),source=fs.readFileSync(path.join(root,'app/app.js'),'utf8');
  const html=fs.readFileSync(path.join(root,'app/index.html'),'utf8');
  const worker=fs.readFileSync(path.join(root,'app/service-worker.js'),'utf8');
- assert.match(html,/media-viewer\.js\?v=71\.13\.38/,'The viewer must load in the app');
+ assert.match(html,/media-viewer\.js\?v=71\.13\.40/,'The viewer must load in the app');
  assert.match(worker,/\.\/media-viewer\.js/,'Viewer must be cached for PWA');
  for(const id of ['zoomJobPhoto','zoomExpensePreview','zoomExpensePdf','zoomDocumentPdf']){
   assert.ok(source.includes(id),'Missing zoom entry point: '+id);
@@ -45,9 +45,12 @@ module.exports=async(browser,origin)=>{
    const tap=()=>{event('touchstart',[[150,200]]);event('touchend',[]);};
    tap();tap();
    const doubleTap=parseInt(root.querySelector('[data-zoom-reset]').textContent);
+   stage.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,cancelable:true,clientX:150,clientY:200}));
+   const doubleClick=parseInt(root.querySelector('[data-zoom-reset]').textContent);
+   const hint=root.querySelector('.jk-media-hint').textContent;
    const documentViewport=document.querySelector('meta[name=viewport]').content;
    root.querySelector('[data-zoom-close]').click();
-   return {zoomStart,zoomed,pinchPrevented,pinch,reset,doubleTap,closed:!document.querySelector('.jk-media-overlay'),
+   return {zoomStart,zoomed,pinchPrevented,pinch,reset,doubleTap,doubleClick,hint,closed:!document.querySelector('.jk-media-overlay'),
      viewport:documentViewport};
   });
   assert.equal(imageResult.zoomStart,100);
@@ -55,7 +58,9 @@ module.exports=async(browser,origin)=>{
   assert.ok(imageResult.pinch>imageResult.zoomed,'Two fingers increase image scale');
   assert.equal(imageResult.pinchPrevented,true,'Native page zoom is blocked');
   assert.equal(imageResult.reset,100);
-  assert.ok(imageResult.doubleTap>100,'Double tap zooms image');
+  assert.equal(imageResult.doubleTap,100,'Double tap does not zoom image');
+  assert.equal(imageResult.doubleClick,100,'Double-click does not zoom image');
+  assert.doesNotMatch(imageResult.hint,/dubbel/i,'Viewer explanation no longer mentions double tapping');
   assert.ok(imageResult.closed,'Viewer closes cleanly');
   assert.match(imageResult.viewport,/user-scalable=no/,'Rest of app retains fixed zoom');
   const pdfResult=await page.evaluate(async()=>{
@@ -81,6 +86,6 @@ module.exports=async(browser,origin)=>{
   assert.equal(pdfResult.pages,2,'Each PDF page rendered');
   assert.ok(pdfResult.zoomed>100,'PDF supports zoom');
   assert.deepEqual(errors,[],'No browser errors');
-  console.log('PASS: app stays fixed; photo, receipt and PDF viewer zoom/pinch/doubletap, PDF pages and close work');
+  console.log('PASS: app stays fixed; photo, receipt and PDF viewer support pinch and buttons but no double tap; PDF pages and close work');
  }finally{await context.close();}
 };
