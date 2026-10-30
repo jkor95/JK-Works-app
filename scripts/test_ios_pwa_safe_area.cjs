@@ -33,7 +33,19 @@ module.exports=async(browser,origin)=>{
         const view=document.querySelector('#view');
         const nav=document.querySelector('.bottom-nav');
         const viewCss=getComputedStyle(view),navCss=getComputedStyle(nav);
+        // Chromium's iPhone emulation often reports a 0px native bottom inset.
+        // Simulate a 34px iPhone home-indicator area to verify the real layout.
+        const item=nav.querySelector('.nav-item');
+        document.documentElement.style.setProperty('--safe-bottom','34px');
+        const withShift=item.getBoundingClientRect();
+        item.style.transform='none';
+        const unshifted=item.getBoundingClientRect();
+        item.style.removeProperty('transform');
+        const simulatedShift=withShift.bottom-unshifted.bottom;
+        const simulatedClearance=window.innerHeight-withShift.bottom;
+        document.documentElement.style.removeProperty('--safe-bottom');
         return {installedClass:document.documentElement.classList.contains('ios-standalone'),before,scrolled,modalTop:modal.top,modalHeight:modal.height,
+          simulatedShift,simulatedClearance,
           viewTop:parseFloat(viewCss.paddingTop),viewBottom:parseFloat(viewCss.paddingBottom),
           navBottom:parseFloat(navCss.bottom),navHeight:nav.getBoundingClientRect().height,
           navPaddingBottom:parseFloat(navCss.paddingBottom),
@@ -58,6 +70,8 @@ module.exports=async(browser,origin)=>{
   assert.ok(Math.abs(pwa.navPaddingBottom-2)<0.1 || pwa.navPaddingBottom>=2,
     'Navigatie behoudt minimaal 2px plus de iPhone veilige onderruimte');
   assert.ok(pwa.navLastItemBottom<=pwa.viewportHeight-2,'Navigatieknoppen blijven boven de onderrand');
+  assert.ok(Math.abs(pwa.simulatedShift-8)<0.1,'De iPhone-knoppen schuiven nog maximaal 8px omlaag');
+  assert.ok(pwa.simulatedClearance>=26,'Minstens 26px vrijhouden rond de home-indicator');
   const safari=await inspect({ua:iphone,installed:false});
   assert.equal(safari.installedClass,false,'Gewone Safari-weergave niet aanpassen');
   assert.ok(safari.before.padding<100,'Safari behoudt bestaande hoogte');
@@ -65,9 +79,11 @@ module.exports=async(browser,origin)=>{
   assert.ok(safari.viewBottom>pwa.viewBottom,'Normale Safari houdt oorspronkelijke scrollruimte');
   assert.ok(Math.abs(safari.navPaddingBottom-pwa.navPaddingBottom-6)<0.1,
     'Alleen de geïnstalleerde iPhone-app zet navigatie 6px lager');
+  assert.ok(Math.abs(safari.simulatedShift)<0.1,'Safari krijgt geen extra verschuiving');
   const mac=await inspect({ua:desktop,installed:true});
   assert.equal(mac.installedClass,false,'Desktop/Mac niet aanpassen');
   assert.ok(mac.before.padding<100,'Desktop behoudt bestaande header');
   assert.ok(mac.viewTop>pwa.viewTop,'Desktop houdt oorspronkelijke inhoudsmarge');
-  console.log('PASS: iOS blurbescherming, ondernavigatie 6px lager zonder safe-area overlap, Safari/desktop ongewijzigd');
+  assert.ok(Math.abs(mac.simulatedShift)<0.1,'Desktop krijgt geen verschuiving');
+  console.log('PASS: iOS-navigatie maximaal 8px lager met 26px clearance rond home-indicator; Safari/desktop ongewijzigd');
 };
