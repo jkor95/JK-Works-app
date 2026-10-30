@@ -284,14 +284,15 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
     scroll-margin-top:8px;
   }
   .ios-standalone #appShell > .bottom-nav{
-    /* Vast onderaan; behoud de bestaande iPhone-veiligheidsmarge. */
+    /* Verlaag de hele navigatie, inclusief de bovenrand en achtergrond.
+       Alleen de knoppen verplaatsen liet een brede witte strook erboven.
+       De werkelijke safe-area-inset bepaalt de maximale verschuiving. */
+    bottom:calc(-1 * clamp(0px,var(--safe-bottom),24px));
     padding-bottom:calc(2px + var(--safe-bottom));
   }
   .ios-standalone #appShell > .bottom-nav .nav-item{
-    /* Pictogrammen en labels komen 24 px lager zodra de iPhone onderruimte
-       biedt. Geen extra marge voor de vervagende home-indicator reserveren.
-       Zonder onderruimte blijven knoppen op het scherm in plaats van erbuiten. */
-    transform:translateY(clamp(0px,var(--safe-bottom),24px));
+    /* De knoppen blijven in hun normale positie binnen de balk. */
+    transform:none;
   }
   .ios-standalone .modal{
     max-height:calc(100dvh - max(112px,calc(env(safe-area-inset-top,0px) + 50px)));

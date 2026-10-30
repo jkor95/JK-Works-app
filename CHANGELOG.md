@@ -1,3 +1,9 @@
+## v71.13.45 — witte strook boven navigatieknoppen opgelost
+- De vijf navigatieknoppen stonden lager, maar de achtergrond en de bovenrand van de balk bleven op hun oude plek. Dit veroorzaakte een onnodig breed wit vlak boven de knoppen.
+- Verplaats in de geïnstalleerde iPhone-app voortaan de hele navigatiebalk maximaal 24 px omlaag, inclusief achtergrond en bovenrand. De knoppen blijven ongeveer op dezelfde hoogte als in v71.13.44.
+- De verschuiving wordt afgeleid van de beschikbare iOS-onderruimte. Safari en desktop blijven ongewijzigd. Geen gevolgen voor klussen of opgeslagen gegevens.
+- Browserregressietest controleert dat knoppen en navigatieachtergrond gelijk meebewegen.
+
 ## v71.13.44 — navigatie nog verder omlaag op de iPhone
 - De vijf navigatieknoppen komen maximaal 24 px lager te staan in de geïnstalleerde iPhone-webapp, in plaats van maximaal 8 px. Dit is de totale extra verplaatsing ten opzichte van de vaste navigatiebalk.
 - Geen extra marge rond de automatisch vervagende iOS-home-indicator; de verschuiving hangt alleen af van de beschikbare onderste veilige schermruimte en wordt begrensd tot 24 px.
