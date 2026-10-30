@@ -70,8 +70,8 @@ module.exports=async(browser,origin)=>{
   assert.ok(Math.abs(pwa.navPaddingBottom-2)<0.1 || pwa.navPaddingBottom>=2,
     'Navigatie behoudt minimaal 2px plus de iPhone veilige onderruimte');
   assert.ok(pwa.navLastItemBottom<=pwa.viewportHeight-2,'Navigatieknoppen blijven boven de onderrand');
-  assert.ok(Math.abs(pwa.simulatedShift-8)<0.1,'De iPhone-knoppen schuiven nog maximaal 8px omlaag');
-  assert.ok(pwa.simulatedClearance>=26,'Minstens 26px vrijhouden rond de home-indicator');
+  assert.ok(Math.abs(pwa.simulatedShift-24)<0.1,'De iPhone-knoppen schuiven 24px omlaag bij 34px onderste inset');
+  assert.ok(pwa.simulatedClearance>=2,'Navigatie mag lager komen maar niet onder de schermrand verdwijnen');
   const safari=await inspect({ua:iphone,installed:false});
   assert.equal(safari.installedClass,false,'Gewone Safari-weergave niet aanpassen');
   assert.ok(safari.before.padding<100,'Safari behoudt bestaande hoogte');
@@ -85,5 +85,5 @@ module.exports=async(browser,origin)=>{
   assert.ok(mac.before.padding<100,'Desktop behoudt bestaande header');
   assert.ok(mac.viewTop>pwa.viewTop,'Desktop houdt oorspronkelijke inhoudsmarge');
   assert.ok(Math.abs(mac.simulatedShift)<0.1,'Desktop krijgt geen verschuiving');
-  console.log('PASS: iOS-navigatie maximaal 8px lager met 26px clearance rond home-indicator; Safari/desktop ongewijzigd');
+  console.log('PASS: iOS-navigatie maximaal 24px lager binnen viewport; Safari/desktop ongewijzigd');
 };
