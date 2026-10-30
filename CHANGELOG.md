@@ -1,3 +1,9 @@
+## v71.13.37 — iPhone-zoom blokkeren en logo betrouwbaar laden
+- In de geïnstalleerde iPhone-webapp en op mobiele aanraakschermen is zoomen met twee vingers of dubbeltikken uitgeschakeld. Scrollen, knoppen en gewone invoervelden blijven bruikbaar.
+- De bovenbalk en aanmeldkaart gebruiken voortaan het kleinere lokale app-PNG-logo in plaats van de 189 kB JPEG. Het logo wordt vooraf geladen, met een tweede PNG als fallback wanneer de eerste afbeelding faalt.
+- De bestaande serviceworker laadt de twee logo-icoontjes eerst uit zijn gecontroleerde offlinecache. Zo hoeft een iPhone niet bij iedere start opnieuw het logo van het netwerk op te halen.
+- Nieuwe mobiele browsertests controleren zoomgebaren, scrollen, logo, PNG-fallback en schermbreedte. Geen aanpassingen aan klantgegevens, financiële administratie, pushmeldingen, Supabase of de agenda.
+
 ## v71.13.36 — Booraccessoires bij DHR183 in Mbox maat 1
 - **Mbox maat 1 – Boorhamer & booraccessoires:** naast de Makita DHR183 zitten hier nu ook de hout-, metaal-, steen- en glasborenset, gatenzaagset, speedboor en ringstops.
 - **Mbox maat 3 – Diversen:** bovenstaande booraccessoires zijn hieruit verwijderd. Overige inhoud, zoals tapes, montagewig, WD-40, leidingzoeker en schoonmaak-/kleinmateriaal, blijft staan.

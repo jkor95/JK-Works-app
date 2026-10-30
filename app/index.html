@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
   <meta name="theme-color" content="#1e272d" />
   <meta name="robots" content="noindex,nofollow,noarchive" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -16,16 +16,31 @@
       if(ios&&installed)document.documentElement.classList.add('ios-standalone');
     })();
   </script>
+  <script>
+    // Alleen mobiele aanraakgebaren voor pagina-zoom uitschakelen.
+    // Normaal scrollen, invoeren en tikken blijven gewoon werken.
+    (() => {
+      if (!('ontouchstart' in window) && navigator.maxTouchPoints < 1) return;
+      const cancel = event => event.preventDefault();
+      for (const type of ['gesturestart', 'gesturechange'])
+        document.addEventListener(type, cancel, {passive:false});
+      document.addEventListener('touchmove', event => {
+        if (event.touches.length > 1) event.preventDefault();
+      }, {passive:false});
+      document.addEventListener('dblclick', cancel, {passive:false});
+    })();
+  </script>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="preload" href="icons/apple-touch-icon.png" as="image" type="image/png" />
   <link rel="icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=71.13.26" />
+  <link rel="stylesheet" href="styles.css?v=71.13.37" />
   <title>JK Works Bedrijfsapp</title>
 </head>
 <body class="auth-locked">
   <section id="authGate" class="auth-gate" aria-label="Beveiligde omgeving laden">
     <div class="auth-card">
-      <img src="assets/jk-works-logo.jpg" alt="JK Works Dordrecht" class="auth-logo">
+      <img src="icons/apple-touch-icon.png" alt="JK Works Dordrecht" class="auth-logo" loading="eager" decoding="sync" onerror="this.onerror=null;this.src='icons/icon-192.png'">
       <div class="auth-kicker">JK WORKS DORDRECHT</div>
       <h1>Bedrijfsapp</h1>
       <p class="auth-intro">Beveiligde omgeving laden...</p>
@@ -35,7 +50,7 @@
 
   <div id="appShell" hidden>
     <header class="topbar">
-      <div class="brand-title"><img src="assets/jk-works-logo.jpg" alt="JK Works Dordrecht"><div><div class="eyebrow">JK WORKS DORDRECHT</div><h1 id="pageTitle">Dashboard</h1></div></div>
+      <div class="brand-title"><img src="icons/apple-touch-icon.png" alt="JK Works Dordrecht" loading="eager" decoding="sync" fetchpriority="high" onerror="this.onerror=null;this.src='icons/icon-192.png'"><div><div class="eyebrow">JK WORKS DORDRECHT</div><h1 id="pageTitle">Dashboard</h1></div></div>
       <div class="top-actions"><button id="manualSyncBtn" class="sync-btn" type="button" aria-label="Handmatig synchroniseren" title="Handmatig synchroniseren" hidden>☁ <span>Sync</span></button><button id="notificationBtn" class="notice-btn" type="button" aria-label="Acties en meldingen" title="Acties en meldingen" hidden><span class="notice-icon">🔔</span><b id="notificationCount" hidden>0</b></button><button id="topLogoutBtn" class="logout-btn" type="button" aria-label="Uitloggen" title="Uitloggen" hidden>⎋ <span>Uitloggen</span></button><button id="quickAddBtn" class="icon-btn" aria-label="Snel toevoegen">+</button></div>
     </header>
 
