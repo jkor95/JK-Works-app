@@ -1,3 +1,8 @@
+## v71.13.48 — alle twaalf maanden zichtbaar in dashboardgrafiek
+- De urenstatistieken op het mobiele dashboard verdelen de beschikbare breedte nu evenredig over alle 12 maanden, van januari tot en met december. Horizontaal scrollen is niet meer nodig.
+- De tussenruimte tussen maandkolommen is kleiner en vaste minimale kolombreedtes zijn verwijderd; urenwaarden, maandlabels en balken blijven staan.
+- Alleen de kleine dashboardgrafiek is aangepast, niet de uitgebreidere statistiekenpagina of andere onderdelen. Mobiele regressietests controleren op iPhonebreedtes dat december zichtbaar is en de grafiek niet horizontaal scrolt.
+
 ## v71.13.47 — dashboard compacter en zoveel mogelijk op één iPhone-scherm
 - Alleen bij mobiele dashboardweergave zijn de tussenruimtes bij de meldingen, aankomende klus en snelknoppen subtiel kleiner gemaakt. De kaarten Nieuwe klus en Uren invoeren zijn minder hoog.
 - De urenstatistiekenkaart en maandgrafiek zijn circa 15–20 px lager, met behoud van alle twaalf maanden, het totaal en de leesbare lettergrootte.
