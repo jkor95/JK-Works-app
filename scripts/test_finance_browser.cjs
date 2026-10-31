@@ -448,12 +448,25 @@ module.exports=async(browser,origin)=>{
       const stat=document.querySelector('#timeStatsDash'),nav=document.querySelector('.bottom-nav');
       const chart=stat.querySelector('.dash-month-chart');
       const statBottom=stat.getBoundingClientRect().bottom,navTop=nav.getBoundingClientRect().top;
-      return {statBottom,navTop,chartColumns:chart.querySelectorAll('.dash-month-col').length,
+      const months=[...chart.querySelectorAll('.dash-month-col')];
+      const bounds=chart.getBoundingClientRect();
+      const monthBounds=months.map(month=>month.getBoundingClientRect());
+      return {statBottom,navTop,chartColumns:months.length,
+        chartScrollWidth:chart.scrollWidth,chartClientWidth:chart.clientWidth,
+        firstMonthLeft:monthBounds[0]?.left,lastMonthRight:monthBounds[11]?.right,
+        chartLeft:bounds.left,chartRight:bounds.right,
+        monthLabels:months.map(month=>month.querySelector('.dash-month-label')?.textContent),
         topbarBottom:document.querySelector('.topbar').getBoundingClientRect().bottom,
         statFont:getComputedStyle(stat.querySelector('strong')).fontSize,
         documentWidth:document.documentElement.scrollWidth,viewportWidth:innerWidth};
     });
     assert.equal(layout.chartColumns,12,'Alle 12 maanden blijven op het dashboard zichtbaar');
+    assert.deepEqual(layout.monthLabels,['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'],
+      'Alle maandnamen zijn aanwezig van januari tot december');
+    assert.ok(layout.chartScrollWidth<=layout.chartClientWidth+1,
+      'Dashboardgrafiek mag niet horizontaal kunnen scrollen: '+JSON.stringify(layout));
+    assert.ok(layout.firstMonthLeft>=layout.chartLeft-1&&layout.lastMonthRight<=layout.chartRight+1,
+      'Januari en december moeten allebei binnen de zichtbare grafiek liggen');
     assert.ok(layout.statBottom<=layout.navTop-3,
       'Dashboard moet zonder scrollen passen op '+width+'x'+height+': '+JSON.stringify(layout));
     assert.ok(layout.documentWidth<=layout.viewportWidth+1,'Dashboard heeft geen horizontale pagina-overloop');
