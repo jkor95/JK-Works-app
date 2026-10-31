@@ -124,7 +124,12 @@ h1{color:var(--ink);letter-spacing:-.025em}
   .dashboard-quick-grid .quick{min-height:98px;padding:14px 12px 12px 16px}
   .dashboard-quick-grid .quick small{font-size:9.5px}
   .dashboard-quick-grid .quick-stat{min-height:205px}
-  .dash-month-chart{grid-template-columns:repeat(12,31px)}
+  /* Verdeel de beschikbare breedte over alle twaalf maanden in plaats van
+     vaste kolommen van 31px die horizontaal scrollen veroorzaken. */
+  .dash-month-chart{grid-template-columns:repeat(12,minmax(0,1fr));gap:2px;width:100%;overflow-x:hidden}
+  .dash-month-col{min-width:0}
+  .dash-month-hours{letter-spacing:-.18px}
+  @media(max-width:360px){.dash-month-hours{font-size:7px}}
   .material-actions>*{min-width:145px}
 }
 
