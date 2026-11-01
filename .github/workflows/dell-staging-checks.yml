@@ -25,6 +25,13 @@ jobs:
         env:
           JKWORKS_STAGING_DB_PASSWORD: dummy-ci-password-not-used
         run: docker compose -f dell-backend/compose.staging.yaml config --quiet
+      - name: Test PostgreSQL schema with synthetic rows and rollback
+        env:
+          JKWORKS_STAGING_DB_PASSWORD: dummy-ci-password-not-used
+        run: |
+          docker compose -f dell-backend/compose.staging.yaml up -d db
+          docker compose -f dell-backend/compose.staging.yaml exec -T db sh -c 'until pg_isready -U jkworks_staging -d jkworks_staging; do sleep 1; done'
+          docker compose -f dell-backend/compose.staging.yaml exec -T db psql -X -v ON_ERROR_STOP=1 -U jkworks_staging -d jkworks_staging < dell-backend/test-schema.sql
       - name: Confirm no published host ports
         run: |
           if grep -Eq '^[[:space:]]+ports:' dell-backend/compose.staging.yaml; then
