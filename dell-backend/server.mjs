@@ -112,7 +112,7 @@ export async function handler(req, res) {
         return reply(res,200,{ok:true});
       }
       if(path==='/api/v1/records' && method==='GET')return reply(res,200,{records:await listRecords(id)});
-      const m = new RegExp('^/api/v1/records/([A-Za-z0-9_-]{1,64})/([A-Za-z0-9_.-]{1,128})
+      const m = /^\/api\/v1\/records\/([A-Za-z0-9_-]{1,64})\/([A-Za-z0-9_.-]{1,128})$/.exec(path);
       if(m && (method==='PUT'||method==='DELETE')){
         if(method==='PUT'){
           const body=await readJson(req);
