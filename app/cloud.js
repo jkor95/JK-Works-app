@@ -258,7 +258,10 @@ const JKCloud = (() => {
       if(v && typeof v==='object' && v.__storagePath){
         const {data:blob,error}=await client.storage.from(BUCKET).download(v.__storagePath);
         if(error) throw error;
-        obj[k]=new Blob([blob],{type:v.__mime||blob.type||'application/octet-stream'});
+        // Materialize the downloaded response before IndexedDB stores it. Safari can
+        // reject network-backed Blob implementations during structured cloning.
+        const bytes=await blob.arrayBuffer();
+        obj[k]=new Blob([bytes],{type:v.__mime||blob.type||'application/octet-stream'});
       }
     }
     return obj;
