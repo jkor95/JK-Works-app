@@ -245,7 +245,8 @@ const JKCloud = (() => {
       if(v instanceof Blob){
         const ext=v.type==='application/pdf'?'pdf':v.type==='image/jpeg'?'jpg':v.type==='image/png'?'png':'bin';
         const path=`${user().id}/${store}/${obj.id}/${k}.${ext}`;
-        const {error}=await client.storage.from(BUCKET).upload(path,v,{upsert:true,contentType:v.type||'application/octet-stream'});
+        const uploadBytes=new Uint8Array(await v.arrayBuffer());
+        const {error}=await client.storage.from(BUCKET).upload(path,uploadBytes,{upsert:true,contentType:v.type||'application/octet-stream'});
         if(error) throw error;
         data[k]={__storagePath:path,__mime:v.type||'application/octet-stream'};
       }
