@@ -67,3 +67,10 @@ test('database URL without database fails closed', async () => {
     else process.env.DATABASE_URL=prev;
   }
 });
+
+test('authentication and writes disabled without explicit feature switch', async()=>withServer(async url=>{
+  const r=await fetch(url+'/api/v1/auth/login',{method:'POST',headers:{origin:'https://test.jkworks.nl','content-type':'application/json'},body:JSON.stringify({email:'demo@example.invalid',password:'fictional-password'})});
+  assert.equal(r.status,503);
+  const write=await fetch(url+'/api/v1/records/clients/demo',{method:'PUT',headers:{origin:'https://test.jkworks.nl','content-type':'application/json'},body:'{}'});
+  assert.equal(write.status,503);
+}));
