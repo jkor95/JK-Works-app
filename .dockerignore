@@ -1,0 +1,13 @@
+.git
+.github
+docs
+scripts
+supabase
+node_modules
+*.sql
+*.md
+.env
+.env.*
+Dockerfile
+.dockerignore
+docker
