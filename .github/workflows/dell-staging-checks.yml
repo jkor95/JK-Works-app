@@ -32,6 +32,14 @@ jobs:
           docker compose -f dell-backend/compose.staging.yaml up -d db
           docker compose -f dell-backend/compose.staging.yaml exec -T db sh -c 'until pg_isready -U jkworks_staging -d jkworks_staging; do sleep 1; done'
           docker compose -f dell-backend/compose.staging.yaml exec -T db psql -X -v ON_ERROR_STOP=1 -U jkworks_staging -d jkworks_staging < dell-backend/test-schema.sql
+      - name: Integration-test backend against isolated PostgreSQL
+        env:
+          JKWORKS_STAGING_DB_PASSWORD: dummy-ci-password-not-used
+        run: |
+          docker compose -f dell-backend/compose.staging.yaml build backend
+          docker compose -f dell-backend/compose.staging.yaml run --rm -T \
+            -e DATABASE_URL=postgresql://jkworks_staging:dummy-ci-password-not-used@db:5432/jkworks_staging \
+            backend node --input-type=module -e "import {databaseCheck} from './server.mjs'; const r=await databaseCheck(); if(!r.connected||!r.schema_ready) { console.error('isolated DB connection failed',r.reason); process.exit(1) }; console.log('DB schema and connection OK')"
       - name: Confirm no published host ports
         run: |
           if grep -Eq '^[[:space:]]+ports:' dell-backend/compose.staging.yaml; then
