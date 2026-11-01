@@ -49,6 +49,7 @@ export async function upsertRecord(accountId,store,id,data) {
   const conn=await pool.connect();
   try {
     await conn.query('BEGIN');
+    await conn.query('SELECT pg_advisory_xact_lock(hashtextextended($1 || \'|\' || $2 || \'|\' || $3, 0))',[accountId,store,id]);
     // Deletion wins: do not resurrect an older ID from a second device.
     const tombstone=await conn.query('SELECT 1 FROM jk_staging.app_deletions WHERE user_id=$1 AND store=$2 AND record_id=$3 FOR UPDATE',[accountId,store,id]);
     if(tombstone.rowCount){await conn.query('ROLLBACK');return {deleted:true};}
@@ -62,6 +63,7 @@ export async function deleteRecord(accountId,store,id) {
   const conn=await pool.connect();
   try {
     await conn.query('BEGIN');
+    await conn.query('SELECT pg_advisory_xact_lock(hashtextextended($1 || \'|\' || $2 || \'|\' || $3, 0))',[accountId,store,id]);
     await conn.query('DELETE FROM jk_staging.app_records WHERE user_id=$1 AND store=$2 AND record_id=$3',[accountId,store,id]);
     await conn.query(`INSERT INTO jk_staging.app_deletions(user_id,store,record_id,deleted_at) VALUES ($1,$2,$3,now())
       ON CONFLICT (user_id,store,record_id) DO UPDATE SET deleted_at=EXCLUDED.deleted_at`,[accountId,store,id]);
