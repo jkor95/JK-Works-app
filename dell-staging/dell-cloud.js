@@ -79,11 +79,12 @@ const JKCloud = (() => {
         if(q.type==='delete'){
           await api(path,{method:'DELETE'});
         }else if(q.type==='put'){
-          if(await JKDB.isDeletedLocal(q.store,q.recordId)) continue;
+          if(await JKDB.isDeletedLocal(q.store,q.recordId)) { await JKDB.removeLocal('syncQueue',q.id); continue; }
           const data=await JKDB.get(q.store,q.recordId);
           if(!data){await JKDB.removeLocal('syncQueue',q.id);continue}
           if(hasBlob(data))throw Error('Dit record bevat een foto of bestand. Bestandsopslag moet eerst worden aangesloten; wijzigingen blijven lokaal bewaard.');
-          await api(path,{method:'PUT',body:JSON.stringify(data)});
+          const result=await api(path,{method:'PUT',body:JSON.stringify(data)});
+          if(result.deleted) {await JKDB.markDeleteLocal(q.store,q.recordId);await JKDB.removeLocal(q.store,q.recordId);}
         }else continue;
         await JKDB.removeLocal('syncQueue',q.id);
       }
