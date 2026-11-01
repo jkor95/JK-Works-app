@@ -59,3 +59,44 @@ export async function deleteRecord(accountId,store,id) {
     await conn.query('COMMIT');
   } catch(e) {await conn.query('ROLLBACK');throw e;}finally{conn.release();}
 }
+
+export async function initializeStagingAccount() {
+  if (process.env.ENABLE_STAGING_API !== 'true') return {ready:false,reason:'disabled'};
+  const email=process.env.JK_TEST_EMAIL;
+  const password=process.env.JK_TEST_PASSWORD;
+  if (!process.env.DATABASE_URL || !email || !password || password.length<14) {
+    return {ready:false,reason:'missing_staging_credentials'};
+  }
+  // Safe for repeat deployments. No production tables or existing users modified.
+  const conn=await pool.connect();
+  try {
+    await conn.query('BEGIN');
+    await conn.query(`CREATE TABLE IF NOT EXISTS jk_staging.login_accounts (
+      account_id uuid PRIMARY KEY REFERENCES jk_staging.accounts(id),
+      email text NOT NULL UNIQUE,
+      password_salt text NOT NULL,
+      password_hash text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`);
+    await conn.query(`CREATE TABLE IF NOT EXISTS jk_staging.login_sessions (
+      token_hash text PRIMARY KEY,
+      account_id uuid NOT NULL REFERENCES jk_staging.accounts(id) ON DELETE CASCADE,
+      expires_at timestamptz NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`);
+    await conn.query('CREATE INDEX IF NOT EXISTS jk_login_sessions_expiry_idx ON jk_staging.login_sessions(expires_at)');
+    const lookup=await conn.query('SELECT account_id FROM jk_staging.login_accounts WHERE email=$1',[email.trim().toLowerCase()]);
+    if(!lookup.rowCount){
+      const {randomUUID}=await import('node:crypto');
+      const accountId=randomUUID(),salt=randomBytes(32).toString('hex');
+      const hash=await passwordHash(password,salt);
+      await conn.query('INSERT INTO jk_staging.accounts(id) VALUES ($1)',[accountId]);
+      await conn.query('INSERT INTO jk_staging.login_accounts(account_id,email,password_salt,password_hash) VALUES ($1,$2,$3,$4)',[accountId,email.trim().toLowerCase(),salt,hash]);
+    }
+    await conn.query('COMMIT');
+    return {ready:true};
+  } catch(e) {
+    await conn.query('ROLLBACK');
+    return {ready:false,reason:'database_initialization_failed'};
+  } finally { conn.release(); }
+}
