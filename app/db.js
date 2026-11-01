@@ -33,7 +33,7 @@ const JKDB = (() => {
     if(!opts.preserveTimestamp) stamped._syncUpdatedAt=new Date().toISOString();
     await putLocal(store,stamped);
     const localOnly=!!opts.localOnly || localOnlyStores.has(store);
-    if(!localOnly && !window.__JK_SEEDING && window.JKCloud?.queuePut) window.JKCloud.queuePut(store,stamped).catch(()=>{});
+    if(!localOnly && !window.__JK_SEEDING && window.JKCloud?.queuePut) await window.JKCloud.queuePut(store,stamped);
     return stamped;
   }
   // Save explicitly entered workdays and their price together, or keep all original data.
@@ -60,7 +60,7 @@ const JKDB = (() => {
       };
       a.onsuccess=check;b.onsuccess=check;c.onsuccess=check;
     });
-    if(!window.__JK_SEEDING&&window.JKCloud?.queuePut)for(const item of written)window.JKCloud.queuePut(item.store,item.record).catch(()=>{});
+    if(!window.__JK_SEEDING&&window.JKCloud?.queuePut)for(const item of written)await window.JKCloud.queuePut(item.store,item.record);
   }
   async function markDeleteLocal(store,id,deletedAt=new Date().toISOString()){
     const marker={id:`${store}|${id}`,store,recordId:id,deletedAt};
