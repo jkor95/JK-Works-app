@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="theme-color" content="#1e272d" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="JK Works" />
+  <script>
+    // iOS-statusbalk vrijhouden in de geïnstalleerde webapp; Safari blijft ongewijzigd.
+    (()=>{
+      const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);
+      const installed=navigator.standalone===true||window.matchMedia?.('(display-mode: standalone)')?.matches===true;
+      if(ios&&installed)document.documentElement.classList.add('ios-standalone');
+    })();
+  </script>
+  <script>
+    // Alleen mobiele aanraakgebaren voor pagina-zoom uitschakelen.
+    // Normaal scrollen, invoeren en tikken blijven gewoon werken.
+    (() => {
+      if (!('ontouchstart' in window) && navigator.maxTouchPoints < 1) return;
+      const cancel = event => event.preventDefault();
+      for (const type of ['gesturestart', 'gesturechange'])
+        document.addEventListener(type, cancel, {passive:false});
+      document.addEventListener('touchmove', event => {
+        if (event.touches.length > 1) event.preventDefault();
+      }, {passive:false});
+      document.addEventListener('dblclick', cancel, {passive:false});
+    })();
+  </script>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="preload" href="icons/apple-touch-icon.png" as="image" type="image/png" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css?v=71.13.48" />
+  <title>JK Works Bedrijfsapp</title>
+<style>#dellPreviewAlert{background:#513d18;color:#fff2d4;padding:12px 20px;text-align:center;font-size:14px;line-height:1.45;position:relative;z-index:9999}#dellPreviewAlert strong{display:block}</style></head>
+<body class="auth-locked"><div id="dellPreviewAlert"><strong>DELL-TESTVERSIE — lokale demonstratie</strong>Dit is je bestaande JK Works-interface. Deze weergave is nog niet gekoppeld aan je echte bedrijfsgegevens. Wijzigingen zijn alleen lokaal in deze testbrowser; synchronisatie, push en publieke websitefuncties zijn uitgeschakeld.</div>
+  <section id="authGate" class="auth-gate" aria-label="Beveiligde omgeving laden">
+    <div class="auth-card">
+      <img src="icons/apple-touch-icon.png" alt="JK Works Dordrecht" class="auth-logo" loading="eager" decoding="sync" onerror="this.onerror=null;this.src='icons/icon-192.png'">
+      <div class="auth-kicker">JK WORKS DORDRECHT</div>
+      <h1>Bedrijfsapp</h1>
+      <p class="auth-intro">Beveiligde omgeving laden...</p>
+      <p class="auth-note">Als je niet bent ingelogd, word je automatisch doorgestuurd naar de inlogpagina.</p>
+    </div>
+  </section>
+
+  <div id="appShell" hidden>
+    <header class="topbar">
+      <div class="brand-title"><img src="icons/apple-touch-icon.png" alt="JK Works Dordrecht" loading="eager" decoding="sync" fetchpriority="high" onerror="this.onerror=null;this.src='icons/icon-192.png'"><div><div class="eyebrow">JK WORKS DORDRECHT</div><h1 id="pageTitle">Dashboard</h1></div></div>
+      <div class="top-actions"><button id="manualSyncBtn" class="sync-btn" type="button" aria-label="Handmatig synchroniseren" title="Handmatig synchroniseren" hidden>☁ <span>Sync</span></button><button id="notificationBtn" class="notice-btn" type="button" aria-label="Acties en meldingen" title="Acties en meldingen" hidden><span class="notice-icon">🔔</span><b id="notificationCount" hidden>0</b></button><button id="topLogoutBtn" class="logout-btn" type="button" aria-label="Uitloggen" title="Uitloggen" hidden>⎋ <span>Uitloggen</span></button><button id="quickAddBtn" class="icon-btn" aria-label="Snel toevoegen">+</button></div>
+    </header>
+
+    <main id="view" class="view" aria-live="polite"></main>
+
+    <nav class="bottom-nav" aria-label="Hoofdnavigatie">
+      <button data-route="dashboard" class="nav-item active"><span>⌂</span><small>Start</small></button>
+      <button data-route="jobs" class="nav-item"><span>▣</span><small>Klussen</small></button>
+      <button data-route="gear" class="nav-item"><span>🧰</span><small>Materiaal</small></button>
+      <button data-route="documents" class="nav-item"><span>▤</span><small>Documenten</small></button>
+      <button data-route="more" class="nav-item"><span>•••</span><small>Meer</small></button>
+    </nav>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+  <div id="modalRoot"></div>
+
+  <input id="hiddenExistingPdfInput" type="file" accept="application/pdf" multiple hidden />
+  <input id="hiddenBackupInput" type="file" accept="application/json,.jkbackup,.jkbackup.json" hidden />
+
+  
+  <script src="db.js"></script>
+  <script src="dell-cloud.js"></script>
+  <script src="calendar-sync.js?v=71.13.31"></script>
+  <script src="website-editor.js?v=71.8.9"></script>
+  <script src="backup.js"></script>
+  <script src="push.js?v=71.13.26"></script>
+  <script src="finance.js?v=71.13.26"></script>
+  <script src="media-viewer.js?v=71.13.40"></script>
+  <script src="job-label.js?v=71.13.26"></script>
+  <script src="job-label-editor.js?v=71.13.26"></script>
+  <script src="open-payments-label.js?v=71.13.26"></script>
+  <script src="open-payments-editor.js?v=71.13.26"></script>
+  <script src="app.js?v=dell-preview-1"></script>
+</body>
+</html>
