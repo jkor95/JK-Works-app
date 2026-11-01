@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { handler } from './server.mjs';
+import { Readable } from 'node:stream';
+import { handler, readJson } from './server.mjs';
 
 async function withServer(fn) {
   const server = createServer(handler);
@@ -74,3 +75,16 @@ test('authentication and writes disabled without explicit feature switch', async
   const write=await fetch(url+'/api/v1/records/clients/demo',{method:'PUT',headers:{origin:'https://test.jkworks.nl','content-type':'application/json'},body:'{}'});
   assert.equal(write.status,503);
 }));
+
+
+test('JSON reader reports 413-compatible error on oversized body without destroying stream', async () => {
+  const req=Readable.from([Buffer.alloc(65537,120)]);
+  await assert.rejects(readJson(req), /body_too_large/);
+  assert.equal(req.destroyed,true);
+});
+test('JSON reader rejects malformed body', async () => {
+  await assert.rejects(readJson(Readable.from(['{broken'])), /invalid_json/);
+});
+test('JSON reader handles a valid JSON payload', async () => {
+  assert.deepEqual(await readJson(Readable.from(['{"ok":true}'])),{ok:true});
+});
