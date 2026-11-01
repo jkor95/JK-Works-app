@@ -118,7 +118,8 @@ export async function handler(req, res) {
         if(method==='PUT'){
           const body=await readJson(req);
           if(body===null||typeof body!=='object'||Array.isArray(body))return reply(res,400,{error:'invalid_data'});
-          await upsertRecord(id,m[1],m[2],body);
+          const outcome=await upsertRecord(id,m[1],m[2],body);
+          if(outcome.deleted)return reply(res,409,{error:'record_deleted',deleted:true});
         } else await deleteRecord(id,m[1],m[2]);
         return reply(res,200,{ok:true});
       }
