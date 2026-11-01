@@ -47,7 +47,7 @@ const JKCloud = (() => {
       if(!eligible(record.store,record.record_id))continue;
       const key=record.store+'|'+record.record_id;
       if(pendingKeys.has(key)||await JKDB.isDeletedLocal(record.store,record.record_id))continue;
-      if(!record.data||typeof record.data!=='object'||hasBlob(record.data))continue;
+      if(!record.data||typeof record.data!=='object'||Array.isArray(record.data)||hasBlob(record.data))continue;
       const local=await JKDB.get(record.store,record.record_id);
       if(local && local._syncUpdatedAt && new Date(local._syncUpdatedAt)>new Date(record.updated_at)) continue;
       await JKDB.putLocal(record.store,record.data);
@@ -68,7 +68,7 @@ const JKCloud = (() => {
   async function syncNow(){
     if(!identity)throw Error('Niet aangemeld bij de Dell-testomgeving.');
     if(syncing)return;
-    if(await JKDB.get('settings','backupRestoreGuard')?.active)throw Error('Back-upherstel is beveiligd; synchronisatie is geblokkeerd.');
+    if((await JKDB.get('settings','backupRestoreGuard'))?.active)throw Error('Back-upherstel is beveiligd; synchronisatie is geblokkeerd.');
     if(!navigator.onLine)throw Error('Geen internetverbinding.');
     syncing=true;emit('jkcloud-sync',{state:'syncing'});
     try{
