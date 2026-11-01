@@ -62,9 +62,16 @@ function cookie(req) {
 }
 function readJson(req) {
   return new Promise((resolve,reject)=>{
-    let buf='',bytes=0;
-    req.on('data',v=>{bytes+=v.length;if(bytes>65536){reject(Error('body_too_large'));req.destroy();return;}buf+=v;});
-    req.on('end',()=>{try{resolve(JSON.parse(buf||'{}'));}catch{reject(Error('invalid_json'));}});
+    let buf='',bytes=0,overflow=false;
+    req.on('data',v=>{
+      bytes+=v.length;
+      if(bytes>65536){overflow=true;buf='';return;}
+      if(!overflow)buf+=v;
+    });
+    req.on('end',()=>{
+      if(overflow)return reject(Error('body_too_large'));
+      try{resolve(JSON.parse(buf||'{}'));}catch{reject(Error('invalid_json'));}
+    });
     req.on('error',reject);
   });
 }
