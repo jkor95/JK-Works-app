@@ -1,0 +1,33 @@
+name: Dell staging backend checks
+on:
+  push:
+    branches:
+      - dell-migration-staging-20261031
+    paths:
+      - 'dell-backend/**'
+      - '.github/workflows/dell-staging-checks.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-staging-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run offline backend tests
+        run: node --test dell-backend/server.test.mjs
+      - name: Validate compose config without production secrets
+        env:
+          JKWORKS_STAGING_DB_PASSWORD: dummy-ci-password-not-used
+        run: docker compose -f dell-backend/compose.staging.yaml config --quiet
+      - name: Confirm no published host ports
+        run: |
+          if grep -Eq '^[[:space:]]+ports:' dell-backend/compose.staging.yaml; then
+            echo "Staging database or backend must not publish host ports"
+            exit 1
+          fi
