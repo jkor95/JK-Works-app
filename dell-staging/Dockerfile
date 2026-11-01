@@ -9,8 +9,9 @@ COPY app/icons/ /usr/share/nginx/html/app/icons/
 # Existing JK Works UI in separate preview folder, with a fail-closed Dell cloud adapter.
 COPY dell-staging/preview-index.html /usr/share/nginx/html/preview/index.html
 COPY dell-staging/dell-cloud.js /usr/share/nginx/html/preview/dell-cloud.js
+COPY dell-staging/preview-integrations.js /usr/share/nginx/html/preview/preview-integrations.js
 COPY app/styles.css /usr/share/nginx/html/preview/styles.css
-COPY app/db.js app/app.js app/calendar-sync.js app/website-editor.js app/backup.js app/push.js app/finance.js app/media-viewer.js app/job-label.js app/job-label-editor.js app/open-payments-label.js app/open-payments-editor.js /usr/share/nginx/html/preview/
+COPY app/db.js app/app.js app/backup.js app/finance.js app/media-viewer.js app/job-label.js app/job-label-editor.js app/open-payments-label.js app/open-payments-editor.js /usr/share/nginx/html/preview/
 COPY app/icons/ /usr/share/nginx/html/preview/icons/
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1
