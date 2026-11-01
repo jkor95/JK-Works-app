@@ -1,0 +1,35 @@
+name: JK Works Dell UI preview checks
+on:
+  push:
+    branches: [dell-migration-staging-20261031]
+    paths:
+      - 'dell-staging/**'
+      - 'app/index.html'
+      - 'app/app.js'
+      - 'app/db.js'
+      - 'app/styles.css'
+      - '.github/workflows/dell-ui-preview-checks.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check isolated preview source dependencies
+        run: |
+          test -f dell-staging/preview-index.html
+          test -f dell-staging/dell-cloud.js
+          if grep -E -q 'supabase-js|src="cloud.js' dell-staging/preview-index.html; then
+            echo 'Preview must not load production Supabase SDK'
+            exit 1
+          fi
+          node --check dell-staging/dell-cloud.js
+          node --check dell-staging/dell-staging.js
+      - name: Build Dell frontend image
+        run: docker build -f dell-staging/Dockerfile -t jkworks-preview-check .
+      - name: Verify copied UI assets in container
+        run: |
+          docker run --rm --entrypoint sh jkworks-preview-check -c 'test -f /usr/share/nginx/html/preview/index.html && test -f /usr/share/nginx/html/preview/app.js && test -f /usr/share/nginx/html/preview/dell-cloud.js && test ! -e /usr/share/nginx/html/preview/cloud.js'
