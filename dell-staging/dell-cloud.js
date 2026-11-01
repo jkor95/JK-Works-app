@@ -57,7 +57,10 @@ const JKCloud = (() => {
       if(pendingKeys.has(key)||await JKDB.isDeletedLocal(record.store,record.record_id))continue;
       if(!record.data||typeof record.data!=='object'||Array.isArray(record.data)||hasBlob(record.data))continue;
       const local=await JKDB.get(record.store,record.record_id);
-      if(local && local._syncUpdatedAt && new Date(local._syncUpdatedAt)>new Date(record.updated_at)) continue;
+      // Never overwrite local edits that have not been uploaded. This also protects
+      // old queues created before a browser refresh.
+      if(local && local._syncUpdatedAt && Number.isFinite(Date.parse(local._syncUpdatedAt)) &&
+         Date.parse(local._syncUpdatedAt)>Date.parse(record.updated_at)) continue;
       await JKDB.putLocal(record.store,record.data);
       changed=true;
     }
