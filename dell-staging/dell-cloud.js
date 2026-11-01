@@ -14,6 +14,11 @@ const JKCloud = (() => {
   const eligible=(store,id)=> allowedStores.has(store)&&!(store==='settings'&&excludedSettings.has(id));
   async function api(path,options={}){
     const response=await fetch(endpoint+path,{credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json'},...options});
+    if(response.status===409){
+      let detail={};
+      try{detail=await response.json()}catch{}
+      if(detail.error==='record_deleted')return {deleted:true};
+    }
     if(!response.ok) throw Error(response.status===401?'Je Dell-testlogin is verlopen. Log opnieuw in.':'Dell-synchronisatie niet beschikbaar (HTTP '+response.status+').');
     return response.json();
   }
