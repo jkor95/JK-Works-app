@@ -60,7 +60,7 @@ function cookie(req) {
   const c=String(req.headers.cookie||'').split(';').map(v=>v.trim()).find(v=>v.startsWith('jk_stage_session='));
   return c?.slice('jk_stage_session='.length) || null;
 }
-function readJson(req) {
+export function readJson(req) {
   return new Promise((resolve,reject)=>{
     let buf='',bytes=0,overflow=false;
     req.on('data',v=>{
