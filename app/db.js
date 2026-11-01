@@ -26,7 +26,31 @@ const JKDB = (() => {
   }
   async function all(store){const s=await tx(store);return reqP(s.getAll());}
   async function get(store,id){const s=await tx(store);return reqP(s.get(id));}
-  async function putLocal(store,obj){const s=await tx(store,'readwrite');await reqP(s.put(obj));return obj;}
+  // Safari cannot always persist Blob/File objects backed by a network response.
+  // Copy their bytes into fresh, memory-backed Blobs before opening the IDB transaction.
+  async function prepareForIndexedDB(value,seen=new WeakMap()){
+    if(value instanceof Blob){
+      const bytes=await value.arrayBuffer();
+      return new Blob([bytes],{type:value.type||'application/octet-stream'});
+    }
+    if(!value||typeof value!=='object'||value instanceof Date||value instanceof ArrayBuffer||ArrayBuffer.isView(value))return value;
+    if(seen.has(value))return seen.get(value);
+    if(Array.isArray(value)){
+      const out=[];seen.set(value,out);
+      for(const item of value)out.push(await prepareForIndexedDB(item,seen));
+      return out;
+    }
+    if(Object.getPrototypeOf(value)!==Object.prototype)return value;
+    const out={};seen.set(value,out);
+    for(const [key,item] of Object.entries(value))out[key]=await prepareForIndexedDB(item,seen);
+    return out;
+  }
+  async function putLocal(store,obj){
+    const prepared=await prepareForIndexedDB(obj);
+    const s=await tx(store,'readwrite');
+    await reqP(s.put(prepared));
+    return obj;
+  }
   async function removeLocal(store,id){const s=await tx(store,'readwrite');return reqP(s.delete(id));}
   async function put(store,obj,opts={}){
     const stamped={...obj};
