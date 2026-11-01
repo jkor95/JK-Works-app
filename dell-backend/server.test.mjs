@@ -36,3 +36,34 @@ test('unknown routes cannot expose files', async () => withServer(async url => {
   const r = await fetch(url + '/etc/passwd');
   assert.equal(r.status, 404);
 }));
+
+test('invalid database config fails closed and never exposes credentials', async () => {
+  const prev = process.env.DATABASE_URL;
+  process.env.DATABASE_URL = 'postgresql://demo:super-private-password@127.0.0.1:1/staging';
+  try {
+    await withServer(async url => {
+      const r=await fetch(url+'/api/v1/status');
+      const body=await r.text();
+      assert.equal(r.status,200);
+      assert.equal(JSON.parse(body).database_connected,false);
+      assert.equal(JSON.parse(body).production_sync_enabled,false);
+      assert.equal(body.includes('super-private-password'),false);
+    });
+  } finally {
+    if(prev===undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL=prev;
+  }
+});
+test('database URL without database fails closed', async () => {
+  const prev=process.env.DATABASE_URL;
+  process.env.DATABASE_URL='postgres://test:secret@localhost/';
+  try {
+    await withServer(async url => {
+      const data=await (await fetch(url+'/api/v1/status')).json();
+      assert.equal(data.database_reason,'invalid_configuration');
+    });
+  } finally {
+    if(prev===undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL=prev;
+  }
+});
