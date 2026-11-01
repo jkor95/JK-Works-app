@@ -83,7 +83,7 @@ export async function handler(req, res) {
       database_connected:db.connected,
       database_schema_ready:db.schema_ready === true,
       database_reason:db.reason || null,
-      authentication_enabled:false,
+      authentication_enabled:isApiEnabled(),
       production_sync_enabled:false,
       message:'Database connectivity only. All business endpoints remain disabled.'
     });
@@ -112,7 +112,34 @@ export async function handler(req, res) {
         return reply(res,200,{ok:true});
       }
       if(path==='/api/v1/records' && method==='GET')return reply(res,200,{records:await listRecords(id)});
-      const m=/^\\/api\\/v1\\/records\\/([A-Za-z0-9_-]{1,64})\\/([A-Za-z0-9_.-]{1,128})$/.exec(path);
+      const m = new RegExp('^/api/v1/records/([A-Za-z0-9_-]{1,64})/([A-Za-z0-9_.-]{1,128})
+      if(m && (method==='PUT'||method==='DELETE')){
+        if(method==='PUT'){
+          const body=await readJson(req);
+          if(body===null||typeof body!=='object'||Array.isArray(body))return reply(res,400,{error:'invalid_data'});
+          await upsertRecord(id,m[1],m[2],body);
+        } else await deleteRecord(id,m[1],m[2]);
+        return reply(res,200,{ok:true});
+      }
+      return reply(res,404,{error:'not_found'});
+    }catch(e){
+      // Never return database errors, SQL, raw credentials or request bodies.
+      if(e.message==='body_too_large')return reply(res,413,{error:'body_too_large'});
+      if(e.message==='invalid_json')return reply(res,400,{error:'invalid_json'});
+      return reply(res,503,{error:'temporarily_unavailable'});
+    }
+  }
+  if (path.startsWith('/api/')) return reply(res,503,{error:'service_not_configured'});
+  return reply(res,404,{error:'not_found'});
+}
+
+if (process.argv[1] && import.meta.url === new URL('file://' + process.argv[1]).href) {
+  const server=createServer(handler);
+  server.requestTimeout=5000;
+  server.headersTimeout=5000;
+  server.listen(port,host,()=>process.stdout.write('JK Works staging backend listening\n'));
+}
+).exec(path);
       if(m && (method==='PUT'||method==='DELETE')){
         if(method==='PUT'){
           const body=await readJson(req);
