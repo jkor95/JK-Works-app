@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { login, identify, logout, listRecords, upsertRecord, deleteRecord, initializeStagingAccount } from './db-api.mjs';
+import { login, identify, logout, listRecords, upsertRecord, deleteRecord, syncSnapshot, initializeStagingAccount } from './db-api.mjs';
 
 const host = process.env.HOST || '127.0.0.1';
 const port = Number(process.env.PORT || 8090);
@@ -111,6 +111,7 @@ export async function handler(req, res) {
         res.setHeader('Set-Cookie','jk_stage_session=; HttpOnly; Secure; SameSite=Strict; Path=/api/v1; Max-Age=0');
         return reply(res,200,{ok:true});
       }
+      if(path==='/api/v1/sync/snapshot' && method==='GET')return reply(res,200,await syncSnapshot(id));
       if(path==='/api/v1/records' && method==='GET')return reply(res,200,{records:await listRecords(id)});
       const m = /^\/api\/v1\/records\/([A-Za-z0-9_-]{1,64})\/([A-Za-z0-9_.-]{1,128})$/.exec(path);
       if(m && (method==='PUT'||method==='DELETE')){
