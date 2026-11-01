@@ -1,5 +1,6 @@
 FROM nginx:1.27-alpine
-COPY dell-staging/nginx.conf /etc/nginx/conf.d/default.conf
+COPY dell-staging/default.conf.template /etc/nginx/templates/default.conf.template
+ENV BACKEND_UPSTREAM=127.0.0.1:8090
 COPY dell-staging/index.html /usr/share/nginx/html/index.html
 COPY dell-staging/dell-staging.js /usr/share/nginx/html/dell-staging.js
 # Copy the *real* JK Works visual assets, not the original Supabase scripts.
