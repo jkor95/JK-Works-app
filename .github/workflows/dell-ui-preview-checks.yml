@@ -27,9 +27,12 @@ jobs:
             exit 1
           fi
           node --check dell-staging/dell-cloud.js
+          node --check dell-staging/preview-integrations.js
+          node --check app/app.js
+          node --check app/db.js
           node --check dell-staging/dell-staging.js
       - name: Build Dell frontend image
         run: docker build -f dell-staging/Dockerfile -t jkworks-preview-check .
       - name: Verify copied UI assets in container
         run: |
-          docker run --rm --entrypoint sh jkworks-preview-check -c 'test -f /usr/share/nginx/html/preview/index.html && test -f /usr/share/nginx/html/preview/app.js && test -f /usr/share/nginx/html/preview/dell-cloud.js && test ! -e /usr/share/nginx/html/preview/cloud.js'
+          docker run --rm --entrypoint sh jkworks-preview-check -c 'test -f /usr/share/nginx/html/preview/index.html && test -f /usr/share/nginx/html/preview/app.js && test -f /usr/share/nginx/html/preview/dell-cloud.js && test ! -e /usr/share/nginx/html/preview/cloud.js && test ! -e /usr/share/nginx/html/preview/push.js && test ! -e /usr/share/nginx/html/preview/calendar-sync.js'
