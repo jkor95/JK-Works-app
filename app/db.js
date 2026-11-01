@@ -24,14 +24,14 @@ const JKDB = (() => {
   async function tx(store, mode='readonly'){
     const db=await open(); return db.transaction(store,mode).objectStore(store);
   }
-  async function all(store){const s=await tx(store);return reqP(s.getAll());}
-  async function get(store,id){const s=await tx(store);return reqP(s.get(id));}
-  // Safari cannot always persist Blob/File objects backed by a network response.
-  // Copy their bytes into fresh, memory-backed Blobs before opening the IDB transaction.
+  // Store binary data as Uint8Array rather than Blob/File in IndexedDB.
+  // Safari WebKit can reject even newly constructed Blobs during IDB writes.
+  // Recreate Blobs when records are read, preserving the existing app API.
+  const BINARY_TAG='__jkworksIndexedBinaryV1';
   async function prepareForIndexedDB(value,seen=new WeakMap()){
     if(value instanceof Blob){
-      const bytes=await value.arrayBuffer();
-      return new Blob([bytes],{type:value.type||'application/octet-stream'});
+      return {[BINARY_TAG]:true,mime:value.type||'application/octet-stream',
+        bytes:new Uint8Array(await value.arrayBuffer())};
     }
     if(!value||typeof value!=='object'||value instanceof Date||value instanceof ArrayBuffer||ArrayBuffer.isView(value))return value;
     if(seen.has(value))return seen.get(value);
@@ -45,6 +45,24 @@ const JKDB = (() => {
     for(const [key,item] of Object.entries(value))out[key]=await prepareForIndexedDB(item,seen);
     return out;
   }
+  function restoreFromIndexedDB(value,seen=new WeakMap()){
+    if(!value||typeof value!=='object'||value instanceof Blob||value instanceof Date||value instanceof ArrayBuffer||ArrayBuffer.isView(value))return value;
+    if(value[BINARY_TAG]===true && value.bytes instanceof Uint8Array && typeof value.mime==='string'){
+      return new Blob([value.bytes],{type:value.mime});
+    }
+    if(seen.has(value))return seen.get(value);
+    if(Array.isArray(value)){
+      const out=[];seen.set(value,out);
+      for(const item of value)out.push(restoreFromIndexedDB(item,seen));
+      return out;
+    }
+    if(Object.getPrototypeOf(value)!==Object.prototype)return value;
+    const out={};seen.set(value,out);
+    for(const [key,item] of Object.entries(value))out[key]=restoreFromIndexedDB(item,seen);
+    return out;
+  }
+  async function all(store){const s=await tx(store);return (await reqP(s.getAll())).map(v=>restoreFromIndexedDB(v));}
+  async function get(store,id){const s=await tx(store);return restoreFromIndexedDB(await reqP(s.get(id)));}
   async function putLocal(store,obj){
     const prepared=await prepareForIndexedDB(obj);
     const s=await tx(store,'readwrite');
