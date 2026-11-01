@@ -19,7 +19,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Run offline backend tests
+      - name: Install backend dependencies
+        run: npm install --prefix dell-backend --ignore-scripts --no-audit --no-fund
+      - name: Run backend unit tests
         run: node --test dell-backend/server.test.mjs
       - name: Validate compose config without production secrets
         env:
@@ -32,6 +34,12 @@ jobs:
           docker compose -f dell-backend/compose.staging.yaml up -d db
           docker compose -f dell-backend/compose.staging.yaml exec -T db sh -c 'until pg_isready -U jkworks_staging -d jkworks_staging; do sleep 1; done'
           docker compose -f dell-backend/compose.staging.yaml exec -T db psql -X -v ON_ERROR_STOP=1 -U jkworks_staging -d jkworks_staging < dell-backend/test-schema.sql
+      - name: Apply and verify authentication schema in disposable database
+        env:
+          JKWORKS_STAGING_DB_PASSWORD: dummy-ci-password-not-used
+        run: |
+          docker compose -f dell-backend/compose.staging.yaml exec -T db psql -X -v ON_ERROR_STOP=1 -U jkworks_staging -d jkworks_staging < dell-backend/auth-schema.sql
+          docker compose -f dell-backend/compose.staging.yaml exec -T db psql -X -v ON_ERROR_STOP=1 -U jkworks_staging -d jkworks_staging -c "SELECT account_id FROM jk_staging.login_accounts WHERE false;"
       - name: Integration-test backend against isolated PostgreSQL
         env:
           JKWORKS_STAGING_DB_PASSWORD: dummy-ci-password-not-used
