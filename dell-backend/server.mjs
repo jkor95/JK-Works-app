@@ -85,7 +85,7 @@ export async function handler(req, res) {
       database_reason:db.reason || null,
       authentication_enabled:isApiEnabled(),
       production_sync_enabled:false,
-      message:'Database connectivity only. All business endpoints remain disabled.'
+      message:'Isolated staging login and synthetic test-record endpoints only. Full JK Works migration and production sync remain disabled.'
     });
   }
 
