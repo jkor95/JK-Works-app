@@ -100,3 +100,20 @@ export async function initializeStagingAccount() {
     return {ready:false,reason:'database_initialization_failed'};
   } finally { conn.release(); }
 }
+
+/**
+ * Consistent owner-scoped snapshot. Deletion markers are included, so future
+ * clients can reconcile removals rather than silently resurrecting records.
+ * Deliberately no cross-account access and no production data import.
+ */
+export async function syncSnapshot(accountId) {
+  const conn=await pool.connect();
+  try {
+    await conn.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    const rec=await conn.query('SELECT store,record_id,data,updated_at FROM jk_staging.app_records WHERE user_id=$1 ORDER BY store,record_id LIMIT 5001',[accountId]);
+    const del=await conn.query('SELECT store,record_id,deleted_at FROM jk_staging.app_deletions WHERE user_id=$1 ORDER BY store,record_id LIMIT 5001',[accountId]);
+    if(rec.rows.length>5000||del.rows.length>5000)throw Error('staging_sync_limit_exceeded');
+    await conn.query('COMMIT');
+    return {records:rec.rows,deletions:del.rows};
+  }catch(err){await conn.query('ROLLBACK');throw err}finally{conn.release()}
+}
