@@ -1,4 +1,5 @@
 FROM node:22-alpine
+RUN apk add --no-cache postgresql18-client
 WORKDIR /service
 COPY dell-backend/server.mjs ./server.mjs
 USER node
