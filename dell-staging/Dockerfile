@@ -1,6 +1,7 @@
 FROM nginx:1.27-alpine
 COPY dell-staging/nginx.conf /etc/nginx/conf.d/default.conf
 COPY dell-staging/index.html /usr/share/nginx/html/index.html
+COPY dell-staging/dell-staging.js /usr/share/nginx/html/dell-staging.js
 # Copy the *real* JK Works visual assets, not the original Supabase scripts.
 COPY app/styles.css /usr/share/nginx/html/app/styles.css
 COPY app/icons/ /usr/share/nginx/html/app/icons/
