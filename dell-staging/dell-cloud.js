@@ -40,7 +40,10 @@ const JKCloud = (() => {
       if(!eligible(d.store,d.record_id))continue;
       const key=d.store+'|'+d.record_id;
       await JKDB.markDeleteLocal(d.store,d.record_id,d.deleted_at);
-      if(pendingKeys.has(key))continue;
+      // A server tombstone always wins, even over a pending local edit.
+      if(pendingKeys.has(key)){
+        for(const q of queue)if(q.store===d.store&&q.recordId===d.record_id)await JKDB.removeLocal('syncQueue',q.id);
+      }
       if(await JKDB.get(d.store,d.record_id)){await JKDB.removeLocal(d.store,d.record_id);changed=true;}
     }
     for(const record of records){
@@ -72,6 +75,8 @@ const JKCloud = (() => {
     if(!navigator.onLine)throw Error('Geen internetverbinding.');
     syncing=true;emit('jkcloud-sync',{state:'syncing'});
     try{
+      // Check remote tombstones before sending local edits to avoid resurrecting old data.
+      await applySnapshot();
       const jobs=await JKDB.all('syncQueue');
       for(const q of jobs){
         if(!eligible(q.store,q.recordId))continue;
