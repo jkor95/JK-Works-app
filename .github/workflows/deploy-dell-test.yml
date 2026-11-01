@@ -1,0 +1,31 @@
+name: Deploy JK Works Dell test
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/coolify-original-test]
+permissions:
+  contents: read
+concurrency:
+  group: jkworks-dell-test
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request Coolify test deployment
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_TEST_UUID: ${{ secrets.COOLIFY_TEST_UUID }}
+        run: |
+          set -euo pipefail
+          : "${COOLIFY_URL:?Set COOLIFY_URL repository secret}"
+          : "${COOLIFY_TOKEN:?Set COOLIFY_TOKEN repository secret}"
+          : "${COOLIFY_TEST_UUID:?Set COOLIFY_TEST_UUID repository secret}"
+          case "$COOLIFY_URL" in https://*) ;; *) echo "COOLIFY_URL must start with https://"; exit 1;; esac
+          curl --fail-with-body --silent --show-error --retry 2 --connect-timeout 15 --max-time 60 \
+            --request GET \
+            --header "Authorization: Bearer ${COOLIFY_TOKEN}" \
+            --header "Accept: application/json" \
+            "${COOLIFY_URL%/}/api/v1/deploy?uuid=${COOLIFY_TEST_UUID}&force=false" \
+            | python3 -m json.tool
