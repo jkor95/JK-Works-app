@@ -46,8 +46,17 @@ export async function listRecords(accountId) {
   return r.rows;
 }
 export async function upsertRecord(accountId,store,id,data) {
-  return pool.query(`INSERT INTO jk_staging.app_records(user_id,store,record_id,data,updated_at) VALUES ($1,$2,$3,$4,now())
- ON CONFLICT (user_id,store,record_id) DO UPDATE SET data=EXCLUDED.data,updated_at=now()`,[accountId,store,id,data]);
+  const conn=await pool.connect();
+  try {
+    await conn.query('BEGIN');
+    // Deletion wins: do not resurrect an older ID from a second device.
+    const tombstone=await conn.query('SELECT 1 FROM jk_staging.app_deletions WHERE user_id=$1 AND store=$2 AND record_id=$3 FOR UPDATE',[accountId,store,id]);
+    if(tombstone.rowCount){await conn.query('ROLLBACK');return {deleted:true};}
+    await conn.query(`INSERT INTO jk_staging.app_records(user_id,store,record_id,data,updated_at) VALUES ($1,$2,$3,$4,now())
+     ON CONFLICT (user_id,store,record_id) DO UPDATE SET data=EXCLUDED.data,updated_at=now()`,[accountId,store,id,data]);
+    await conn.query('COMMIT');
+    return {deleted:false};
+  } catch(e) {await conn.query('ROLLBACK');throw e;} finally {conn.release();}
 }
 export async function deleteRecord(accountId,store,id) {
   const conn=await pool.connect();
