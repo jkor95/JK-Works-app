@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { login, identify, logout, listRecords, upsertRecord, deleteRecord } from './db-api.mjs';
+import { login, identify, logout, listRecords, upsertRecord, deleteRecord, initializeStagingAccount } from './db-api.mjs';
 
 const host = process.env.HOST || '127.0.0.1';
 const port = Number(process.env.PORT || 8090);
@@ -134,6 +134,8 @@ export async function handler(req, res) {
 }
 
 if (process.argv[1] && import.meta.url === new URL('file://' + process.argv[1]).href) {
+  const init=await initializeStagingAccount();
+  if(process.env.ENABLE_STAGING_API==='true' && !init.ready) { console.error('Staging API initialization unsuccessful:',init.reason); process.exit(1); }
   const server=createServer(handler);
   server.requestTimeout=5000;
   server.headersTimeout=5000;
