@@ -1,0 +1,41 @@
+# Isolated staging stack. Never run against production; no host DB port is published.
+name: jkworks-staging
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jkworks_staging
+      POSTGRES_USER: jkworks_staging
+      POSTGRES_PASSWORD: ${JKWORKS_STAGING_DB_PASSWORD:?Set unique staging password}
+    volumes:
+      - jkworks_staging_pg:/var/lib/postgresql
+      - ./schema-staging.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jkworks_staging -d jkworks_staging"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - isolated
+  backend:
+    build:
+      context: ..
+      dockerfile: dell-backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 8090
+      STAGING_ONLY: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - isolated
+    # No ports to host or public reverse proxy until authenticated endpoints exist.
+volumes:
+  jkworks_staging_pg:
+networks:
+  isolated:
+    internal: true
