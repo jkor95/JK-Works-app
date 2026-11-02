@@ -21,3 +21,5 @@ jobs:
       - run: npm install --ignore-scripts
       - run: NODE_ENV=test npm test
       - run: node --check src/server.mjs
+      - name: Build isolated Docker image (no deployment)
+        run: docker build --pull -t jkworks-selfhost-test:ci .
