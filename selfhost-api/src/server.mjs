@@ -1,11 +1,13 @@
 import http from 'node:http';
 import { Pool } from 'pg';
+import { createRecordsHandler } from './routes.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const databaseUrl = process.env.DATABASE_URL;
 const pool = process.env.NODE_ENV === 'test' ? null : (databaseUrl ? new Pool({ connectionString: databaseUrl, max: 5, connectionTimeoutMillis: 3000 }) : null);
 
-export function createHandler(db = pool) {
+export function createHandler(db = pool, verifySession = null) {
+  const recordsHandler = db ? createRecordsHandler(db, verifySession) : null;
   return async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -26,6 +28,10 @@ export function createHandler(db = pool) {
         res.end(JSON.stringify({ status: 'unavailable' }));
       }
       return;
+    }
+    if (url.pathname.startsWith('/v1/records/')) {
+      if (!recordsHandler) { res.writeHead(503, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'database_unavailable' })); return; }
+      return recordsHandler(req, res, url);
     }
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'not_found' }));
