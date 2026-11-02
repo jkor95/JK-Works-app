@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
+import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { createRecordsHandler } from './routes.mjs';
 import { createTokenVerifier } from './auth.mjs';
@@ -30,6 +31,16 @@ export function createHandler(db = pool, verifySession = null, login = null) {
       } catch {
         res.writeHead(503, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'unavailable' }));
+      }
+      return;
+    }
+    if (req.method === 'GET' && (url.pathname === '/test-login' || url.pathname === '/test-login/')) {
+      try {
+        const page = await readFile(new URL('../public/login.html', import.meta.url));
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'", 'X-Frame-Options': 'DENY' });
+        res.end(page);
+      } catch {
+        res.writeHead(503); res.end('Test login unavailable');
       }
       return;
     }
