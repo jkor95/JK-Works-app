@@ -3,8 +3,7 @@ import { Pool } from 'pg';
 
 const port = Number(process.env.PORT || 3000);
 const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL is verplicht');
-const pool = new Pool({ connectionString: databaseUrl, max: 5, connectionTimeoutMillis: 3000 });
+const pool = process.env.NODE_ENV === 'test' ? null : (databaseUrl ? new Pool({ connectionString: databaseUrl, max: 5, connectionTimeoutMillis: 3000 }) : null);
 
 export function createHandler(db = pool) {
   return async (req, res) => {
@@ -18,6 +17,7 @@ export function createHandler(db = pool) {
     }
     if (req.method === 'GET' && url.pathname === '/health/ready') {
       try {
+        if (!db) throw new Error('Database not configured');
         await db.query('SELECT 1');
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ready' }));
@@ -33,6 +33,7 @@ export function createHandler(db = pool) {
 }
 
 if (process.env.NODE_ENV !== 'test') {
+  if (!pool) throw new Error('DATABASE_URL is verplicht');
   const server = http.createServer(createHandler());
   server.requestTimeout = 10000;
   server.headersTimeout = 8000;
