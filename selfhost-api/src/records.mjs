@@ -23,6 +23,32 @@ export function createRecordRepository(db) {
       );
       return result.rows;
     },
+    async create(ownerId, store, recordId, data) {
+      validate(ownerId, store, recordId);
+      if (!data || typeof data !== 'object' || Array.isArray(data) || JSON.stringify(data).length > 65536) throw new TypeError('Invalid record data');
+      const result = await db.query(
+        'INSERT INTO jk_records (owner_id, store, record_id, data) VALUES ($1, $2, $3, $4::jsonb) ON CONFLICT DO NOTHING RETURNING record_id, data, updated_at',
+        [ownerId, store, recordId, JSON.stringify(data)]
+      );
+      return result.rows[0] ?? null;
+    },
+    async update(ownerId, store, recordId, data) {
+      validate(ownerId, store, recordId);
+      if (!data || typeof data !== 'object' || Array.isArray(data) || JSON.stringify(data).length > 65536) throw new TypeError('Invalid record data');
+      const result = await db.query(
+        'UPDATE jk_records SET data = $4::jsonb, updated_at = NOW() WHERE owner_id = $1 AND store = $2 AND record_id = $3 RETURNING record_id, data, updated_at',
+        [ownerId, store, recordId, JSON.stringify(data)]
+      );
+      return result.rows[0] ?? null;
+    },
+    async remove(ownerId, store, recordId) {
+      validate(ownerId, store, recordId);
+      const result = await db.query(
+        'DELETE FROM jk_records WHERE owner_id = $1 AND store = $2 AND record_id = $3 RETURNING record_id',
+        [ownerId, store, recordId]
+      );
+      return Boolean(result.rows[0]);
+    },
     async get(ownerId, store, recordId) {
       validate(ownerId, store, recordId);
       const result = await db.query(
