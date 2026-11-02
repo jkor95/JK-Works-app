@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { Pool } from 'pg';
 import { createRecordsHandler } from './routes.mjs';
+import { createTokenVerifier } from './auth.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const databaseUrl = process.env.DATABASE_URL;
@@ -40,7 +41,8 @@ export function createHandler(db = pool, verifySession = null) {
 
 if (process.env.NODE_ENV !== 'test') {
   if (!pool) throw new Error('DATABASE_URL is verplicht');
-  const server = http.createServer(createHandler());
+  const verifySession = process.env.AUTH_TOKEN_SECRET ? createTokenVerifier(process.env.AUTH_TOKEN_SECRET) : null;
+  const server = http.createServer(createHandler(pool, verifySession));
   server.requestTimeout = 10000;
   server.headersTimeout = 8000;
   server.listen(port, '0.0.0.0', () => console.log('JK Works isolated test API listening'));
