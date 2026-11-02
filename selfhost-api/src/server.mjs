@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { pathToFileURL } from 'node:url';
 import { Pool } from 'pg';
 import { createRecordsHandler } from './routes.mjs';
 import { createTokenVerifier } from './auth.mjs';
@@ -73,7 +74,7 @@ export function createHandler(db = pool, verifySession = null, login = null) {
   };
 }
 
-if (process.env.NODE_ENV !== 'test') {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (!pool) throw new Error('DATABASE_URL is verplicht');
   const verifySession = process.env.AUTH_TOKEN_SECRET ? createTokenVerifier(process.env.AUTH_TOKEN_SECRET) : null;
   const login = process.env.AUTH_TOKEN_SECRET ? createLoginService(pool, process.env.AUTH_TOKEN_SECRET) : null;
