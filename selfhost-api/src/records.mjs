@@ -7,7 +7,7 @@
 const STORES = new Set(['clients', 'jobs']);
 const ID = /^[a-zA-Z0-9_-]{1,128}$/;
 function validate(ownerId, store, recordId) {
-  if (typeof ownerId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(ownerId)) throw new TypeError('Invalid owner');
+  if (typeof ownerId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ownerId)) throw new TypeError('Invalid owner');
   if (!STORES.has(store)) throw new TypeError('Invalid store');
   if (recordId !== undefined && (typeof recordId !== 'string' || !ID.test(recordId))) throw new TypeError('Invalid record id');
 }
