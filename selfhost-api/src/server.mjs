@@ -9,7 +9,8 @@ const databaseUrl = process.env.DATABASE_URL;
 const pool = process.env.NODE_ENV === 'test' ? null : (databaseUrl ? new Pool({ connectionString: databaseUrl, max: 5, connectionTimeoutMillis: 3000 }) : null);
 
 export function createHandler(db = pool, verifySession = null, login = null) {
-  const recordsHandler = db ? createRecordsHandler(db, verifySession) : null;
+  const recordsHandler = db && typeof db.query === 'function' ? createRecordsHandler(db, verifySession) : null;
+  const attempts = new Map();
   return async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -35,6 +36,15 @@ export function createHandler(db = pool, verifySession = null, login = null) {
       res.setHeader('Content-Type', 'application/json');
       if (req.method !== 'POST') { res.writeHead(405, { Allow: 'POST' }); res.end(JSON.stringify({error:'method_not_allowed'})); return; }
       if (!login) { res.writeHead(503); res.end(JSON.stringify({error:'authentication_not_configured'})); return; }
+      // In-memory limiter for the isolated single-instance test deployment.
+      // A production deployment must use a shared limiter at the reverse proxy.
+      const key = req.socket?.remoteAddress || 'unknown';
+      const now = Date.now();
+      for (const [address, entry] of attempts) if (entry.until <= now) attempts.delete(address);
+      const entry = attempts.get(key) || { count: 0, until: now + 60000 };
+      if (entry.count >= 5) { res.writeHead(429, { 'Retry-After': String(Math.max(1, Math.ceil((entry.until-now)/1000))) }); res.end(JSON.stringify({error:'too_many_attempts'})); return; }
+      entry.count++;
+      attempts.set(key, entry);
       const chunks=[]; let size=0;
       try {
         for await (const chunk of req) {
