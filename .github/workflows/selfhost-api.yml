@@ -1,0 +1,23 @@
+name: JK Works selfhost API tests
+on:
+  pull_request:
+    paths:
+      - 'selfhost-api/**'
+      - '.github/workflows/selfhost-api.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: selfhost-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts
+      - run: NODE_ENV=test npm test
+      - run: node --check src/server.mjs
