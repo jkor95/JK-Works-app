@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JK Works - Testomgeving</title>
+<style>body{font:16px system-ui,sans-serif;background:#f4f6f9;color:#182433;margin:0;display:grid;place-items:center;min-height:100vh}main{background:white;padding:2rem;border-radius:16px;box-shadow:0 8px 30px #0001;width:min(90vw,420px)}label{display:block;margin:1rem 0}input,button{box-sizing:border-box;width:100%;font:inherit;padding:.8rem;border:1px solid #bbc5d1;border-radius:8px}button{background:#153e69;color:white;cursor:pointer}small{color:#526477}#message{min-height:1.5rem}</style></head>
+<body><main><h1>JK Works</h1><p>Afgescheiden testomgeving</p>
+<form id="login"><label>E-mailadres<input name="email" type="email" autocomplete="username" required></label>
+<label>Wachtwoord<input name="password" type="password" autocomplete="current-password" required></label>
+<button type="submit">Inloggen</button></form><p id="message" role="status" aria-live="polite"></p>
+<small>Alleen voor testaccounts. Gebruik hier niet je bestaande JK Works-inloggegevens.</small></main>
+<script>
+const form=document.getElementById('login'),message=document.getElementById('message');
+form.addEventListener('submit',async event=>{
+ event.preventDefault();message.textContent='Bezig met aanmelden...';
+ const values=new FormData(form);
+ try {
+ const response=await fetch('/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:values.get('email'),password:values.get('password')}),cache:'no-store'});
+ if(!response.ok){message.textContent=response.status===503?'Testlogin is nog niet geactiveerd.':'Aanmelden niet gelukt.';return;}
+ const result=await response.json();
+ // Deliberately keep the token only in memory; do not persist it in localStorage.
+ window.jkTestAccessToken=result.access_token;
+ form.reset();message.textContent='Ingelogd in de testomgeving. De beheerschermen volgen later.';
+ }catch{message.textContent='De testserver is niet bereikbaar.';}
+});
+</script></body></html>
