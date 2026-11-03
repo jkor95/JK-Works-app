@@ -32,6 +32,10 @@ jobs:
                   print('Response received: '+str(len(payload))+' bytes; content deliberately not logged')
           except urllib.error.HTTPError as e:
               print('FAILED: Coolify API returned HTTP '+str(e.code)+' (response body hidden)')
+              print('Response server:',e.headers.get('Server','unknown'))
+              print('Cloudflare ray present:',bool(e.headers.get('CF-Ray')))
+              print('WWW-Authenticate present:',bool(e.headers.get('WWW-Authenticate')))
+              print('Content-Type:',e.headers.get('Content-Type','unknown'))
               sys.exit(1)
           except Exception as e:
               print('FAILED: Coolify API connection error ('+type(e).__name__+')')
