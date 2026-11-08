@@ -1,0 +1,28 @@
+name: JK Works zelfstandige backend tests
+
+on:
+  push:
+    branches:
+      - 'automation/jkworks-api-ci-20261108'
+  pull_request:
+    branches:
+      - 'production-dell'
+
+jobs:
+  api-tests:
+    runs-on: docker
+    container:
+      image: node:22-alpine
+    permissions:
+      contents: read
+    steps:
+      - name: Haal broncode op
+        uses: actions/checkout@v4
+      - name: Installeer testafhankelijkheden zonder scripts
+        working-directory: selfhost-api
+        run: npm install --ignore-scripts --no-save --package-lock=false --no-audit --no-fund
+      - name: Test eigen backend
+        working-directory: selfhost-api
+        env:
+          NODE_ENV: test
+        run: npm test
