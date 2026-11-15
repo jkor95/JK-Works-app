@@ -57,10 +57,10 @@ module.exports=async(browser,origin)=>{
   assert.doesNotMatch(await page.locator('#modalRoot [data-edit-payment]').first().innerText(),/Pin/,'Geen Pin-label in de historie');
   assert.equal(await page.evaluate(()=>JKDB.all('settings').then(xs=>xs.find(x=>x.kind==='jkPayment'&&!x.legacy&&!x.voided)?.method)),'card',
     'Bestaande opslagcode blijft intact, geen gegevensmigratie');
-  await page.evaluate(()=>App.renderDashboard());assert.match(await page.locator('#dashOpenPayments').innerText(),/50,00/);assert.equal(await page.locator('#view .finance-kpis').count(),0,'Dashboard toont geen financiële statistiekkaarten');
+  await page.evaluate(()=>App.go('dashboard'));assert.match(await page.locator('#dashOpenPayments').innerText(),/50,00/);assert.equal(await page.locator('#view .finance-kpis').count(),0,'Dashboard toont geen financiële statistiekkaarten');
   const detailLabels=['Berekende urenwaarde','Afgesproken omzet','Gefactureerd incl. btw','Ontvangen','Effectief afgesproken / uur','Effectief ontvangen / uur'];
   for(const label of detailLabels)assert.ok(!(await page.locator('#view').innerText()).includes(label),label+' niet op dashboard');
-  await page.locator('[data-close]').click();await page.evaluate(()=>App.renderJobs());
+  await page.locator('[data-close]').click();await page.evaluate(()=>App.go('jobs'));
   assert.equal(await page.locator('#view .finance-kpis').count(),0,'Klussenoverzicht heeft geen detailkaarten');
   assert.equal(await page.locator('#view .jobs-summary-card').count(),0,'Klussenoverzicht heeft geen uitgebreide samenvatting');
 
@@ -76,7 +76,7 @@ module.exports=async(browser,origin)=>{
   ];
   await page.evaluate(async fixtures=>{
     for(const fixture of fixtures)await JKDB.putLocal('jobs',{clientName:'Proefklant',...fixture});
-    await App.renderJobs();
+    await App.go('jobs');
   },sortFixtures);
   const sortRows=()=>page.locator('#view [data-job]').evaluateAll(rows=>rows.map(row=>row.getAttribute('data-job')).filter(id=>id.startsWith('sort-')));
   assert.deepEqual(await sortRows(),['sort-active-multi','sort-active-sooner','sort-active-later',
@@ -92,7 +92,7 @@ module.exports=async(browser,origin)=>{
     'Contantfilter respecteert dezelfde sortering');
   await page.locator('[data-jpf=all]').click();
   await page.waitForFunction(()=>document.querySelector('[data-jpf=all]')?.classList.contains('active'));
-  await page.evaluate(async fixtures=>{for(const fixture of fixtures)await JKDB.removeLocal('jobs',fixture.id);await App.renderJobs();},sortFixtures);
+  await page.evaluate(async fixtures=>{for(const fixture of fixtures)await JKDB.removeLocal('jobs',fixture.id);await App.go('jobs');},sortFixtures);
   console.log('PASS: open/geplande klussen chronologisch, afgeronde klussen onderaan, meerdaagse planning en betaalfilters');
 
   const row=page.locator('[data-job=fixed]');assert.match(await row.innerText(),/Montage kast/);assert.match(await row.innerText(),/Fictieve klant/);assert.doesNotMatch(await row.innerText(),/Berekende urenwaarde|Referentie-uurtarief|Effectief/);assert.match(await row.innerText(),/50,00/);
@@ -321,7 +321,7 @@ module.exports=async(browser,origin)=>{
   await page.evaluate(()=>App.showPayments('fixed'));await page.locator('[data-edit-payment]').click();await page.locator('#voidPayment').click();await page.waitForFunction(()=>!document.querySelector('#paymentForm'));
   assert.equal((await metrics()).received,0);assert.equal(await page.evaluate(()=>JKDB.all('settings').then(rs=>rs.filter(r=>r.kind==='jkPayment'&&r.voided).length)),1);
   await page.evaluate(async()=>JKDB.putLocal('documents',{id:'unassigned',folder:'factuur',filename:'Losse factuur.pdf',blob:new Blob(['%PDF fixture'],{type:'application/pdf'}),meta:{total:50,sent:true,paid:false}}));
-  await page.locator('[data-close]').click();await page.evaluate(()=>App.renderJobs());await page.locator('[data-unassigned-invoice=unassigned]').waitFor();await page.locator('[data-unassigned-invoice=unassigned]').click();await page.locator('#documentPayments').waitFor();
+  await page.locator('[data-close]').click();await page.evaluate(()=>App.go('jobs'));await page.locator('[data-unassigned-invoice=unassigned]').waitFor();await page.locator('[data-unassigned-invoice=unassigned]').click();await page.locator('#documentPayments').waitFor();
   // Simple multi-day workflow: actual hours -> hourly/fixed -> extra -> live total.
   await page.evaluate(async()=>{
     window.workflowQueued=[];JKCloud.queuePut=async(store,record)=>workflowQueued.push({store,id:record.id});
@@ -346,7 +346,7 @@ module.exports=async(browser,origin)=>{
     await JKDB.putLocal('documents',{id:'simple-invoice',folder:'factuur',filename:'bestaand.pdf',blob:new Blob(['%PDF fixture'],{type:'application/pdf'}),meta:{jobId:'simple',total:150,lines:[{qty:1,price:150,description:'Bestaande factuur'}],paid:false}});
     window.workflowOriginal=JSON.stringify((await JKDB.all('timeEntries')).filter(e=>e.jobId==='simple'));window.workflowQueued=[];
   });
-  await page.locator('[data-close]').click();await page.evaluate(()=>App.renderDashboard());await page.locator('#addHours').click();await page.locator('[name=calculationJob]').selectOption('simple');await page.locator('#chooseCalculationJob button.primary').click();await page.locator('[name=calculationType]').selectOption('hourly');await page.locator('[name=calculationExtra]').fill('25');
+  await page.locator('[data-close]').click();await page.evaluate(()=>App.go('dashboard'));await page.locator('#addHours').click();await page.locator('[name=calculationJob]').selectOption('simple');await page.locator('#chooseCalculationJob button.primary').click();await page.locator('[name=calculationType]').selectOption('hourly');await page.locator('[name=calculationExtra]').fill('25');
   assert.match(await page.locator('#actualHoursTotal').innerText(),/17 u/);assert.match(await page.locator('#calculationTotal').innerText(),/195,00/);
   assert.equal(await page.locator('[name=confirmActual]').isChecked(),false);assert.ok(await page.locator('[name=confirmActual]').evaluate(e=>e.getBoundingClientRect().width<=24),'Confirmation checkbox remains compact');
   await page.locator('#saveJobCalculation').click();await page.locator('#paymentsThisJob').waitFor();
@@ -410,12 +410,12 @@ module.exports=async(browser,origin)=>{
   // Replanning hides only the premature payment highlight; financial records stay intact.
   await page.evaluate(async()=>{
     await JKDB.putLocal('jobs',{id:'badge',title:'Een lange omschrijving van de klus voor mobiele uitlijning',clientName:'Testklant',date:'2026-10-01',startTime:'08:00',endTime:'16:00',pricingType:'fixed',agreedAmount:150,status:'afgerond'});
-    await App.renderJobs();
+    await App.go('jobs');
   });
   const badgeRow=page.locator('[data-job="badge"]');assert.equal(await badgeRow.locator('.job-payment-badge').count(),1);
   const badgeAmount=await page.evaluate(async()=>{await App.refreshFinance();return App.jobFinancial(await JKDB.get('jobs','badge'),[],{}).balance;});
   await page.evaluate(()=>App.editJob('badge'));await page.locator('#addWorkDay').click();await page.locator('[name=dayDate]').last().fill('2026-10-25');await saveJob();
-  await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),0);assert.ok(!(await badgeRow.getAttribute('class')).includes('payment-unpaid'));assert.equal(await badgeRow.locator('.job-status').innerText(),'afgerond');
+  await page.evaluate(()=>App.go('jobs'));assert.equal(await badgeRow.locator('.danger').count(),0);assert.ok(!(await badgeRow.getAttribute('class')).includes('payment-unpaid'));assert.equal(await badgeRow.locator('.job-status').innerText(),'afgerond');
   assert.equal(await page.evaluate(async()=>{await App.refreshFinance();return App.jobFinancial(await JKDB.get('jobs','badge'),[],{}).balance;}),badgeAmount);
   for(const width of [390,1024]){
     await page.setViewportSize({width,height:844});
@@ -423,12 +423,12 @@ module.exports=async(browser,origin)=>{
     assert.ok(layout.sameTop&&layout.right&&layout.fits,JSON.stringify(layout));
   }
   await page.setViewportSize({width:390,height:844});
-  await page.evaluate(()=>App.editJob('badge'));await page.locator('[name=dayDate]').last().fill('2026-10-15');await saveJob();await page.evaluate(()=>App.renderJobs());
+  await page.evaluate(()=>App.editJob('badge'));await page.locator('[name=dayDate]').last().fill('2026-10-15');await saveJob();await page.evaluate(()=>App.go('jobs'));
   assert.equal(await badgeRow.locator('.danger').count(),1);
   assert.equal(await badgeRow.evaluate(row=>row.querySelector('.job-payment-badge').getBoundingClientRect().top>row.querySelector('.job-row-heading').getBoundingClientRect().bottom),true,'Payment badge below title/status');
-  await page.evaluate(()=>App.editJob('badge'));await page.locator('[name=dayDate]').first().fill('2026-10-26');await page.locator('[name=status]').selectOption('gepland');await saveJob();await page.evaluate(()=>App.renderJobs());
+  await page.evaluate(()=>App.editJob('badge'));await page.locator('[name=dayDate]').first().fill('2026-10-26');await page.locator('[name=status]').selectOption('gepland');await saveJob();await page.evaluate(()=>App.go('jobs'));
   assert.equal(await badgeRow.locator('.danger').count(),0);assert.equal(await badgeRow.locator('.job-status').innerText(),'gepland');
-  await page.evaluate(()=>App.renderDashboard());
+  await page.evaluate(()=>App.go('dashboard'));
   assert.equal(await page.locator('#view #clientsDash').count(),0,'Klanten niet meer als dashboardknop');
   assert.equal(await page.locator('#view .quick[data-go="gear"]').count(),0,'Materiaal niet meer als dashboardknop');
   for(const id of ['#newJobDash','#addHours','#timeStatsDash'])assert.equal(await page.locator('#view '+id).count(),1,'Nuttige dashboardknop blijft: '+id);
@@ -444,7 +444,7 @@ module.exports=async(browser,origin)=>{
     await page.setViewportSize({width,height});
     const layout=await page.evaluate(async()=>{
       document.documentElement.classList.add('ios-standalone');
-      await App.renderDashboard();
+      await App.go('dashboard');
       const stat=document.querySelector('#timeStatsDash'),nav=document.querySelector('.bottom-nav');
       const chart=stat.querySelector('.dash-month-chart');
       const statBottom=stat.getBoundingClientRect().bottom,navTop=nav.getBoundingClientRect().top;
@@ -476,13 +476,13 @@ module.exports=async(browser,origin)=>{
   await page.evaluate(()=>document.documentElement.classList.remove('ios-standalone'));
   await page.setViewportSize({width:390,height:844});
   await page.evaluate(async()=>{const j=await JKDB.get('jobs','badge');await JKDB.putLocal('jobs',{...j,workDays:undefined,date:'2026-10-20',startTime:'20:00',endTime:'02:00',status:'afgerond'});});
-  await page.clock.setFixedTime(new Date('2026-10-20T23:00:00Z'));await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),0,'Night shift still running');
-  await page.clock.setFixedTime(new Date('2026-10-21T01:00:00Z'));await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),1,'Night shift ended');
-  await page.evaluate(async()=>{await JKDB.putLocal('settings',{id:'badge-payment',kind:'jkPayment',jobId:'badge',amount:150,date:'2026-10-21',method:'bank'});});await page.evaluate(()=>App.renderJobs());assert.equal(await badgeRow.locator('.danger').count(),0,'Paid past job stays neutral');
+  await page.clock.setFixedTime(new Date('2026-10-20T23:00:00Z'));await page.evaluate(()=>App.go('jobs'));assert.equal(await badgeRow.locator('.danger').count(),0,'Night shift still running');
+  await page.clock.setFixedTime(new Date('2026-10-21T01:00:00Z'));await page.evaluate(()=>App.go('jobs'));assert.equal(await badgeRow.locator('.danger').count(),1,'Night shift ended');
+  await page.evaluate(async()=>{await JKDB.putLocal('settings',{id:'badge-payment',kind:'jkPayment',jobId:'badge',amount:150,date:'2026-10-21',method:'bank'});});await page.evaluate(()=>App.go('jobs'));assert.equal(await badgeRow.locator('.danger').count(),0,'Paid past job stays neutral');
   await page.clock.setFixedTime(new Date('2026-10-21T10:00:00Z'));
   console.log('PASS: toekomstige datum toevoegen/verplaatsen verwijdert voortijdige betaalbadge; status rechts naast omschrijving mobiel/desktop, betaalbadge eronder, dashboardafstand, nachtwerk en behoud financieel saldo');
   // Agreement amounts only become outstanding when BOTH status and all planned end times qualify.
-  await page.evaluate(()=>App.renderJobs());
+  await page.evaluate(()=>App.go('jobs'));
   const numeric=async selector=>Number((await page.locator(selector).innerText()).replace(/[^0-9,-]/g,'').replace(',','.'));
   const baseline={open:await numeric('#jobOpenTotal'),cash:await numeric('.job-totals [data-payment-group="cash"] strong'),bank:await numeric('.job-totals [data-payment-group="bank"] strong')};
   assert.equal(await page.locator('.job-totals [data-payment-group="bank"] span').innerText(),'Bank','Alleen Bank als label op Klussen');
@@ -492,19 +492,19 @@ module.exports=async(browser,origin)=>{
   await page.evaluate(async()=>{
     await JKDB.putLocal('jobs',{id:'settlement',clientId:'client',clientName:'Fictieve klant',title:'Vaste afspraak later klaar',pricingType:'fixed',agreedAmount:150,paymentType:'invoice',status:'gepland',date:'2026-10-01',workDays:[{date:'2026-10-01',startTime:'08:00',endTime:'16:00'},{date:'2026-10-25',startTime:'08:00',endTime:'16:00'}]});
     await JKDB.putLocal('jobs',{id:'settlement-cash',title:'Contante afspraak',pricingType:'fixed',agreedAmount:200,paymentType:'cash',status:'open',date:'2026-10-01'});
-    await App.renderJobs();
+    await App.go('jobs');
   });
   assert.equal(await numeric('#jobOpenTotal'),baseline.open);assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank);
-  const setSettlement=async changes=>page.evaluate(async changes=>{const j=await JKDB.get('jobs','settlement');await JKDB.putLocal('jobs',{...j,...changes});await App.renderJobs();},changes);
+  const setSettlement=async changes=>page.evaluate(async changes=>{const j=await JKDB.get('jobs','settlement');await JKDB.putLocal('jobs',{...j,...changes});await App.go('jobs');},changes);
   const settlementMetrics=()=>page.evaluate(()=>App.state.finance.job(App.state.finance.jobs.find(j=>j.id==='settlement')));
   await setSettlement({status:'afgerond'});assert.equal((await settlementMetrics()).open,0,'Completed alone is insufficient with a future workday');assert.equal((await settlementMetrics()).agreed,150);assert.equal((await settlementMetrics()).paid,false);
   await page.evaluate(()=>App.showJob('settlement'));assert.match(await page.locator('#modalRoot').innerText(),/Na afronding af te rekenen/);await page.locator('[data-close]').click();
   await setSettlement({status:'gepland',workDays:[{date:'2026-10-01',startTime:'08:00',endTime:'16:00'},{date:'2026-10-15',startTime:'08:00',endTime:'16:00'}]});assert.equal((await settlementMetrics()).open,0,'Past end alone is insufficient while planned');
   await setSettlement({status:'open'});assert.equal((await settlementMetrics()).open,0);
-  await page.evaluate(()=>App.editJob('settlement'));await page.locator('[name=status]').selectOption('afgerond');await saveJob();await page.evaluate(()=>App.renderJobs());
+  await page.evaluate(()=>App.editJob('settlement'));await page.locator('[name=status]').selectOption('afgerond');await saveJob();await page.evaluate(()=>App.go('jobs'));
   assert.equal((await settlementMetrics()).open,150);assert.equal(await numeric('#jobOpenTotal'),baseline.open+150);
-  await page.evaluate(()=>App.renderDashboard());assert.equal(await numeric('#dashOpenPayments strong'),baseline.open+150);
-  await page.evaluate(()=>App.renderJobs());
+  await page.evaluate(()=>App.go('dashboard'));assert.equal(await numeric('#dashOpenPayments strong'),baseline.open+150);
+  await page.evaluate(()=>App.go('jobs'));
   for(const filter of ['cash','invoice','all']){await page.locator(`[data-jpf="${filter}"]`).click();await page.waitForFunction(value=>document.querySelector(`[data-jpf="${value}"]`).classList.contains('active'),filter);assert.equal(await numeric('#jobOpenTotal'),baseline.open+150);assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank);}
   for(const width of [390,1024]){
     await page.setViewportSize({width,height:844});
@@ -521,14 +521,14 @@ module.exports=async(browser,origin)=>{
     assert.equal(layout.color,'rgb(180, 35, 24)');assert.equal(layout.note,0);
   }await page.setViewportSize({width:390,height:844});
   const preserved=await page.evaluate(async()=>JSON.stringify({hours:await JKDB.all('timeEntries'),docs:await JKDB.all('documents'),payments:(await JKDB.all('settings')).filter(r=>r.kind==='jkPayment')}));assert.equal(preserved,recordsBefore,'Changing settlement status never rewrites hours, invoices or payments');
-  await page.evaluate(async()=>{await JKDB.putLocal('settings',{id:'settlement-payment',kind:'jkPayment',jobId:'settlement',amount:100,date:'2026-10-21',method:'bank'});await App.renderJobs();});assert.equal((await settlementMetrics()).open,50);assert.equal((await settlementMetrics()).received,100);assert.equal((await settlementMetrics()).paid,false);assert.equal(await numeric('#jobOpenTotal'),baseline.open+50);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+100);
-  await page.evaluate(()=>App.editJob('settlement'));await page.locator('#addWorkDay').click();await page.locator('[name=dayDate]').last().fill('2026-10-27');await saveJob();await page.evaluate(()=>App.renderJobs());assert.equal((await settlementMetrics()).open,0);assert.equal((await settlementMetrics()).balance,50);assert.equal((await settlementMetrics()).received,100);assert.equal(await numeric('#jobOpenTotal'),baseline.open);
+  await page.evaluate(async()=>{await JKDB.putLocal('settings',{id:'settlement-payment',kind:'jkPayment',jobId:'settlement',amount:100,date:'2026-10-21',method:'bank'});await App.go('jobs');});assert.equal((await settlementMetrics()).open,50);assert.equal((await settlementMetrics()).received,100);assert.equal((await settlementMetrics()).paid,false);assert.equal(await numeric('#jobOpenTotal'),baseline.open+50);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+100);
+  await page.evaluate(()=>App.editJob('settlement'));await page.locator('#addWorkDay').click();await page.locator('[name=dayDate]').last().fill('2026-10-27');await saveJob();await page.evaluate(()=>App.go('jobs'));assert.equal((await settlementMetrics()).open,0);assert.equal((await settlementMetrics()).balance,50);assert.equal((await settlementMetrics()).received,100);assert.equal(await numeric('#jobOpenTotal'),baseline.open);
   // Exact end boundary and overnight work use Europe/Amsterdam, including an untimed date.
   await setSettlement({status:'afgerond',workDays:[{date:'2026-10-20',startTime:'20:00',endTime:'02:00'}]});
-  await page.clock.setFixedTime(new Date('2026-10-20T23:59:59Z'));await page.evaluate(()=>App.renderJobs());assert.equal((await settlementMetrics()).open,0);
-  await page.clock.setFixedTime(new Date('2026-10-21T00:00:00Z'));await page.evaluate(()=>App.renderJobs());assert.equal((await settlementMetrics()).open,50);
+  await page.clock.setFixedTime(new Date('2026-10-20T23:59:59Z'));await page.evaluate(()=>App.go('jobs'));assert.equal((await settlementMetrics()).open,0);
+  await page.clock.setFixedTime(new Date('2026-10-21T00:00:00Z'));await page.evaluate(()=>App.go('jobs'));assert.equal((await settlementMetrics()).open,50);
   await setSettlement({workDays:[{date:'2026-10-21'}]});assert.equal((await settlementMetrics()).open,0);
-  await page.clock.setFixedTime(new Date('2026-10-21T22:00:00Z'));await page.evaluate(()=>App.renderJobs());assert.equal((await settlementMetrics()).open,50,'Untimed workday becomes past at Dutch midnight');
+  await page.clock.setFixedTime(new Date('2026-10-21T22:00:00Z'));await page.evaluate(()=>App.go('jobs'));assert.equal((await settlementMetrics()).open,50,'Untimed workday becomes past at Dutch midnight');
   await setSettlement({status:'gepland'});assert.equal((await settlementMetrics()).open,0,'Reopening removes it even after all dates');
   await page.clock.setFixedTime(new Date('2026-10-21T10:00:00Z'));
   // Received totals exclude unpaid agreements and count linked invoice payments only once.
@@ -537,20 +537,20 @@ module.exports=async(browser,origin)=>{
     await JKDB.putLocal('documents',{id:'received-linked',folder:'factuur',meta:{jobId:'settlement',total:150},blob:new Blob(['%PDF fixture'],{type:'application/pdf'})});
     await JKDB.putLocal('documents',{id:'received-orphan',folder:'factuur',meta:{total:80},blob:new Blob(['%PDF fixture'],{type:'application/pdf'})});
     await JKDB.putLocal('settings',{id:'received-orphan-payment',kind:'jkPayment',invoiceId:'received-orphan',amount:30,date:'2026-10-21',method:'bank'});
-    await App.renderJobs();
+    await App.go('jobs');
   });
   assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash+50);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+130);
   assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+130);assert.equal(await numeric('#jobOpenTotal'),baseline.open+50,'Only orphan invoice remainder is newly outstanding');
-  await page.evaluate(async()=>{const p=await JKDB.get('settings','settlement-payment');await JKDB.putLocal('settings',{...p,invoiceId:'received-linked',amount:150});await App.renderJobs();});
+  await page.evaluate(async()=>{const p=await JKDB.get('settings','settlement-payment');await JKDB.putLocal('settings',{...p,invoiceId:'received-linked',amount:150});await App.go('jobs');});
   assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+180);assert.equal(await page.locator('.job-totals .payment-invoice-detail').count(),0,'Geen factuur-specificatie op Klussen');assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash+50);
-  await page.evaluate(async()=>{const p=await JKDB.get('settings','received-cash');await JKDB.putLocal('settings',{...p,voided:true});await App.renderJobs();});assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+180);assert.equal(await page.locator('.job-totals .payment-invoice-detail').count(),0);
+  await page.evaluate(async()=>{const p=await JKDB.get('settings','received-cash');await JKDB.putLocal('settings',{...p,voided:true});await App.go('jobs');});assert.equal(await numeric('.job-totals [data-payment-group="cash"] strong'),baseline.cash);assert.equal(await numeric('.job-totals [data-payment-group="bank"] strong'),baseline.bank+180);assert.equal(await page.locator('.job-totals .payment-invoice-detail').count(),0);
   console.log('PASS: uitsluitend ontvangen contant/bank, deelbetalingen, onbetaalde afspraken uitgesloten, gekoppelde/losse facturen, wijzigen en verwijderen; gecentreerd rood openstaand en witte totalen zonder toelichting');
   console.log('PASS: compact klussaldo en betaalwijzeverdeling zonder factuurblok; openstaand uitsluitend afgerond én laatste einde voorbij; dashboard, filters, toekomst/heropenen, deelbetaling, nachtwerk/middernacht en bytegelijk behoud uren/facturen/betalingen');
   // Issue #35: clickable outstanding filter, rounding without creating revenue and reversible settlement.
   await page.evaluate(async()=>{
     await JKDB.putLocal('jobs',{id:'issue35',title:'Afronding bij montage',clientName:'Proefklant',date:'2026-10-01',status:'afgerond',pricingType:'fixed',agreedAmount:105,hourlyRate:15,paymentType:'cash'});
     await JKDB.putLocal('settings',{id:'issue35-pay',kind:'jkPayment',jobId:'issue35',date:'2026-10-21',amount:102.5,method:'cash'});
-    await App.renderJobs();
+    await App.go('jobs');
   });
   assert.equal(await page.locator('[data-job=issue35] .danger').count(),1);
   assert.match(await page.locator('[data-job=issue35]').innerText(),/2,50/);
@@ -570,7 +570,7 @@ module.exports=async(browser,origin)=>{
   await page.waitForFunction(()=>document.querySelector('#settleRounding'));
   issue=await page.evaluate(async()=>{const f=await App.refreshFinance();return f.job(await JKDB.get('jobs','issue35'));});
   assert.equal(issue.received,102.5);assert.equal(issue.open,2.5);assert.equal(issue.paid,false);
-  await page.locator('[data-close]').click();await page.evaluate(()=>App.renderJobs());
+  await page.locator('[data-close]').click();await page.evaluate(()=>App.go('jobs'));
   await page.locator('[data-jpf="open"]').click();
   await page.locator('#showAllJobs').click();
   await page.locator('[data-job="settlement-cash"]').waitFor();
@@ -948,7 +948,7 @@ module.exports=async(browser,origin)=>{
     assert.ok(values.scale<=1.01,'Geen browserfocuszoom bij '+width+'px');
   }
   await page.setViewportSize({width:390,height:844});
-  await page.evaluate(()=>{document.documentElement.classList.remove('ios-standalone');App.renderJobs()});
+  await page.evaluate(()=>{document.documentElement.classList.remove('ios-standalone');App.go('jobs')});
   console.log('PASS: mobiele tekst, cijfers, datums, tijden, selecties en notities minstens 16px zonder inzoomen of horizontale overflow');
   // Vrijwillige vergoeding bij klus van €0 (bijv. familie): correct Betaald,
   // originele afspraak blijft nul en werkbon toont het ontvangen bedrag.
