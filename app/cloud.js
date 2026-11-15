@@ -406,8 +406,8 @@ const JKCloud = (() => {
           const lt=new Date(obj._syncUpdatedAt||0).getTime(), rt=new Date(rr.updated_at||0).getTime();
           if(!hasSyncedBefore){
             const decoded=await decodeRecord(rr.data); decoded._syncUpdatedAt=rr.updated_at; await JKDB.putLocal(store,decoded); localChanged=true;
-          } else if(lt>rt+1000) await pushRecord(store,obj);
-          else if(rt>lt+1000){
+          } else if(lt>rt) await pushRecord(store,obj);
+          else if(rt>lt){
             const decoded=await decodeRecord(rr.data); decoded._syncUpdatedAt=rr.updated_at; await JKDB.putLocal(store,decoded); localChanged=true;
           }
           remote.delete(key);
