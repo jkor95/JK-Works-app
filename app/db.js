@@ -31,7 +31,8 @@ const JKDB = (() => {
   async function prepareForIndexedDB(value,seen=new WeakMap()){
     if(value instanceof Blob){
       return {[BINARY_TAG]:true,mime:value.type||'application/octet-stream',
-        bytes:new Uint8Array(await value.arrayBuffer())};
+        bytes:new Uint8Array(await value.arrayBuffer()),
+        ...(typeof File!=='undefined'&&value instanceof File?{name:value.name,lastModified:value.lastModified}:{})};
     }
     if(!value||typeof value!=='object'||value instanceof Date||value instanceof ArrayBuffer||ArrayBuffer.isView(value))return value;
     if(seen.has(value))return seen.get(value);
@@ -48,6 +49,8 @@ const JKDB = (() => {
   function restoreFromIndexedDB(value,seen=new WeakMap()){
     if(!value||typeof value!=='object'||value instanceof Blob||value instanceof Date||value instanceof ArrayBuffer||ArrayBuffer.isView(value))return value;
     if(value[BINARY_TAG]===true && value.bytes instanceof Uint8Array && typeof value.mime==='string'){
+      if(typeof File!=='undefined'&&typeof value.name==='string'&&Number.isFinite(value.lastModified))
+        return new File([value.bytes],value.name,{type:value.mime,lastModified:value.lastModified});
       return new Blob([value.bytes],{type:value.mime});
     }
     if(seen.has(value))return seen.get(value);
@@ -128,7 +131,7 @@ const JKDB = (() => {
     const db=await open(), names=[...stores,...internalStores];
     return new Promise((resolve,reject)=>{
       const t=db.transaction(names,'readonly'), result={};
-      for(const name of names){const r=t.objectStore(name).getAll();r.onsuccess=()=>{result[name]=r.result;};}
+      for(const name of names){const r=t.objectStore(name).getAll();r.onsuccess=()=>{result[name]=r.result.map(value=>restoreFromIndexedDB(value));};}
       t.oncomplete=()=>resolve(result);t.onabort=()=>reject(new Error('Lokale gegevens konden niet worden gelezen.'));
     });
   }
@@ -140,6 +143,10 @@ const JKDB = (() => {
   }
   async function replaceFromBackup(records, expected, guard){
     const db=await open(), names=[...stores,...internalStores];
+    // Prepare binary values before opening the atomic transaction. Awaiting
+    // Blob.arrayBuffer() inside it can let IndexedDB close the transaction.
+    const prepared={};
+    for(const name of names)prepared[name]=await prepareForIndexedDB(records[name]||[]);
     return new Promise((resolve,reject)=>{
       const t=db.transaction(names,'readwrite'), current={};let remaining=names.length;
       t.oncomplete=resolve;t.onabort=()=>reject(new Error('Herstel afgebroken; bestaande lokale gegevens zijn behouden.'));
@@ -147,13 +154,13 @@ const JKDB = (() => {
       for(const name of names){
         const r=t.objectStore(name).getAll();
         r.onsuccess=()=>{
-          current[name]=r.result;
+          current[name]=r.result.map(value=>restoreFromIndexedDB(value));
           if(--remaining)return;
           if(snapshotKey(current)!==snapshotKey(expected)){t.abort();return;}
           try{
             for(const s of names){
               const os=t.objectStore(s);os.clear();
-              for(const record of records[s]||[])os.add(record);
+              for(const record of prepared[s])os.add(record);
             }
             const settings=t.objectStore('settings');
             settings.put({id:'seedVersion',value:6,at:new Date().toISOString()});
