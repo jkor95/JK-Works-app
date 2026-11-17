@@ -170,6 +170,32 @@ async function files(dir) {
       return saved.value === 'test' && !await JKDB.get('settings', 'regression-fixture');
     }), true);
     console.log('PASS: lokale IndexedDB lezen/schrijven/verwijderen in wegwerp-browserprofiel');
+    const fileProof = await page.evaluate(async () => {
+      const data = new Uint8Array([37,80,68,70,45,49,46,52]);
+      const file = new File([data], 'fixture-document.pdf',
+        {type:'application/pdf',lastModified:1700000000000});
+      await JKDB.putLocal('documents',{id:'binary-check',blob:file});
+      try {
+        const stored = (await JKDB.snapshot()).documents.find(x => x.id === 'binary-check');
+        const direct = await JKDB.get('documents','binary-check');
+        return {
+          snapshotFile:stored?.blob instanceof File,
+          file:direct?.blob instanceof File,
+          name:direct?.blob?.name,
+          lastModified:direct?.blob?.lastModified,
+          bytes:direct?.blob instanceof Blob ?
+            [...new Uint8Array(await direct.blob.arrayBuffer())] : []
+        };
+      } finally {
+        await JKDB.removeLocal('documents','binary-check');
+      }
+    });
+    assert.equal(fileProof.snapshotFile,true,'IndexedDB snapshot moet File opleveren');
+    assert.equal(fileProof.file,true,'IndexedDB get moet File opleveren');
+    assert.equal(fileProof.name,'fixture-document.pdf');
+    assert.equal(fileProof.lastModified,1700000000000);
+    assert.deepEqual(fileProof.bytes,[37,80,68,70,45,49,46,52]);
+    console.log('PASS: IndexedDB File metadata en PDF-bytes blijven behouden');
     assert.deepEqual(mutations, [], 'Externe of lokale HTTP-schrijfactie geprobeerd');
     assert.deepEqual(failures, [], 'Browser- of resourcefouten');
     await require('./test_manual_backup.cjs')(browser, origin);

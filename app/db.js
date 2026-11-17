@@ -24,9 +24,63 @@ const JKDB = (() => {
   async function tx(store, mode='readonly'){
     const db=await open(); return db.transaction(store,mode).objectStore(store);
   }
-  async function all(store){const s=await tx(store);return reqP(s.getAll());}
-  async function get(store,id){const s=await tx(store);return reqP(s.get(id));}
-  async function putLocal(store,obj){const s=await tx(store,'readwrite');await reqP(s.put(obj));return obj;}
+  // Store binary data as Uint8Array rather than Blob/File in IndexedDB.
+  // Safari WebKit can reject even newly constructed Blobs during IDB writes.
+  // Restore real File objects (including name/lastModified) when reading.
+  // Legacy tagged blobs without file metadata remain backwards compatible.
+  const BINARY_TAG='__jkworksIndexedBinaryV1';
+  async function prepareForIndexedDB(value,seen=new WeakMap()){
+    if(value instanceof Blob){
+      const result={[BINARY_TAG]:true,mime:value.type||'application/octet-stream',
+        bytes:new Uint8Array(await value.arrayBuffer())};
+      if(value instanceof File){
+        result.kind='file';
+        result.name=value.name;
+        result.lastModified=value.lastModified;
+      }
+      return result;
+    }
+    if(!value||typeof value!=='object'||value instanceof Date||value instanceof ArrayBuffer||ArrayBuffer.isView(value))return value;
+    if(seen.has(value))return seen.get(value);
+    if(Array.isArray(value)){
+      const out=[];seen.set(value,out);
+      for(const item of value)out.push(await prepareForIndexedDB(item,seen));
+      return out;
+    }
+    if(Object.getPrototypeOf(value)!==Object.prototype)return value;
+    const out={};seen.set(value,out);
+    for(const [key,item] of Object.entries(value))out[key]=await prepareForIndexedDB(item,seen);
+    return out;
+  }
+  function restoreFromIndexedDB(value,seen=new WeakMap()){
+    if(!value||typeof value!=='object'||value instanceof Blob||value instanceof Date||value instanceof ArrayBuffer||ArrayBuffer.isView(value))return value;
+    if(value[BINARY_TAG]===true && value.bytes instanceof Uint8Array && typeof value.mime==='string'){
+      if(value.kind==='file' && typeof value.name==='string' &&
+          Number.isSafeInteger(value.lastModified) && value.lastModified>=0){
+        return new File([value.bytes],value.name,{type:value.mime,lastModified:value.lastModified});
+      }
+      // Files stored by old versions have no recoverable filename or date.
+      return new Blob([value.bytes],{type:value.mime});
+    }
+    if(seen.has(value))return seen.get(value);
+    if(Array.isArray(value)){
+      const out=[];seen.set(value,out);
+      for(const item of value)out.push(restoreFromIndexedDB(item,seen));
+      return out;
+    }
+    if(Object.getPrototypeOf(value)!==Object.prototype)return value;
+    const out={};seen.set(value,out);
+    for(const [key,item] of Object.entries(value))out[key]=restoreFromIndexedDB(item,seen);
+    return out;
+  }
+  async function all(store){const s=await tx(store);return (await reqP(s.getAll())).map(v=>restoreFromIndexedDB(v));}
+  async function get(store,id){const s=await tx(store);return restoreFromIndexedDB(await reqP(s.get(id)));}
+  async function putLocal(store,obj){
+    const prepared=await prepareForIndexedDB(obj);
+    const s=await tx(store,'readwrite');
+    await reqP(s.put(prepared));
+    return obj;
+  }
   async function removeLocal(store,id){const s=await tx(store,'readwrite');return reqP(s.delete(id));}
   async function put(store,obj,opts={}){
     const stamped={...obj};
@@ -87,7 +141,7 @@ const JKDB = (() => {
     return new Promise((resolve,reject)=>{
       const t=db.transaction(names,'readonly'), result={};
       for(const name of names){const r=t.objectStore(name).getAll();r.onsuccess=()=>{result[name]=r.result;};}
-      t.oncomplete=()=>resolve(result);t.onabort=()=>reject(new Error('Lokale gegevens konden niet worden gelezen.'));
+      t.oncomplete=()=>resolve(restoreFromIndexedDB(result));t.onabort=()=>reject(new Error('Lokale gegevens konden niet worden gelezen.'));
     });
   }
   function snapshotKey(value){
@@ -97,6 +151,12 @@ const JKDB = (() => {
     return JSON.stringify(value);
   }
   async function replaceFromBackup(records, expected, guard){
+    // Prepare binary data *before* starting the atomic IndexedDB transaction.
+    // Blob.arrayBuffer() is asynchronous: awaiting it in an open IDB
+    // transaction would risk auto-committing and losing atomicity.
+    const [storedRecords,storedExpected]=await Promise.all([
+      prepareForIndexedDB(records),prepareForIndexedDB(expected)
+    ]);
     const db=await open(), names=[...stores,...internalStores];
     return new Promise((resolve,reject)=>{
       const t=db.transaction(names,'readwrite'), current={};let remaining=names.length;
@@ -107,11 +167,11 @@ const JKDB = (() => {
         r.onsuccess=()=>{
           current[name]=r.result;
           if(--remaining)return;
-          if(snapshotKey(current)!==snapshotKey(expected)){t.abort();return;}
+          if(snapshotKey(current)!==snapshotKey(storedExpected)){t.abort();return;}
           try{
             for(const s of names){
               const os=t.objectStore(s);os.clear();
-              for(const record of records[s]||[])os.add(record);
+              for(const record of storedRecords[s]||[])os.add(record);
             }
             const settings=t.objectStore('settings');
             settings.put({id:'seedVersion',value:6,at:new Date().toISOString()});

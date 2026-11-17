@@ -245,7 +245,8 @@ const JKCloud = (() => {
       if(v instanceof Blob){
         const ext=v.type==='application/pdf'?'pdf':v.type==='image/jpeg'?'jpg':v.type==='image/png'?'png':'bin';
         const path=`${user().id}/${store}/${obj.id}/${k}.${ext}`;
-        const {error}=await client.storage.from(BUCKET).upload(path,v,{upsert:true,contentType:v.type||'application/octet-stream'});
+        const uploadBytes=new Uint8Array(await v.arrayBuffer());
+        const {error}=await client.storage.from(BUCKET).upload(path,uploadBytes,{upsert:true,contentType:v.type||'application/octet-stream'});
         if(error) throw error;
         data[k]={__storagePath:path,__mime:v.type||'application/octet-stream'};
       }
@@ -258,7 +259,10 @@ const JKCloud = (() => {
       if(v && typeof v==='object' && v.__storagePath){
         const {data:blob,error}=await client.storage.from(BUCKET).download(v.__storagePath);
         if(error) throw error;
-        obj[k]=new Blob([blob],{type:v.__mime||blob.type||'application/octet-stream'});
+        // Materialize the downloaded response before IndexedDB stores it. Safari can
+        // reject network-backed Blob implementations during structured cloning.
+        const bytes=await blob.arrayBuffer();
+        obj[k]=new Blob([bytes],{type:v.__mime||blob.type||'application/octet-stream'});
       }
     }
     return obj;
@@ -336,9 +340,14 @@ const JKCloud = (() => {
     if(syncing || !isSignedIn() || !navigator.onLine) return;
     syncing=true; document.dispatchEvent(new CustomEvent('jkcloud-sync',{detail:{state:'syncing'}}));
     let localChanged=false;
+    let syncStep='start';
+    let syncRecord='';
     try{
+      syncStep='local cleanup';
       await purgeLocalOnlyCloudData();
+      syncStep='pending queue';
       await flushQueue();
+      syncStep='cloud record list';
       const [recordsRes,deletionsRes]=await Promise.all([
         client.from('app_records').select('store,record_id,data,updated_at').eq('user_id',user().id),
         client.from('app_deletions').select('store,record_id,deleted_at').eq('user_id',user().id)
@@ -383,10 +392,12 @@ const JKCloud = (() => {
       }
 
       const hasSyncedBefore=!!(await JKDB.get('settings','cloudStatus'))?.lastSync;
+      syncStep='local/cloud reconciliation';
       for(const store of JKDB.stores){
         if(LOCAL_ONLY_STORES.has(store)) continue;
         const local=await JKDB.all(store);
         for(const obj of local){
+          syncRecord=store+' / '+String(obj.id).slice(0,48);
           if(store==='settings'&&(['backup','backupRestoreGuard'].includes(obj.id)||LOCAL_ONLY_SETTINGS.has(obj.id)))continue;
           const key=`${store}|${obj.id}`;
           if(deletedKeys.has(key)){ await JKDB.removeLocal(store,obj.id); localChanged=true; continue; }
@@ -402,7 +413,9 @@ const JKCloud = (() => {
           remote.delete(key);
         }
       }
+      syncStep='cloud-only download';
       for(const rr of remote.values()){
+        syncRecord=rr.store+' / '+String(rr.record_id).slice(0,48);
         if(rr.store==='settings'&&(['backup','backupRestoreGuard'].includes(rr.record_id)||LOCAL_ONLY_SETTINGS.has(rr.record_id)))continue;
         if(!JKDB.stores.includes(rr.store)) continue;
         const key=`${rr.store}|${rr.record_id}`;
@@ -411,8 +424,13 @@ const JKCloud = (() => {
         decoded._syncUpdatedAt=rr.updated_at;
         await JKDB.putLocal(rr.store,decoded); localChanged=true;
       }
+      syncStep='save sync status';
       await JKDB.putLocal('settings',{id:'cloudStatus',lastSync:new Date().toISOString(),email:user().email});
       document.dispatchEvent(new CustomEvent('jkcloud-sync',{detail:{state:'done',changed:localChanged}}));
+    }catch(error){
+      console.error('JK Works sync diagnostic', {step:syncStep,record:syncRecord,error});
+      const detail=syncRecord?' ('+syncRecord+')':'';
+      throw new Error('Sync-stap: '+syncStep+detail+' — '+(error?.message||String(error)));
     }finally{ syncing=false; document.dispatchEvent(new CustomEvent('jkcloud-queue')); scheduleNotificationProjection();window.JKCalendarFeed?.schedule(); }
   }
 
