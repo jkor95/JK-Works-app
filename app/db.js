@@ -26,12 +26,19 @@ const JKDB = (() => {
   }
   // Store binary data as Uint8Array rather than Blob/File in IndexedDB.
   // Safari WebKit can reject even newly constructed Blobs during IDB writes.
-  // Recreate Blobs when records are read, preserving the existing app API.
+  // Restore real File objects (including name/lastModified) when reading.
+  // Legacy tagged blobs without file metadata remain backwards compatible.
   const BINARY_TAG='__jkworksIndexedBinaryV1';
   async function prepareForIndexedDB(value,seen=new WeakMap()){
     if(value instanceof Blob){
-      return {[BINARY_TAG]:true,mime:value.type||'application/octet-stream',
+      const result={[BINARY_TAG]:true,mime:value.type||'application/octet-stream',
         bytes:new Uint8Array(await value.arrayBuffer())};
+      if(value instanceof File){
+        result.kind='file';
+        result.name=value.name;
+        result.lastModified=value.lastModified;
+      }
+      return result;
     }
     if(!value||typeof value!=='object'||value instanceof Date||value instanceof ArrayBuffer||ArrayBuffer.isView(value))return value;
     if(seen.has(value))return seen.get(value);
@@ -48,6 +55,11 @@ const JKDB = (() => {
   function restoreFromIndexedDB(value,seen=new WeakMap()){
     if(!value||typeof value!=='object'||value instanceof Blob||value instanceof Date||value instanceof ArrayBuffer||ArrayBuffer.isView(value))return value;
     if(value[BINARY_TAG]===true && value.bytes instanceof Uint8Array && typeof value.mime==='string'){
+      if(value.kind==='file' && typeof value.name==='string' &&
+          Number.isSafeInteger(value.lastModified) && value.lastModified>=0){
+        return new File([value.bytes],value.name,{type:value.mime,lastModified:value.lastModified});
+      }
+      // Files stored by old versions have no recoverable filename or date.
       return new Blob([value.bytes],{type:value.mime});
     }
     if(seen.has(value))return seen.get(value);
@@ -129,7 +141,7 @@ const JKDB = (() => {
     return new Promise((resolve,reject)=>{
       const t=db.transaction(names,'readonly'), result={};
       for(const name of names){const r=t.objectStore(name).getAll();r.onsuccess=()=>{result[name]=r.result;};}
-      t.oncomplete=()=>resolve(result);t.onabort=()=>reject(new Error('Lokale gegevens konden niet worden gelezen.'));
+      t.oncomplete=()=>resolve(restoreFromIndexedDB(result));t.onabort=()=>reject(new Error('Lokale gegevens konden niet worden gelezen.'));
     });
   }
   function snapshotKey(value){
@@ -139,6 +151,12 @@ const JKDB = (() => {
     return JSON.stringify(value);
   }
   async function replaceFromBackup(records, expected, guard){
+    // Prepare binary data *before* starting the atomic IndexedDB transaction.
+    // Blob.arrayBuffer() is asynchronous: awaiting it in an open IDB
+    // transaction would risk auto-committing and losing atomicity.
+    const [storedRecords,storedExpected]=await Promise.all([
+      prepareForIndexedDB(records),prepareForIndexedDB(expected)
+    ]);
     const db=await open(), names=[...stores,...internalStores];
     return new Promise((resolve,reject)=>{
       const t=db.transaction(names,'readwrite'), current={};let remaining=names.length;
@@ -149,11 +167,11 @@ const JKDB = (() => {
         r.onsuccess=()=>{
           current[name]=r.result;
           if(--remaining)return;
-          if(snapshotKey(current)!==snapshotKey(expected)){t.abort();return;}
+          if(snapshotKey(current)!==snapshotKey(storedExpected)){t.abort();return;}
           try{
             for(const s of names){
               const os=t.objectStore(s);os.clear();
-              for(const record of records[s]||[])os.add(record);
+              for(const record of storedRecords[s]||[])os.add(record);
             }
             const settings=t.objectStore('settings');
             settings.put({id:'seedVersion',value:6,at:new Date().toISOString()});
