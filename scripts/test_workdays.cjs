@@ -61,8 +61,17 @@ module.exports=async(browser,origin)=>{
   console.log('PASS: vijf losse werkdagen; bestaande klus omzetten; werkdagen toevoegen, wijzigen en verwijderen zonder uurverlies');
   for(const [date,from,to,pause] of [['2026-10-19','08:00','17:00',30],['2026-10-21','09:00','17:00',0],['2026-10-23','08:00','14:00',0]]){
    await page.evaluate(({id,date})=>App.editTimeEntry(null,id,date,id),{id:job.id,date});
-   await page.locator('[name=from]').fill(from);await page.locator('[name=to]').fill(to);await page.locator('[name=breakMinutes]').fill(String(pause));
-   await page.locator('#timeForm button.primary').click();await page.waitForFunction(()=>!document.querySelector('#timeForm'));
+   // Scope fields to this exact hours form; never type into another modal.
+   // A previous async showJob() must have finished before the next iteration.
+   await page.locator('#timeForm [name=from]').fill(from);
+   await page.locator('#timeForm [name=to]').fill(to);
+   await page.locator('#timeForm [name=breakMinutes]').fill(String(pause));
+   await page.locator('#timeForm button.primary').click();
+   // The submit handler closes the form BEFORE awaiting showJob(returnJobId).
+   // Waiting only for #timeForm to disappear raced the next editTimeEntry
+   // against the previous showJob, which detached its inputs mid-fill.
+   await page.waitForFunction(()=>!document.querySelector('#timeForm') &&
+     document.querySelectorAll('#modalRoot .workday-summary').length===4);
   }
   assert.equal(await page.evaluate(async id=>App.jobMinutes(await JKDB.get('jobs',id),await JKDB.all('timeEntries')),job.id),1350);
   assert.equal(await page.evaluate(async id=>App.jobOwnAmount(await JKDB.get('jobs',id),await JKDB.all('timeEntries'),{}),job.id),787.5);

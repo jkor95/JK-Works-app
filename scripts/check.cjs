@@ -104,10 +104,25 @@ async function files(dir) {
     });
     const context = await browser.newContext();
     const failures = [];
+    const abortedRequests = [];
+    const verifiedLocalAssets = new Set();
     const mutations = [];
     const page = await context.newPage();
     page.on('pageerror', error => failures.push(error.message));
-    page.on('requestfailed', request => failures.push(`${request.url()}: ${request.failure().errorText}`));
+    page.on('requestfailed', request => {
+      const failure = request.failure()?.errorText;
+      // A page navigation may cancel a script that was already loaded and
+      // verified on the previous page. Collect it for strict post-navigation
+      // validation rather than ignoring any ERR_ABORTED globally.
+      if (failure === 'net::ERR_ABORTED' &&
+          request.method() === 'GET' &&
+          request.resourceType() === 'script' &&
+          new URL(request.url()).origin === origin) {
+        abortedRequests.push(request.url());
+      } else {
+        failures.push(`${request.url()}: ${failure}`);
+      }
+    });
     page.on('response', response => { if (response.status() >= 400) failures.push(`${response.url()}: HTTP ${response.status()}`); });
     await context.route('**/*', async route => {
       const request = route.request();
@@ -136,9 +151,10 @@ async function files(dir) {
         const assets = [...document.querySelectorAll('script[src],link[rel="stylesheet"],link[rel="icon"],link[rel="manifest"],link[rel="apple-touch-icon"],img[src]')]
           .map(element => element.src || element.href).filter(url => new URL(url).origin === location.origin);
         const checks = await Promise.all([...new Set(assets)].map(async url => ({ url, status: (await fetch(url)).status })));
-        return checks.filter(check => check.status !== 200);
+        return checks;
       });
-      assert.deepEqual(badAssets, []);
+      assert.deepEqual(badAssets.filter(check => check.status !== 200), []);
+      for (const check of badAssets) verifiedLocalAssets.add(check.url);
       if (route === '/') {
         assert.ok(await page.locator('#publicRequestForm').isVisible());
         await page.evaluate(() => {
@@ -171,6 +187,15 @@ async function files(dir) {
     }), true);
     console.log('PASS: lokale IndexedDB lezen/schrijven/verwijderen in wegwerp-browserprofiel');
     assert.deepEqual(mutations, [], 'Externe of lokale HTTP-schrijfactie geprobeerd');
+    // Only navigation-cancelled scripts that were independently fetched with
+    // HTTP 200 on a preceding/active page are acceptable. A missing script,
+    // first-load cancellation, different resource, or any other failure
+    // remains a hard failure.
+    assert.deepEqual(
+      abortedRequests.filter(url => !verifiedLocalAssets.has(url)),
+      [],
+      'Onverklaarde afgebroken scriptverzoeken'
+    );
     assert.deepEqual(failures, [], 'Browser- of resourcefouten');
     await require('./test_manual_backup.cjs')(browser, origin);
     await require('./test_push.cjs').browserTests(browser, origin);
