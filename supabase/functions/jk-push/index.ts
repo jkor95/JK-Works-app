@@ -1,7 +1,7 @@
 // Supabase Edge Function: jk-push. Secrets: JK_VAPID_PUBLIC, JK_VAPID_PRIVATE, JK_PUSH_WEBHOOK_SECRET.
 // Vereist dependency npm:web-push (compatibiliteit met Deno runtime vooraf testen).
 import webpush from 'npm:web-push@3.6.7';
-import {createClient} from 'npm:@supabase/supabase-js@2';
+import {createClient} from 'npm:@supabase/supabase-js@2.118.0';
 const url=Deno.env.get('SUPABASE_URL')!,admin=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const db=createClient(url,admin,{auth:{persistSession:false}});
 const pub=Deno.env.get('JK_VAPID_PUBLIC')||'',priv=Deno.env.get('JK_VAPID_PRIVATE')||'';
