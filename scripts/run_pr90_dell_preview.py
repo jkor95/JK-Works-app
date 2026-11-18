@@ -22,10 +22,10 @@ PATCH_COMMIT='56df9a88d911e6bb00d505894e46a0df6558b137'
 ORIGINAL_SHA='43bc85b7c8da9cd2ecad2403047761f9867d1e0a'
 PATCH_SHA='d6911a085ecdee947e212d109ccde64e0d74f4ff'
 TARGET='scripts/test_workdays.cjs'
-FOLDER=STATE/'jkworks-pr90-preview-20261118'
+FOLDER=STATE/'jkworks-pr90-preview-retry1-20261118'
 STATUS=FOLDER/'status.json'
 LOG=FOLDER/'browser-check.private.log'
-ID='jkworks-pr90-preview-20261118'
+ID='jkworks-pr90-preview-retry1-20261118'
 REQUIRED='Backend: uitsluitend fixtures; echte productie-Supabase en apparaatdeelkaart niet getest.'
 
 def record(status, **details):
@@ -111,7 +111,7 @@ def main():
                  'User-Agent':'JKWorks-PR90-Isolated-Preview'})
     with urllib.request.urlopen(request,timeout=30) as response:
         doc=json.load(response)
-    patch=base64.b64decode(doc['content'],validate=True)
+    patch=base64.b64decode(''.join(doc['content'].split()),validate=True)
     if doc.get('sha')!=PATCH_SHA or blob_sha(patch)!=PATCH_SHA:
         raise RuntimeError('patch_hash_mismatch')
     payload=patch_payload(original,patch)
