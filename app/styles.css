@@ -524,3 +524,5 @@ body.auth-locked{min-height:100dvh;overflow:auto;background:linear-gradient(145d
   #view:has(.dashboard-attention) .dash-month-col{height:98px;grid-template-rows:19px 1fr 17px}
   #view:has(.dashboard-attention) .dash-month-track{height:57px}
 }
+
+/* JK Works release-pipeline smoke candidate: CSS-only, no visual or functional change. */
